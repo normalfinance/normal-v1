@@ -7,8 +7,8 @@
 	"scripts": {
 		"generate-docs": "typedoc --skipErrorChecking --logLevel Error",
 		"prepare": "husky install",
-		"prettify": "prettier --check './tests/**.ts' './programs/**.rs'",
-		"prettify:fix": "prettier --write './tests/**.ts' './programs/**.rs'",
+		"prettify": "prettier --check",
+		"prettify:fix": "prettier --write",
 		"lint": "eslint . --ext ts --quiet",
 		"lint:fix": "eslint . --ext ts --fix"
 	},
