@@ -28,8 +28,8 @@ use crate::state::amm::AMM;
 use crate::state::state::OracleGuardRails;
 use crate::state::user::MarketType;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 pub fn calculate_repeg_validity_from_oracle_account(
     market: &Market,

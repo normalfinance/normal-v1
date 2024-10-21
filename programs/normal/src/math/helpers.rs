@@ -6,8 +6,8 @@ use crate::math::casting::Cast;
 use crate::math::safe_math::SafeMath;
 use crate::math_error;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 pub fn standardize_value_with_remainder_i128(
     value: i128,

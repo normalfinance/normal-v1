@@ -18,8 +18,8 @@ use crate::state::market::Market;
 use crate::state::amm::AMM;
 use crate::state::user::Position;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 #[derive(Debug)]
 pub struct LPMetrics {

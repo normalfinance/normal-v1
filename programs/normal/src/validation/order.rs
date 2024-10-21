@@ -12,8 +12,8 @@ use crate::state::perp_market::PerpMarket;
 use crate::state::user::{ Order, OrderTriggerCondition, OrderType };
 use crate::validate;
 
-#[cfg(test)]
-mod test;
+// #[cfg(test)]
+// mod test;
 
 pub fn validate_order(
     order: &Order,

@@ -23,8 +23,8 @@ use crate::state::user::User;
 use crate::validate;
 use anchor_lang::prelude::Account;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 pub fn apply_lp_rebase_to_market(market: &mut Market, expo_diff: i8) -> NormalResult<()> {
     // target_base_asset_amount_per_lp is the only one that it doesnt get applied

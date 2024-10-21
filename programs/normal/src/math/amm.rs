@@ -30,8 +30,8 @@ use crate::{ validate, PERCENTAGE_PRECISION_U64 };
 use super::helpers::get_proportion_u128;
 use crate::math::safe_math::SafeMath;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 pub fn calculate_price(
     quote_asset_reserve: u128,

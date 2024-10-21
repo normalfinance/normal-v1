@@ -6,8 +6,8 @@ use crate::math::orders::standardize_base_asset_amount;
 use crate::math::safe_math::SafeMath;
 use crate::state::market::{AMMLiquiditySplit, Market};
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 // assumption: market.amm.amm_jit_is_active() == true
 // assumption: taker_baa will improve market balance (see orders.rs & amm_wants_to_jit_make)

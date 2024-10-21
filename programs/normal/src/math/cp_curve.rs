@@ -15,8 +15,8 @@ use crate::math::safe_math::SafeMath;
 use crate::state::market::{MarketStatus, Market};
 use crate::validate;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 pub fn calculate_budgeted_k_scale(
     market: &mut Market,

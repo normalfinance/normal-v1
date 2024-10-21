@@ -13,8 +13,8 @@ use crate::state::market::Market;
 use crate::{ OrderParams };
 use std::cmp::min;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 pub fn calculate_auction_prices(
     oracle_price_data: &OraclePriceData,

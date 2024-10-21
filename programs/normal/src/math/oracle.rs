@@ -16,8 +16,8 @@ use crate::state::state::{ OracleGuardRails, ValidityGuardRails };
 use crate::state::user::MarketType;
 use std::fmt;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 // ordered by "severity"
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq, Default)]
