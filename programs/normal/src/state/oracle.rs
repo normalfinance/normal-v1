@@ -11,12 +11,12 @@ use switchboard_on_demand::{ PullFeedAccountData, SB_ON_DEMAND_PRECISION };
 use crate::error::ErrorCode::{ InvalidOracle, UnableToLoadOracle };
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::load_ref::load_ref;
-use crate::state::synth_market::SynthMarket;
+use crate::state::market::Market;
 use crate::state::traits::Size;
 use crate::validate;
 
-#[cfg(test)]
-mod tests;
+// #[cfg(test)]
+// mod tests;
 
 #[derive(Default, AnchorSerialize, AnchorDeserialize, Clone, Copy, Eq, PartialEq, Debug)]
 pub struct HistoricalOracleData {

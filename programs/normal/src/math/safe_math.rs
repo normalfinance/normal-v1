@@ -1,4 +1,4 @@
-use crate::error::{DriftResult, ErrorCode};
+use crate::error::{NormalResult, ErrorCode};
 use crate::math::bn::{U192, U256};
 use crate::math::ceil_div::CheckedCeilDiv;
 use crate::math::floor_div::CheckedFloorDiv;
@@ -6,11 +6,11 @@ use solana_program::msg;
 use std::panic::Location;
 
 pub trait SafeMath: Sized {
-    fn safe_add(self, rhs: Self) -> DriftResult<Self>;
-    fn safe_sub(self, rhs: Self) -> DriftResult<Self>;
-    fn safe_mul(self, rhs: Self) -> DriftResult<Self>;
-    fn safe_div(self, rhs: Self) -> DriftResult<Self>;
-    fn safe_div_ceil(self, rhs: Self) -> DriftResult<Self>;
+    fn safe_add(self, rhs: Self) -> NormalResult<Self>;
+    fn safe_sub(self, rhs: Self) -> NormalResult<Self>;
+    fn safe_mul(self, rhs: Self) -> NormalResult<Self>;
+    fn safe_div(self, rhs: Self) -> NormalResult<Self>;
+    fn safe_div_ceil(self, rhs: Self) -> NormalResult<Self>;
 }
 
 macro_rules! checked_impl {
@@ -18,7 +18,7 @@ macro_rules! checked_impl {
         impl SafeMath for $t {
             #[track_caller]
             #[inline(always)]
-            fn safe_add(self, v: $t) -> DriftResult<$t> {
+            fn safe_add(self, v: $t) -> NormalResult<$t> {
                 match self.checked_add(v) {
                     Some(result) => Ok(result),
                     None => {
@@ -31,7 +31,7 @@ macro_rules! checked_impl {
 
             #[track_caller]
             #[inline(always)]
-            fn safe_sub(self, v: $t) -> DriftResult<$t> {
+            fn safe_sub(self, v: $t) -> NormalResult<$t> {
                 match self.checked_sub(v) {
                     Some(result) => Ok(result),
                     None => {
@@ -44,7 +44,7 @@ macro_rules! checked_impl {
 
             #[track_caller]
             #[inline(always)]
-            fn safe_mul(self, v: $t) -> DriftResult<$t> {
+            fn safe_mul(self, v: $t) -> NormalResult<$t> {
                 match self.checked_mul(v) {
                     Some(result) => Ok(result),
                     None => {
@@ -57,7 +57,7 @@ macro_rules! checked_impl {
 
             #[track_caller]
             #[inline(always)]
-            fn safe_div(self, v: $t) -> DriftResult<$t> {
+            fn safe_div(self, v: $t) -> NormalResult<$t> {
                 match self.checked_div(v) {
                     Some(result) => Ok(result),
                     None => {
@@ -70,7 +70,7 @@ macro_rules! checked_impl {
 
             #[track_caller]
             #[inline(always)]
-            fn safe_div_ceil(self, v: $t) -> DriftResult<$t> {
+            fn safe_div_ceil(self, v: $t) -> NormalResult<$t> {
                 match self.checked_ceil_div(v) {
                     Some(result) => Ok(result),
                     None => {
@@ -99,7 +99,7 @@ checked_impl!(i8);
 
 pub trait SafeDivFloor: Sized {
     /// Perform floor division
-    fn safe_div_floor(self, rhs: Self) -> DriftResult<Self>;
+    fn safe_div_floor(self, rhs: Self) -> NormalResult<Self>;
 }
 
 macro_rules! div_floor_impl {
@@ -107,7 +107,7 @@ macro_rules! div_floor_impl {
         impl SafeDivFloor for $t {
             #[track_caller]
             #[inline(always)]
-            fn safe_div_floor(self, v: $t) -> DriftResult<$t> {
+            fn safe_div_floor(self, v: $t) -> NormalResult<$t> {
                 match self.checked_floor_div(v) {
                     Some(result) => Ok(result),
                     None => {

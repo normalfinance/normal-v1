@@ -1,11 +1,11 @@
-use crate::error::{DriftResult, ErrorCode};
+use crate::error::{NormalResult, ErrorCode};
 use solana_program::msg;
 use std::panic::Location;
 
 pub trait SafeUnwrap {
     type Item;
 
-    fn safe_unwrap(self) -> DriftResult<Self::Item>;
+    fn safe_unwrap(self) -> NormalResult<Self::Item>;
 }
 
 impl<T> SafeUnwrap for Option<T> {
@@ -13,7 +13,7 @@ impl<T> SafeUnwrap for Option<T> {
 
     #[track_caller]
     #[inline(always)]
-    fn safe_unwrap(self) -> DriftResult<T> {
+    fn safe_unwrap(self) -> NormalResult<T> {
         match self {
             Some(v) => Ok(v),
             None => {
@@ -30,7 +30,7 @@ impl<T, U> SafeUnwrap for Result<T, U> {
 
     #[track_caller]
     #[inline(always)]
-    fn safe_unwrap(self) -> DriftResult<T> {
+    fn safe_unwrap(self) -> NormalResult<T> {
         match self {
             Ok(v) => Ok(v),
             Err(_) => {

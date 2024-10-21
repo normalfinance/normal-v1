@@ -10,9 +10,10 @@ use crate::math::constants::BID_ASK_SPREAD_PRECISION;
 use crate::math::safe_math::SafeMath;
 
 use crate::state::oracle::OraclePriceData;
-use crate::state::paused_operations::SynthOperation;
-use crate::state::synth_market::{ PerpMarket, MarketType };
+use crate::state::paused_operations::PerpOperation;
+use crate::state::perp_market::PerpMarket;
 use crate::state::state::{ OracleGuardRails, ValidityGuardRails };
+use crate::state::user::MarketType;
 use std::fmt;
 
 #[cfg(test)]
@@ -24,7 +25,6 @@ pub enum OracleValidity {
     NonPositive,
     TooVolatile,
     TooUncertain,
-    StaleForMargin,
     InsufficientDataPoints,
     StaleForAMM,
     #[default]
@@ -37,7 +37,6 @@ impl OracleValidity {
             OracleValidity::NonPositive => ErrorCode::OracleNonPositive,
             OracleValidity::TooVolatile => ErrorCode::OracleTooVolatile,
             OracleValidity::TooUncertain => ErrorCode::OracleTooUncertain,
-            OracleValidity::StaleForMargin => ErrorCode::OracleStaleForMargin,
             OracleValidity::InsufficientDataPoints => ErrorCode::OracleInsufficientDataPoints,
             OracleValidity::StaleForAMM => ErrorCode::OracleStaleForAMM,
             OracleValidity::Valid => unreachable!(),
@@ -51,7 +50,6 @@ impl fmt::Display for OracleValidity {
             OracleValidity::NonPositive => write!(f, "NonPositive"),
             OracleValidity::TooVolatile => write!(f, "TooVolatile"),
             OracleValidity::TooUncertain => write!(f, "TooUncertain"),
-            OracleValidity::StaleForMargin => write!(f, "StaleForMargin"),
             OracleValidity::InsufficientDataPoints => write!(f, "InsufficientDataPoints"),
             OracleValidity::StaleForAMM => write!(f, "StaleForAMM"),
             OracleValidity::Valid => write!(f, "Valid"),
@@ -60,14 +58,11 @@ impl fmt::Display for OracleValidity {
 }
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
-pub enum DriftAction {
-    UpdateFunding,
+pub enum NormalAction {
     SettlePnl,
     TriggerOrder,
     FillOrderMatch,
     FillOrderAmm,
-    Liquidate,
-    MarginCalc,
     UpdateTwap,
     UpdateAMMCurve,
     OracleOrderPrice,
@@ -75,23 +70,13 @@ pub enum DriftAction {
 
 pub fn is_oracle_valid_for_action(
     oracle_validity: OracleValidity,
-    action: Option<DriftAction>
+    action: Option<NormalAction>
 ) -> NormalResult<bool> {
     let is_ok = match action {
         Some(action) =>
             match action {
-                DriftAction::FillOrderAmm => { matches!(oracle_validity, OracleValidity::Valid) }
-                // relax oracle staleness, later checks for sufficiently recent amm slot update for funding update
-                DriftAction::UpdateFunding => {
-                    matches!(
-                        oracle_validity,
-                        OracleValidity::Valid |
-                            OracleValidity::StaleForAMM |
-                            OracleValidity::InsufficientDataPoints |
-                            OracleValidity::StaleForMargin
-                    )
-                }
-                DriftAction::OracleOrderPrice => {
+                NormalAction::FillOrderAmm => { matches!(oracle_validity, OracleValidity::Valid) }
+                NormalAction::OracleOrderPrice => {
                     matches!(
                         oracle_validity,
                         OracleValidity::Valid |
@@ -99,41 +84,27 @@ pub fn is_oracle_valid_for_action(
                             OracleValidity::InsufficientDataPoints
                     )
                 }
-                DriftAction::MarginCalc =>
-                    !matches!(
-                        oracle_validity,
-                        OracleValidity::NonPositive |
-                            OracleValidity::TooVolatile |
-                            OracleValidity::TooUncertain |
-                            OracleValidity::StaleForMargin
-                    ),
-                DriftAction::TriggerOrder =>
+                NormalAction::TriggerOrder =>
                     !matches!(
                         oracle_validity,
                         OracleValidity::NonPositive | OracleValidity::TooVolatile
                     ),
-                DriftAction::SettlePnl =>
+                NormalAction::SettlePnl =>
                     matches!(
                         oracle_validity,
                         OracleValidity::Valid |
                             OracleValidity::StaleForAMM |
-                            OracleValidity::InsufficientDataPoints |
-                            OracleValidity::StaleForMargin
+                            OracleValidity::InsufficientDataPoints
                     ),
-                DriftAction::FillOrderMatch =>
+                NormalAction::FillOrderMatch =>
                     !matches!(
                         oracle_validity,
                         OracleValidity::NonPositive |
                             OracleValidity::TooVolatile |
                             OracleValidity::TooUncertain
                     ),
-                DriftAction::Liquidate =>
-                    !matches!(
-                        oracle_validity,
-                        OracleValidity::NonPositive | OracleValidity::TooVolatile
-                    ),
-                DriftAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
-                DriftAction::UpdateAMMCurve =>
+                NormalAction::UpdateTwap => !matches!(oracle_validity, OracleValidity::NonPositive),
+                NormalAction::UpdateAMMCurve =>
                     !matches!(oracle_validity, OracleValidity::NonPositive),
             }
         None => { matches!(oracle_validity, OracleValidity::Valid) }
@@ -143,7 +114,7 @@ pub fn is_oracle_valid_for_action(
 }
 
 pub fn block_operation(
-    market: &PerpMarket,
+    market: &Market,
     oracle_price_data: &OraclePriceData,
     guard_rails: &OracleGuardRails,
     reserve_price: u64,
@@ -155,21 +126,8 @@ pub fn block_operation(
         oracle_reserve_price_spread_pct: _,
         ..
     } = get_oracle_status(market, oracle_price_data, guard_rails, reserve_price)?;
-    let is_oracle_valid = is_oracle_valid_for_action(
-        oracle_validity,
-        Some(DriftAction::UpdateFunding)
-    )?;
 
-    let slots_since_amm_update = slot.saturating_sub(market.amm.last_update_slot);
-
-    let funding_paused_on_market = market.is_operation_paused(SynthOperation::UpdateFunding);
-
-    // block if amm hasnt been updated since over half the funding period (assuming slot ~= 500ms)
-    let block =
-        slots_since_amm_update > market.amm.funding_period.cast()? ||
-        !is_oracle_valid ||
-        is_oracle_mark_too_divergent ||
-        funding_paused_on_market;
+    let block = is_oracle_mark_too_divergent;
     Ok(block)
 }
 
@@ -182,13 +140,13 @@ pub struct OracleStatus {
 }
 
 pub fn get_oracle_status(
-    market: &PerpMarket,
+    market: &Market,
     oracle_price_data: &OraclePriceData,
     guard_rails: &OracleGuardRails,
     reserve_price: u64
 ) -> NormalResult<OracleStatus> {
     let oracle_validity = oracle_validity(
-        MarketType::Perp,
+        MarketType::Spot,
         market.market_index,
         market.amm.historical_oracle_data.last_oracle_price_twap,
         oracle_price_data,
@@ -249,9 +207,6 @@ pub fn oracle_validity(
     );
 
     let is_stale_for_amm = oracle_delay.gt(&valid_oracle_guard_rails.slots_before_stale_for_amm);
-    let is_stale_for_margin = oracle_delay.gt(
-        &valid_oracle_guard_rails.slots_before_stale_for_margin
-    );
 
     let oracle_validity = if is_oracle_price_nonpositive {
         OracleValidity::NonPositive
@@ -259,8 +214,6 @@ pub fn oracle_validity(
         OracleValidity::TooVolatile
     } else if is_conf_too_large {
         OracleValidity::TooUncertain
-    } else if is_stale_for_margin {
-        OracleValidity::StaleForMargin
     } else if !has_sufficient_number_of_data_points {
         OracleValidity::InsufficientDataPoints
     } else if is_stale_for_amm {
@@ -301,7 +254,7 @@ pub fn oracle_validity(
             );
         }
 
-        if is_stale_for_amm || is_stale_for_margin {
+        if is_stale_for_amm {
             msg!(
                 "Invalid {} {} Oracle: Stale (oracle_delay={:?})",
                 market_type,

@@ -20,11 +20,10 @@ use crate::math::constants::PRICE_PRECISION_I64;
 use crate::math::oracle::{ oracle_validity, OracleValidity };
 use crate::state::oracle::{ get_oracle_price, OraclePriceData, OracleSource };
 use crate::state::state::OracleGuardRails;
-use crate::state::synth_market::MarketType;
+use crate::state::market::MarketType;
 use anchor_lang::prelude::{ AccountInfo, Pubkey };
-use anchor_lang::Discriminator;
+
 use anchor_lang::Key;
-use arrayref::array_ref;
 use solana_program::msg;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
@@ -33,7 +32,6 @@ use std::slice::Iter;
 use super::state::ValidityGuardRails;
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
-use crate::validate;
 
 pub const PYTH_1M_IDS: [Pubkey; 2] = [bonk_oracle::id(), pepe_oracle::id()];
 pub const PYTH_PULL_1M_IDS: [Pubkey; 2] = [bonk_pull_oracle::id(), pepe_pull_oracle::id()];
