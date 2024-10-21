@@ -468,7 +468,7 @@ impl OrderParams {
             OrderParams::get_baseline_start_end_price_offset(market, direction_to_close, 1)?;
 
         let params = OrderParams {
-            market_type: MarketType::Spot,
+            market_type: MarketType::Synthetic,
             direction: direction_to_close,
             order_type: OrderType::Market, // TODO: used to be Oracle, unsure why?
             market_index: market.market_index,

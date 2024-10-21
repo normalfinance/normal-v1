@@ -55,7 +55,7 @@ pub fn calculate_fee_for_fulfillment_with_amm(
 	let fee_tier = determine_user_fee_tier(
 		user_stats,
 		fee_structure,
-		&MarketType::Perp
+		&MarketType::Synthetic
 	)?;
 
 	// if there was a quote_asset_amount_surplus, the order was a maker order and fee_to_market comes from surplus

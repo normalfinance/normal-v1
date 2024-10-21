@@ -146,7 +146,7 @@ pub fn get_oracle_status(
     reserve_price: u64
 ) -> NormalResult<OracleStatus> {
     let oracle_validity = oracle_validity(
-        MarketType::Spot,
+        MarketType::Synthetic,
         market.market_index,
         market.amm.historical_oracle_data.last_oracle_price_twap,
         oracle_price_data,

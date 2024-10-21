@@ -176,7 +176,7 @@ pub fn handle_trigger_order<'c: 'info, 'info>(
 	};
 
 	let writeable_markets = match market_type {
-		MarketType::Spot => MarketSet::new(),
+		MarketType::Synthetic => MarketSet::new(),
 	};
 
 	let AccountMaps { market_map, mut oracle_map } = load_maps(
@@ -368,9 +368,9 @@ pub fn place_swift_taker_order<'c: 'info, 'info>(
 		&taker_order_params_message.swift_order_params;
 	if
 		matching_taker_order_params.order_type != OrderType::Market ||
-		matching_taker_order_params.market_type != MarketType::Perp
+		matching_taker_order_params.market_type != MarketType::Synthetic
 	{
-		msg!("First order must be a market or oracle perp taker order");
+		msg!("First order must be a market synthetic taker order");
 		return Err(print_error!(ErrorCode::InvalidSwiftOrderParam)().into());
 	}
 
@@ -417,7 +417,7 @@ pub fn place_swift_taker_order<'c: 'info, 'info>(
 				OrderTriggerCondition::Above
 			},
 			market_index,
-			market_type: MarketType::Perp,
+			market_type: MarketType::Synthetic,
 			reduce_only: true,
 			..OrderParams::default()
 		};
@@ -453,7 +453,7 @@ pub fn place_swift_taker_order<'c: 'info, 'info>(
 				OrderTriggerCondition::Below
 			},
 			market_index,
-			market_type: MarketType::Perp,
+			market_type: MarketType::Synthetic,
 			reduce_only: true,
 			..OrderParams::default()
 		};

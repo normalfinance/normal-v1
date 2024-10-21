@@ -231,9 +231,9 @@ pub fn place_order(
 	}
 
 	validate!(
-		params.market_type == MarketType::Spot,
+		params.market_type == MarketType::Synthetic,
 		ErrorCode::InvalidOrderMarketType,
-		"must be spot order"
+		"must be synthetic order"
 	)?;
 
 	let new_order = Order {
@@ -861,9 +861,9 @@ pub fn fill_order(
 		);
 
 	validate!(
-		order_market_type == MarketType::Spot,
+		order_market_type == MarketType::Synthetic,
 		ErrorCode::InvalidOrderMarketType,
-		"must be spot order"
+		"must be synthetic order"
 	)?;
 
 	// TODO: investigate
@@ -916,7 +916,7 @@ pub fn fill_order(
 
 		let (oracle_price_data, _oracle_validity) =
 			oracle_map.get_price_data_and_validity(
-				MarketType::Spot,
+				MarketType::Synthetic,
 				market.market_index,
 				&market.amm.oracle,
 				market.amm.historical_oracle_data.last_oracle_price_twap,
@@ -1252,7 +1252,7 @@ fn get_maker_orders_info(
 		let maker_order_price_and_indexes = find_maker_orders(
 			&maker,
 			&maker_direction,
-			&MarketType::Perp,
+			&MarketType::Synthetic,
 			taker_order.market_index,
 			Some(oracle_price),
 			slot,
@@ -1749,7 +1749,7 @@ pub fn fulfill_order_with_amm(
 			let fee_tier = determine_user_fee_tier(
 				user_stats,
 				fee_structure,
-				&MarketType::Perp
+				&MarketType::Synthetic
 			)?;
 			let (base_asset_amount, limit_price) =
 				calculate_base_asset_amount_for_amm_to_fulfill(
@@ -2375,7 +2375,7 @@ pub fn fulfill_order_with_match(
 		filler_multiplier,
 		reward_referrer,
 		referrer_stats,
-		&MarketType::Perp,
+		&MarketType::Synthetic,
 		market.fee_adjustment
 	)?;
 
@@ -2629,15 +2629,15 @@ pub fn trigger_order(
 	)?;
 
 	validate!(
-		market_type == MarketType::Perp,
+		market_type == MarketType::Synthetic,
 		ErrorCode::InvalidOrderMarketType,
-		"Order must be a perp order"
+		"Order must be a synthetic order"
 	)?;
 
 	let mut market = market_map.get_ref_mut(&market_index)?;
 	let (oracle_price_data, oracle_validity) =
 		oracle_map.get_price_data_and_validity(
-			MarketType::Perp,
+			MarketType::Synthetic,
 			market.market_index,
 			&market.amm.oracle,
 			market.amm.historical_oracle_data.last_oracle_price_twap,

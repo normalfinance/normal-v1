@@ -764,7 +764,7 @@ pub fn find_bids_and_asks_from_users(
                 continue;
             }
 
-            if order.market_type != MarketType::Perp || order.market_index != market_index {
+            if order.market_type != MarketType::Synthetic || order.market_index != market_index {
                 continue;
             }
 

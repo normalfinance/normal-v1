@@ -45,7 +45,7 @@ pub fn calculate_repeg_validity_from_oracle_account(
     )?;
     let oracle_is_valid =
         oracle::oracle_validity(
-            MarketType::Spot,
+            MarketType::Synthetic,
             market.market_index,
             market.amm.historical_oracle_data.last_oracle_price_twap,
             &oracle_price_data,

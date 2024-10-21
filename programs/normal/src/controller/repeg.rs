@@ -152,7 +152,7 @@ pub fn _update_amm(
     }
 
     let oracle_validity = oracle::oracle_validity(
-        MarketType::Spot,
+        MarketType::Synthetic,
         market.market_index,
         market.amm.historical_oracle_data.last_oracle_price_twap,
         oracle_price_data,
@@ -238,7 +238,7 @@ pub fn update_amm_and_check_validity(
     let risk_ema_price = market.amm.historical_oracle_data.last_oracle_price_twap;
 
     let oracle_validity = oracle_validity(
-        MarketType::Spot,
+        MarketType::Synthetic,
         market.market_index,
         risk_ema_price,
         oracle_price_data,
