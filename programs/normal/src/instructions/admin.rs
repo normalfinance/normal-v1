@@ -43,9 +43,10 @@ use crate::state::oracle::{
     OracleSource,
 };
 use crate::state::oracle_map::OracleMap;
-use crate::state::paused_operations::{ Operation };
-use crate::state::market::{ SyntheticTier, AssetType, MarketStatus, Market, PoolBalance };
+use crate::state::paused_operations::{ Operatio, InsuranceFundOperation };
+use crate::state::market::{ AssetType, MarketStatus, Market, PoolBalance };
 use crate::state::market_map::get_writable_market_set;
+// use crate::state::insurance::{ SyntheticTier};
 // use crate::state::market::{
 //     SyntheticTier, SpotBalanceType, SpotFulfillmentConfigStatus, SpotMarket,
 // };
@@ -1100,6 +1101,55 @@ pub fn handle_reset_amm_oracle_twap(ctx: Context<RepegCurve>) -> Result<()> {
     Ok(())
 }
 
+
+#[access_control(
+    market_valid(&ctx.accounts.market)
+)]
+pub fn handle_update_market_max_imbalances(
+    ctx: Context<AdminUpdateMarket>,
+    quote_max_insurance: u64,
+) -> Result<()> {
+    let market = &mut load_mut!(ctx.accounts.market)?;
+
+    msg!(
+        "updating perp market {} max imbalances",
+        market.market_index
+    );
+
+    let max_insurance_for_tier = match market.contract_tier {
+        ContractTier::A => INSURANCE_A_MAX,
+        ContractTier::B => INSURANCE_B_MAX,
+        ContractTier::C => INSURANCE_C_MAX,
+        ContractTier::Speculative => INSURANCE_SPECULATIVE_MAX,
+        ContractTier::HighlySpeculative => INSURANCE_SPECULATIVE_MAX,
+        ContractTier::Isolated => INSURANCE_SPECULATIVE_MAX,
+    };
+
+    validate!(
+        quote_max_insurance <= max_insurance_for_tier,
+        ErrorCode::DefaultError,
+        "all maxs must be less than max_insurance for ContractTier ={}",
+        max_insurance_for_tier
+    )?;
+
+    validate!(
+        market.insurance_claim.quote_settled_insurance <= quote_max_insurance,
+        ErrorCode::DefaultError,
+        "quote_max_insurance must be above market.insurance_claim.quote_settled_insurance={}",
+        market.insurance_claim.quote_settled_insurance
+    )?;
+
+    msg!(
+        "market.quote_max_insurance: {:?} -> {:?}",
+        market.insurance_claim.quote_max_insurance,
+        quote_max_insurance
+    );
+
+    market.insurance_claim.quote_max_insurance = quote_max_insurance;
+
+    Ok(())
+}
+
 // =======
 
 #[access_control(market_valid(&ctx.accounts.market))]
@@ -1149,17 +1199,27 @@ pub fn handle_update_market_synthetic_tier(
     let market = &mut load_mut!(ctx.accounts.market)?;
     msg!("market {}", market.market_index);
 
-    if market.initial_asset_weight > 0 {
-        validate!(
-            matches!(synthetic_tier, SyntheticTier::Collateral | SyntheticTier::Protected),
-            ErrorCode::DefaultError,
-            "initial_asset_weight > 0 so SyntheticTier must be collateral or protected"
-        )?;
-    }
-
     msg!("market.synthetic_tier: {:?} -> {:?}", market.synthetic_tier, synthetic_tier);
 
     market.synthetic_tier = synthetic_tier;
+
+    let AccountMaps { market_map, oracle_map } = load_maps(
+        &mut ctx.remaining_accounts.iter().peekable(),
+        &get_writable_market_set(market_index),
+        clock.slot,
+        Some(state.oracle_guard_rails)
+    )?;
+
+    let prev_max_insurance_claim_pct = market.max_insurance_claim_pct;
+    controller::insurance::update_market_max_insurance_claim(&market_map);
+    let new_max_insurance_claim_pct = market.max_insurance_claim_pct;
+    
+     msg!(
+        "market.max_insurance_claim_pct: {} -> {}",
+        prev_max_insurance_claim_pct,
+        new_max_insurance_claim_pct
+    );
+
     Ok(())
 }
 
