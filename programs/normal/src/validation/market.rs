@@ -190,17 +190,6 @@ pub fn validate_market(market: &Market) -> NormalResult {
     }
 
     validate!(
-        market.insurance_claim.max_revenue_withdraw_per_period >=
-            market.insurance_claim.revenue_withdraw_since_last_settle.unsigned_abs(),
-        ErrorCode::InvalidAmmDetected,
-        "market
-        .insurance_claim
-        .max_revenue_withdraw_per_period={} < |market.insurance_claim.revenue_withdraw_since_last_settle|={}",
-        market.insurance_claim.max_revenue_withdraw_per_period,
-        market.insurance_claim.revenue_withdraw_since_last_settle.unsigned_abs()
-    )?;
-
-    validate!(
         market.amm.base_asset_amount_per_lp < (MAX_BASE_ASSET_AMOUNT_WITH_AMM as i128),
         ErrorCode::InvalidAmmDetected,
         "market.amm.base_asset_amount_per_lp too large: {}",
