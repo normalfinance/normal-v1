@@ -1,4 +1,5 @@
 pub mod amm;
+pub mod insurance;
 pub mod lp;
 pub mod orders;
 pub mod pda;

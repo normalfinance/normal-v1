@@ -11,6 +11,7 @@ pub mod fees;
 mod floor_div;
 pub mod fulfillment;
 pub mod helpers;
+pub mod insurance;
 pub mod lp;
 pub mod matching;
 pub mod oracle;
