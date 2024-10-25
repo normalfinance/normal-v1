@@ -147,7 +147,6 @@ pub enum PositionUpdateType {
 	Increase,
 	Reduce,
 	Close,
-	Flip,
 }
 pub fn get_position_update_type(
 	position: &Position,
@@ -190,8 +189,6 @@ pub fn get_position_update_type(
 		position_base_with_remainder.abs() == delta_base_with_remainder.abs()
 	{
 		Ok(PositionUpdateType::Close)
-	} else {
-		Ok(PositionUpdateType::Flip)
 	}
 }
 

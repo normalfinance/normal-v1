@@ -150,26 +150,6 @@ pub fn update_position_and_market(
 
 			(new_quote_entry_amount, new_quote_break_even_amount, pnl)
 		}
-		PositionUpdateType::Flip => {
-			let current_base_i128 =
-				position.get_base_asset_amount_with_remainder_abs()?;
-			let delta_base_i128 = delta.get_delta_base_with_remainder_abs()?;
-
-			// same calculation for new_quote_entry_amount
-			let new_quote_break_even_amount = delta.quote_asset_amount.safe_sub(
-				delta.quote_asset_amount
-					.cast::<i128>()?
-					.safe_mul(current_base_i128)?
-					.safe_div(delta_base_i128)?
-					.cast()?
-			)?;
-
-			let pnl = position.quote_entry_amount.safe_add(
-				delta.quote_asset_amount.safe_sub(new_quote_break_even_amount)?
-			)?;
-
-			(new_quote_break_even_amount, new_quote_break_even_amount, pnl)
-		}
 	};
 
 	// Update Market open interest
