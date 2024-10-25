@@ -383,12 +383,12 @@ impl OrderParams {
             .cast::<i64>()?
             .safe_sub(market.amm.historical_oracle_data.last_oracle_price_twap_5min)?;
 
-        let frac_of_long_spread_in_price: i64 = market.amm.long_spread
+        let frac_of_buy_spread_in_price: i64 = market.amm.buy_spread
             .cast::<i64>()?
             .safe_mul(mark_twap_slow)?
             .safe_div(PRICE_PRECISION_I64 * 10)?;
 
-        let frac_of_short_spread_in_price: i64 = market.amm.short_spread
+        let frac_of_sell_spread_in_price: i64 = market.amm.sell_spread
             .cast::<i64>()?
             .safe_mul(mark_twap_slow)?
             .safe_div(PRICE_PRECISION_I64 * 10)?;
@@ -396,12 +396,12 @@ impl OrderParams {
         let baseline_start_price_offset = match direction {
             PositionDirection::Long =>
                 baseline_start_price_offset_slow
-                    .safe_add(frac_of_long_spread_in_price)?
-                    .min(baseline_start_price_offset_fast.safe_sub(frac_of_short_spread_in_price)?),
+                    .safe_add(frac_of_buy_spread_in_price)?
+                    .min(baseline_start_price_offset_fast.safe_sub(frac_of_sell_spread_in_price)?),
             PositionDirection::Short =>
                 baseline_start_price_offset_slow
-                    .safe_sub(frac_of_short_spread_in_price)?
-                    .max(baseline_start_price_offset_fast.safe_add(frac_of_long_spread_in_price)?),
+                    .safe_sub(frac_of_sell_spread_in_price)?
+                    .max(baseline_start_price_offset_fast.safe_add(frac_of_buy_spread_in_price)?),
         };
 
         Ok(baseline_start_price_offset)
@@ -420,9 +420,9 @@ impl OrderParams {
         let (min_divisor, max_divisor) = market.get_auction_end_min_max_divisors()?;
 
         let amm_spread_side_pct = if direction == PositionDirection::Short {
-            market.amm.short_spread
+            market.amm.sell_spread
         } else {
-            market.amm.long_spread
+            market.amm.buy_spread
         };
 
         let mut baseline_end_price_buffer = market.amm.mark_std

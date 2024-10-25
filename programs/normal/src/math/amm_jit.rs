@@ -40,14 +40,14 @@ pub fn calculate_jit_base_asset_amount(
             let opposite_spread_price = if taker_direction == PositionDirection::Long {
                 market
                     .amm
-                    .short_spread
+                    .sell_spread
                     .cast::<u64>()?
                     .safe_mul(baseline_price_u64)?
                     .safe_div(PERCENTAGE_PRECISION_U64)?
             } else {
                 market
                     .amm
-                    .long_spread
+                    .buy_spread
                     .cast::<u64>()?
                     .safe_mul(baseline_price_u64)?
                     .safe_div(PERCENTAGE_PRECISION_U64)?

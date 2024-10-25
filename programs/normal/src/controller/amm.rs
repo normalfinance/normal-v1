@@ -206,7 +206,7 @@ pub fn update_spreads(
 		0
 	};
 
-	let (long_spread, short_spread) = if market.amm.curve_update_intensity > 0 {
+	let (buy_spread, sell_spread) = if market.amm.curve_update_intensity > 0 {
 		amm_spread::calculate_spread(
 			market.amm.base_spread,
 			market.amm.last_oracle_reserve_price_spread_pct,
@@ -223,8 +223,8 @@ pub fn update_spreads(
 			market.amm.max_base_asset_reserve,
 			market.amm.mark_std,
 			market.amm.oracle_std,
-			market.amm.long_intensity_volume,
-			market.amm.short_intensity_volume,
+			market.amm.buy_intensity_volume,
+			market.amm.sell_intensity_volume,
 			market.amm.volume_24h
 		)?
 	} else {
@@ -232,13 +232,13 @@ pub fn update_spreads(
 		(half_base_spread, half_base_spread)
 	};
 
-	market.amm.long_spread = long_spread;
-	market.amm.short_spread = short_spread;
+	market.amm.buy_spread = buy_spread;
+	market.amm.sell_spread = sell_spread;
 	market.amm.reference_price_offset = reference_price_offset;
 
 	update_spread_reserves(market)?;
 
-	Ok((long_spread, short_spread))
+	Ok((buy_spread, sell_spread))
 }
 
 pub fn update_concentration_coef(

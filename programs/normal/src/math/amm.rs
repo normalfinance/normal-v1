@@ -188,7 +188,7 @@ pub fn estimate_best_bid_ask_price(
 	// trade is a long
 	let best_bid_estimate = (
 		if trade_premium > 0 {
-			let discount = min(base_spread_u64, amm.short_spread.cast::<u64>()? / 2);
+			let discount = min(base_spread_u64, amm.sell_spread.cast::<u64>()? / 2);
 			last_oracle_price_u64
 				.saturating_sub(discount.min(trade_premium.unsigned_abs()))
 				.max(amm.order_tick_size)
@@ -202,7 +202,7 @@ pub fn estimate_best_bid_ask_price(
 		if trade_premium < 0 {
 			let premium: u64 = min(
 				base_spread_u64,
-				amm.long_spread.cast::<u64>()? / 2
+				amm.buy_spread.cast::<u64>()? / 2
 			);
 			last_oracle_price_u64.safe_add(premium.min(trade_premium.unsigned_abs()))?
 		} else {
@@ -603,27 +603,27 @@ pub fn update_amm_long_short_intensity(
 		(0_u64, quote_asset_amount)
 	};
 
-	amm.long_intensity_count = calculate_weighted_average(
-		amm.long_intensity_count.cast()?,
+	amm.buy_intensity_count = calculate_weighted_average(
+		amm.buy_intensity_count.cast()?,
 		long_quote_amount.cast::<i64>()?.safe_div(QUOTE_PRECISION_I64)?,
 		since_last,
 		ONE_HOUR
 	)?.cast()?;
-	amm.long_intensity_volume = calculate_rolling_sum(
-		amm.long_intensity_volume,
+	amm.buy_intensity_volume = calculate_rolling_sum(
+		amm.buy_intensity_volume,
 		long_quote_amount,
 		since_last,
 		ONE_HOUR
 	)?;
 
-	amm.short_intensity_count = calculate_weighted_average(
-		amm.short_intensity_count.cast()?,
+	amm.sell_intensity_count = calculate_weighted_average(
+		amm.sell_intensity_count.cast()?,
 		short_quote_amount.cast::<i64>()?.safe_div(QUOTE_PRECISION_I64)?,
 		since_last,
 		ONE_HOUR
 	)?.cast()?;
-	amm.short_intensity_volume = calculate_rolling_sum(
-		amm.short_intensity_volume,
+	amm.sell_intensity_volume = calculate_rolling_sum(
+		amm.sell_intensity_volume,
 		short_quote_amount,
 		since_last,
 		ONE_HOUR

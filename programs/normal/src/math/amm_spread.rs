@@ -69,27 +69,27 @@ pub fn calculate_base_asset_amount_to_trade_to_price(
 }
 
 pub fn cap_to_max_spread(
-    mut long_spread: u64,
-    mut short_spread: u64,
+    mut buy_spread: u64,
+    mut sell_spread: u64,
     max_spread: u64,
 ) -> NormalResult<(u64, u64)> {
-    let total_spread = long_spread.safe_add(short_spread)?;
+    let total_spread = buy_spread.safe_add(sell_spread)?;
 
     if total_spread > max_spread {
-        if long_spread > short_spread {
-            long_spread = long_spread
+        if buy_spread > sell_spread {
+            buy_spread = buy_spread
                 .saturating_mul(max_spread)
                 .safe_div_ceil(total_spread)?;
-            short_spread = max_spread.safe_sub(long_spread)?;
+            sell_spread = max_spread.safe_sub(buy_spread)?;
         } else {
-            short_spread = short_spread
+            sell_spread = sell_spread
                 .saturating_mul(max_spread)
                 .safe_div_ceil(total_spread)?;
-            long_spread = max_spread.safe_sub(short_spread)?;
+            buy_spread = max_spread.safe_sub(sell_spread)?;
         }
     }
 
-    let new_total_spread = long_spread.safe_add(short_spread)?;
+    let new_total_spread = buy_spread.safe_add(sell_spread)?;
 
     validate!(
         new_total_spread <= max_spread,
@@ -99,7 +99,7 @@ pub fn cap_to_max_spread(
         max_spread
     )?;
 
-    Ok((long_spread, short_spread))
+    Ok((buy_spread, sell_spread))
 }
 
 pub fn calculate_long_short_vol_spread(
@@ -107,8 +107,8 @@ pub fn calculate_long_short_vol_spread(
     reserve_price: u64,
     mark_std: u64,
     oracle_std: u64,
-    long_intensity_volume: u64,
-    short_intensity_volume: u64,
+    buy_intensity_volume: u64,
+    sell_intensity_volume: u64,
     volume_24h: u64,
 ) -> NormalResult<(u64, u64)> {
     // 1.6 * std
@@ -126,12 +126,12 @@ pub fn calculate_long_short_vol_spread(
     let factor_clamp_min: u128 = PERCENTAGE_PRECISION / 100; // .01
     let factor_clamp_max: u128 = 16 * PERCENTAGE_PRECISION / 10; // 1.6
 
-    let long_vol_spread_factor: u128 = long_intensity_volume
+    let long_vol_spread_factor: u128 = buy_intensity_volume
         .cast::<u128>()?
         .safe_mul(PERCENTAGE_PRECISION)?
         .safe_div(max(volume_24h.cast::<u128>()?, 1))?
         .clamp(factor_clamp_min, factor_clamp_max);
-    let short_vol_spread_factor: u128 = short_intensity_volume
+    let short_vol_spread_factor: u128 = sell_intensity_volume
         .cast::<u128>()?
         .safe_mul(PERCENTAGE_PRECISION)?
         .safe_div(max(volume_24h.cast::<u128>()?, 1))?
@@ -305,8 +305,8 @@ pub fn calculate_spread(
     max_base_asset_reserve: u128,
     mark_std: u64,
     oracle_std: u64,
-    long_intensity_volume: u64,
-    short_intensity_volume: u64,
+    buy_intensity_volume: u64,
+    sell_intensity_volume: u64,
     volume_24h: u64,
 ) -> NormalResult<(u32, u32)> {
     let (long_vol_spread, short_vol_spread) = calculate_long_short_vol_spread(
@@ -314,15 +314,15 @@ pub fn calculate_spread(
         reserve_price,
         mark_std,
         oracle_std,
-        long_intensity_volume,
-        short_intensity_volume,
+        buy_intensity_volume,
+        sell_intensity_volume,
         volume_24h,
     )?;
 
     let half_base_spread_u64 = (base_spread / 2) as u64;
 
-    let mut long_spread = max(half_base_spread_u64, long_vol_spread);
-    let mut short_spread = max(half_base_spread_u64, short_vol_spread);
+    let mut buy_spread = max(half_base_spread_u64, long_vol_spread);
+    let mut sell_spread = max(half_base_spread_u64, short_vol_spread);
 
     let max_target_spread = calculate_max_target_spread(
         reserve_price,
@@ -336,15 +336,15 @@ pub fn calculate_spread(
     // oracle retreat
     // if mark - oracle < 0 (mark below oracle) and user going long then increase spread
     if last_oracle_reserve_price_spread_pct < 0 {
-        long_spread = max(
-            long_spread,
+        buy_spread = max(
+            buy_spread,
             last_oracle_reserve_price_spread_pct
                 .unsigned_abs()
                 .safe_add(long_vol_spread)?,
         );
     } else if last_oracle_reserve_price_spread_pct > 0 {
-        short_spread = max(
-            short_spread,
+        sell_spread = max(
+            sell_spread,
             last_oracle_reserve_price_spread_pct
                 .unsigned_abs()
                 .safe_add(short_vol_spread)?,
@@ -358,28 +358,28 @@ pub fn calculate_spread(
         min_base_asset_reserve,
         max_base_asset_reserve,
         if base_asset_amount_with_amm > 0 {
-            long_spread
+            buy_spread
         } else {
-            short_spread
+            sell_spread
         },
         max_target_spread,
     )?;
 
     if base_asset_amount_with_amm > 0 {
-        long_spread = long_spread
+        buy_spread = buy_spread
             .safe_mul(inventory_scale_capped)?
             .safe_div(BID_ASK_SPREAD_PRECISION)?;
     } else if base_asset_amount_with_amm < 0 {
-        short_spread = short_spread
+        sell_spread = sell_spread
             .safe_mul(inventory_scale_capped)?
             .safe_div(BID_ASK_SPREAD_PRECISION)?;
     }
 
     if total_fee_minus_distributions <= 0 {
-        long_spread = long_spread
+        buy_spread = buy_spread
             .saturating_mul(DEFAULT_LARGE_BID_ASK_FACTOR)
             .safe_div(BID_ASK_SPREAD_PRECISION)?;
-        short_spread = short_spread
+        sell_spread = sell_spread
             .saturating_mul(DEFAULT_LARGE_BID_ASK_FACTOR)
             .safe_div(BID_ASK_SPREAD_PRECISION)?;
     } else {
@@ -394,20 +394,20 @@ pub fn calculate_spread(
         )?;
 
         if base_asset_amount_with_amm > 0 {
-            long_spread = long_spread
+            buy_spread = buy_spread
                 .safe_mul(effective_leverage_capped)?
                 .safe_div(BID_ASK_SPREAD_PRECISION)?;
         } else if base_asset_amount_with_amm < 0 {
-            short_spread = short_spread
+            sell_spread = sell_spread
                 .safe_mul(effective_leverage_capped)?
                 .safe_div(BID_ASK_SPREAD_PRECISION)?;
         }
     }
 
-    let (long_spread, short_spread) =
-        cap_to_max_spread(long_spread, short_spread, max_target_spread)?;
+    let (buy_spread, sell_spread) =
+        cap_to_max_spread(buy_spread, sell_spread, max_target_spread)?;
 
-    Ok((long_spread.cast::<u32>()?, short_spread.cast::<u32>()?))
+    Ok((buy_spread.cast::<u32>()?, sell_spread.cast::<u32>()?))
 }
 
 pub fn get_spread_reserves(amm: &AMM, direction: PositionDirection) -> NormalResult<(u128, u128)> {
@@ -424,8 +424,8 @@ pub fn calculate_spread_reserves(
     direction: PositionDirection,
 ) -> NormalResult<(u128, u128)> {
     let spread = match direction {
-        PositionDirection::Long => market.amm.long_spread,
-        PositionDirection::Short => market.amm.short_spread,
+        PositionDirection::Long => market.amm.buy_spread,
+        PositionDirection::Short => market.amm.sell_spread,
     };
 
     let spread_with_offset: i32 = if direction == PositionDirection::Short {

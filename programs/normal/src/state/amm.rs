@@ -112,10 +112,10 @@ pub struct AMM {
 	/// `x` reserves for constant product mm formula (x * y = k)
 	/// precision: AMM_RESERVE_PRECISION
 	pub base_asset_reserve: u128,
-	/// transformed base_asset_reserve for users going long
+	/// transformed base_asset_reserve for users buying
 	/// precision: AMM_RESERVE_PRECISION
 	pub ask_base_asset_reserve: u128,
-	/// transformed base_asset_reserve for users going short
+	/// transformed base_asset_reserve for users selling
 	/// precision: AMM_RESERVE_PRECISION
 	pub bid_base_asset_reserve: u128,
 
@@ -124,10 +124,10 @@ pub struct AMM {
 	/// `y` reserves for constant product mm formula (x * y = k)
 	/// precision: AMM_RESERVE_PRECISION
 	pub quote_asset_reserve: u128,
-	/// transformed quote_asset_reserve for users going long
+	/// transformed quote_asset_reserve for users buying
 	/// precision: AMM_RESERVE_PRECISION
 	pub ask_quote_asset_reserve: u128,
-	/// transformed quote_asset_reserve for users going short
+	/// transformed quote_asset_reserve for users selling
 	/// precision: AMM_RESERVE_PRECISION
 	pub bid_quote_asset_reserve: u128,
 
@@ -251,14 +251,14 @@ pub struct AMM {
 	/// estimated total of volume in market
 	/// QUOTE_PRECISION
 	pub volume_24h: u64,
-	/// the volume intensity of long fills against AMM
-	pub long_intensity_volume: u64,
-	/// the volume intensity of short fills against AMM
-	pub short_intensity_volume: u64,
-	/// the count intensity of long fills against AMM
-	pub long_intensity_count: u32,
-	/// the count intensity of short fills against AMM
-	pub short_intensity_count: u32,
+	/// the volume intensity of buy fills against AMM
+	pub buy_intensity_volume: u64,
+	/// the volume intensity of sell fills against AMM
+	pub sell_intensity_volume: u64,
+	/// the count intensity of buy fills against AMM
+	pub buy_intensity_count: u32,
+	/// the count intensity of sell fills against AMM
+	pub sell_intensity_count: u32,
 
 	/// the blockchain unix timestamp at the time of the last trade
 	pub last_trade_ts: i64,
@@ -278,9 +278,9 @@ pub struct AMM {
 	/// the maximum spread the AMM can quote
 	pub max_spread: u32,
 	/// the spread for asks vs the reserve price
-	pub long_spread: u32,
+	pub buy_spread: u32,
 	/// the spread for bids vs the reserve price
-	pub short_spread: u32,
+	pub sell_spread: u32,
 
 	/// the fraction of total available liquidity a single fill on the AMM can consume
 	pub max_fill_reserve_fraction: u16,
@@ -357,18 +357,18 @@ impl Default for AMM {
 			min_order_size: 1,
 			max_position_size: 0,
 			volume_24h: 0,
-			long_intensity_volume: 0,
-			short_intensity_volume: 0,
+			buy_intensity_volume: 0,
+			sell_intensity_volume: 0,
 			last_trade_ts: 0,
 			mark_std: 0,
 			oracle_std: 0,
 			last_mark_price_twap_ts: 0,
 			base_spread: 0,
 			max_spread: 0,
-			long_spread: 0,
-			short_spread: 0,
-			long_intensity_count: 0,
-			short_intensity_count: 0,
+			buy_spread: 0,
+			sell_spread: 0,
+			buy_intensity_count: 0,
+			sell_intensity_count: 0,
 			max_fill_reserve_fraction: 0,
 			max_slippage_ratio: 0,
 			curve_update_intensity: 0,
@@ -675,7 +675,7 @@ impl AMM {
 		reserve_price
 			.cast::<u128>()?
 			.safe_mul(
-				BID_ASK_SPREAD_PRECISION_U128.safe_sub(self.short_spread.cast()?)?
+				BID_ASK_SPREAD_PRECISION_U128.safe_sub(self.sell_spread.cast()?)?
 			)?
 			.safe_div(BID_ASK_SPREAD_PRECISION_U128)?
 			.cast()
@@ -685,7 +685,7 @@ impl AMM {
 		reserve_price
 			.cast::<u128>()?
 			.safe_mul(
-				BID_ASK_SPREAD_PRECISION_U128.safe_add(self.long_spread.cast()?)?
+				BID_ASK_SPREAD_PRECISION_U128.safe_add(self.buy_spread.cast()?)?
 			)?
 			.safe_div(BID_ASK_SPREAD_PRECISION_U128)?
 			.cast::<u64>()

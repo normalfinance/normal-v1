@@ -302,8 +302,8 @@ pub fn handle_initialize_market(
             max_slippage_ratio: 50, // ~2%
             max_fill_reserve_fraction: 100, // moves price ~2%
             base_spread,
-            long_spread: 0,
-            short_spread: 0,
+            buy_spread: 0,
+            sell_spread: 0,
             max_spread,
             last_bid_price_twap: init_reserve_price,
             last_ask_price_twap: init_reserve_price,
@@ -319,10 +319,10 @@ pub fn handle_initialize_market(
             mark_std: 0,
             oracle_std: 0,
             volume_24h: 0,
-            long_intensity_count: 0,
-            long_intensity_volume: 0,
-            short_intensity_count: 0,
-            short_intensity_volume: 0,
+            buy_intensity_count: 0,
+            buy_intensity_volume: 0,
+            sell_intensity_count: 0,
+            sell_intensity_volume: 0,
             last_trade_ts: now,
             curve_update_intensity,
             fee_pool: PoolBalance::default(),
@@ -1402,13 +1402,13 @@ pub fn handle_update_market_base_spread(
 
     msg!("market.amm.base_spread: {:?} -> {:?}", market.amm.base_spread, base_spread);
 
-    msg!("market.amm.long_spread: {:?} -> {:?}", market.amm.long_spread, base_spread / 2);
+    msg!("market.amm.buy_spread: {:?} -> {:?}", market.amm.buy_spread, base_spread / 2);
 
-    msg!("market.amm.short_spread: {:?} -> {:?}", market.amm.short_spread, base_spread / 2);
+    msg!("market.amm.sell_spread: {:?} -> {:?}", market.amm.sell_spread, base_spread / 2);
 
     market.amm.base_spread = base_spread;
-    market.amm.long_spread = base_spread / 2;
-    market.amm.short_spread = base_spread / 2;
+    market.amm.buy_spread = base_spread / 2;
+    market.amm.sell_spread = base_spread / 2;
     Ok(())
 }
 
