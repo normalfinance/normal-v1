@@ -727,6 +727,51 @@ pub mod normal {
 	) -> Result<()> {
 		handle_post_multi_pyth_pull_oracle_updates_atomic(ctx, params)
 	}
+
+	/**
+	 *
+	 * INSURANCE FUND STAKER INSTUCTIONS (ADMIN)
+	 *
+	 */
+
+	pub fn initialize_insurance_fund_stake(
+		ctx: Context<InitializeInsuranceFundStake>
+	) -> Result<()> {
+		handle_initialize_insurance_fund_stake(ctx)
+	}
+
+	pub fn add_insurance_fund_stake<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, AddInsuranceFundStake<'info>>,
+		amount: u64
+	) -> Result<()> {
+		handle_add_insurance_fund_stake(ctx, amount)
+	}
+
+	pub fn request_remove_insurance_fund_stake(
+		ctx: Context<RequestRemoveInsuranceFundStake>,
+		amount: u64
+	) -> Result<()> {
+		handle_request_remove_insurance_fund_stake(ctx, amount)
+	}
+
+	pub fn cancel_request_remove_insurance_fund_stake(
+		ctx: Context<RequestRemoveInsuranceFundStake>
+	) -> Result<()> {
+		handle_cancel_request_remove_insurance_fund_stake(ctx)
+	}
+
+	pub fn remove_insurance_fund_stake<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, RemoveInsuranceFundStake<'info>>
+	) -> Result<()> {
+		handle_remove_insurance_fund_stake(ctx)
+	}
+
+	pub fn transfer_protocol_insurance_fund_shares(
+		ctx: Context<TransferProtocolInsuranceFundShares>,
+		shares: u128
+	) -> Result<()> {
+		handle_transfer_protocol_insurance_fund_shares(ctx, shares)
+	}
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
