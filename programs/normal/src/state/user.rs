@@ -283,30 +283,27 @@ pub struct UserFees {
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]
 pub struct Position {
-	/// the size of the users perp position
-	/// precision: BASE_PRECISION
-	pub base_asset_amount: i64,
-	/// Used to calculate the users pnl. Upon entry, is equal to base_asset_amount * avg entry price - fees
-	/// Updated when the user open/closes position or settles pnl. Includes fees/funding
-	/// precision: QUOTE_PRECISION
-	pub quote_asset_amount: i64,
-	/// The amount of quote the user would need to exit their position at to break even
-	/// Updated when the user open/closes position or settles pnl. Includes fees/funding
-	/// precision: QUOTE_PRECISION
-	pub quote_break_even_amount: i64,
-	/// The amount quote the user entered the position with. Equal to base asset amount * avg entry price
-	/// Updated when the user open/closes position. Excludes fees/funding
-	/// precision: QUOTE_PRECISION
-	pub quote_entry_amount: i64,
+	// /// the size of the users perp position
+	// /// precision: BASE_PRECISION
+	// pub base_asset_amount: i64,
+	// /// Used to calculate the users pnl. Upon entry, is equal to base_asset_amount * avg entry price - fees
+	// /// Updated when the user open/closes position or settles pnl. Includes fees/funding
+	// /// precision: QUOTE_PRECISION
+	// pub quote_asset_amount: i64,
+	// /// The amount of quote the user would need to exit their position at to break even
+	// /// Updated when the user open/closes position or settles pnl. Includes fees/funding
+	// /// precision: QUOTE_PRECISION
+	// pub quote_break_even_amount: i64,
+	// /// The amount quote the user entered the position with. Equal to base asset amount * avg entry price
+	// /// Updated when the user open/closes position. Excludes fees/funding
+	// /// precision: QUOTE_PRECISION
+	// pub quote_entry_amount: i64,
 	/// The amount of open bids the user has in this perp market
 	/// precision: BASE_PRECISION
 	pub open_bids: i64,
 	/// The amount of open asks the user has in this perp market
 	/// precision: BASE_PRECISION
 	pub open_asks: i64,
-	/// The amount of pnl settled in this market since opening the position
-	/// precision: QUOTE_PRECISION
-	pub settled_pnl: i64,
 	/// The number of lp (liquidity provider) shares the user has in this perp market
 	/// LP shares allow users to provide liquidity via the AMM
 	/// precision: BASE_PRECISION
@@ -339,7 +336,6 @@ impl Position {
 	pub fn is_available(&self) -> bool {
 		!self.is_open_position() &&
 			!self.has_open_order() &&
-			!self.has_unsettled_pnl() &&
 			!self.is_lp()
 	}
 
@@ -436,10 +432,6 @@ impl Position {
 		settled_position.open_asks = open_asks;
 
 		Ok(settled_position)
-	}
-
-	pub fn has_unsettled_pnl(&self) -> bool {
-		self.base_asset_amount == 0 && self.quote_asset_amount != 0
 	}
 
 	pub fn worst_case_base_asset_amount(
