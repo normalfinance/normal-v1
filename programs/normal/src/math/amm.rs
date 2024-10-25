@@ -588,14 +588,14 @@ pub fn update_amm_oracle_std(
 	Ok(true)
 }
 
-pub fn update_amm_long_short_intensity(
+pub fn update_amm_buy_sell_intensity(
 	amm: &mut AMM,
 	now: i64,
 	quote_asset_amount: u64,
 	side: OrderSide
 ) -> NormalResult<bool> {
 	let since_last = max(1, now.safe_sub(amm.last_trade_ts)?);
-	let (long_quote_amount, short_quote_amount) = if
+	let (buy_quote_amount, sell_quote_amount) = if
 		side == OrderSide::Buy
 	{
 		(quote_asset_amount, 0_u64)
@@ -605,26 +605,26 @@ pub fn update_amm_long_short_intensity(
 
 	amm.buy_intensity_count = calculate_weighted_average(
 		amm.buy_intensity_count.cast()?,
-		long_quote_amount.cast::<i64>()?.safe_div(QUOTE_PRECISION_I64)?,
+		buy_quote_amount.cast::<i64>()?.safe_div(QUOTE_PRECISION_I64)?,
 		since_last,
 		ONE_HOUR
 	)?.cast()?;
 	amm.buy_intensity_volume = calculate_rolling_sum(
 		amm.buy_intensity_volume,
-		long_quote_amount,
+		buy_quote_amount,
 		since_last,
 		ONE_HOUR
 	)?;
 
 	amm.sell_intensity_count = calculate_weighted_average(
 		amm.sell_intensity_count.cast()?,
-		short_quote_amount.cast::<i64>()?.safe_div(QUOTE_PRECISION_I64)?,
+		sell_quote_amount.cast::<i64>()?.safe_div(QUOTE_PRECISION_I64)?,
 		since_last,
 		ONE_HOUR
 	)?.cast()?;
 	amm.sell_intensity_volume = calculate_rolling_sum(
 		amm.sell_intensity_volume,
-		short_quote_amount,
+		sell_quote_amount,
 		since_last,
 		ONE_HOUR
 	)?;

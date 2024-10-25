@@ -798,7 +798,7 @@ impl AMM {
 	) -> NormalResult {
 		let since_last = max(1_i64, now.safe_sub(self.last_trade_ts)?);
 
-		amm::update_amm_long_short_intensity(
+		amm::update_amm_buy_sell_intensity(
 			self,
 			now,
 			quote_asset_amount,
