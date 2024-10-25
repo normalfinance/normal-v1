@@ -9,8 +9,12 @@ pub enum ErrorCode {
 	#[msg("Invalid Governance Proposal")]
 	InvalidGovernanceProposial,
 
-	#[msg("Invalid Spot Market Authority")]
-	InvalidSpotMarketAuthority,
+	// Insurance
+	#[msg("NoFeesToDepotiToInsuranceFund")]
+	NoFeesToDepotiToInsuranceFund,
+
+	#[msg("Invalid Market Authority")]
+	InvalidMarketAuthority,
 	#[msg("Clearing house not insurance fund authority")]
 	InvalidInsuranceFundAuthority,
 
@@ -145,12 +149,12 @@ pub enum ErrorCode {
 	CantExpireOrders,
 	#[msg("CouldNotLoadMarketData")]
 	CouldNotLoadMarketData,
-	#[msg("PerpMarketNotFound")]
-	PerpMarketNotFound,
+	#[msg("MarketNotFound")]
+	MarketNotFound,
 	#[msg("InvalidMarketAccount")]
 	InvalidMarketAccount,
 	#[msg("UnableToLoadMarketAccount")]
-	UnableToLoadPerpMarketAccount,
+	UnableToLoadMarketAccount,
 	#[msg("MarketWrongMutability")]
 	MarketWrongMutability,
 	#[msg("UnableToCastUnixTime")]
@@ -161,18 +165,6 @@ pub enum ErrorCode {
 	NoSpotPositionAvailable,
 	#[msg("InvalidSpotMarketInitialization")]
 	InvalidSpotMarketInitialization,
-	#[msg("CouldNotLoadSpotMarketData")]
-	CouldNotLoadSpotMarketData,
-	#[msg("SpotMarketNotFound")]
-	SpotMarketNotFound,
-	#[msg("InvalidSpotMarketAccount")]
-	InvalidSpotMarketAccount,
-	#[msg("UnableToLoadSpotMarketAccount")]
-	UnableToLoadSpotMarketAccount,
-	#[msg("SpotMarketWrongMutability")]
-	SpotMarketWrongMutability,
-	#[msg("SpotInterestNotUpToDate")]
-	SpotMarketInterestNotUpToDate,
 
 	#[msg("CantUpdatePoolBalanceType")]
 	CantUpdatePoolBalanceType,
@@ -219,9 +211,6 @@ pub enum ErrorCode {
 	#[msg("InvalidPositionDelta")]
 	InvalidPositionDelta,
 
-	#[msg("UserNotBankrupt")]
-	UserNotBankrupt,
-
 	#[msg("DefaultError")]
 	DefaultError,
 	#[msg("Insufficient LP tokens")]
@@ -248,9 +237,9 @@ pub enum ErrorCode {
 	#[msg("the Market status doesnt allow filling orders")]
 	MarketFillOrderPaused,
 
-	#[msg("Action violates the Protected Asset Tier rules")]
+	#[msg("Action violates the Protected Synthetic Tier rules")]
 	ProtectedSyntheticTierViolation,
-	#[msg("Action violates the Isolated Asset Tier rules")]
+	#[msg("Action violates the Isolated Synthetic Tier rules")]
 	IsolatedSyntheticTierViolation,
 	#[msg("User Cant Be Deleted")]
 	UserCantBeDeleted,
@@ -266,10 +255,10 @@ pub enum ErrorCode {
 	PerpMarketSettlementUserHasActiveLP,
 	#[msg("UnequalMarketIndexForSpotTransfer")]
 	UnequalMarketIndexForSpotTransfer,
-	#[msg("InvalidPerpPositionDetected")]
-	InvalidPerpPositionDetected,
-	#[msg("InvalidSpotPositionDetected")]
-	InvalidSpotPositionDetected,
+
+	#[msg("InvalidPositionDetected")]
+	InvalidPositionDetected,
+
 	#[msg("InvalidAmmDetected")]
 	InvalidAmmDetected,
 	#[msg("InvalidAmmForFillDetected")]
@@ -302,8 +291,7 @@ pub enum ErrorCode {
 	InvalidAmmMaxSpreadDetected,
 	#[msg("InvalidConcentrationCoef")]
 	InvalidConcentrationCoef,
-	#[msg("InvalidSrmVault")]
-	InvalidSrmVault,
+
 	#[msg("InvalidVaultOwner")]
 	InvalidVaultOwner,
 	#[msg("InvalidMarketStatusForFills")]
@@ -380,8 +368,7 @@ pub enum ErrorCode {
 	RevertFill,
 	#[msg("Invalid MarketAccount for Deletion")]
 	InvalidMarketAccountforDeletion,
-	#[msg("Invalid Spot Fulfillment Params")]
-	InvalidSpotFulfillmentParams,
+
 	#[msg("Failed to Get Mint")]
 	FailedToGetMint,
 
@@ -418,8 +405,7 @@ pub enum ErrorCode {
 	OracleStaleForAMM,
 	#[msg("Unable to parse pull oracle message")]
 	UnableToParsePullOracleMessage,
-	#[msg("Can not borow more than max borrows")]
-	MaxBorrows,
+
 	#[msg("Updates must be monotonically increasing")]
 	OracleUpdatesNotMonotonic,
 	#[msg("Trying to update price feed with the wrong feed id")]
