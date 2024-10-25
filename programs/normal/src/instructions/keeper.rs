@@ -500,6 +500,127 @@ pub fn handle_settle_lp<'c: 'info, 'info>(
 	Ok(())
 }
 
+// TODO: remove, but use for filling orders with IF
+#[access_control(withdraw_not_paused(&ctx.accounts.state))]
+pub fn handle_resolve_pnl_deficit<'c: 'info, 'info>(
+	ctx: Context<'_, '_, 'c, 'info, ResolvePnlDeficit<'info>>,
+	market_index: u16
+) -> Result<()> {
+	let clock = Clock::get()?;
+	let now = clock.unix_timestamp;
+
+	let state = &ctx.accounts.state;
+
+	let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+	let AccountMaps { market_map, mut oracle_map } = load_maps(
+		remaining_accounts_iter,
+		&get_writable_market_set(market_index),
+		clock.slot,
+		Some(state.oracle_guard_rails)
+	)?;
+
+	let mint = get_token_mint(remaining_accounts_iter)?;
+
+	controller::repeg::update_amm(
+		market_index,
+		&market_map,
+		&mut oracle_map,
+		state,
+		&clock
+	)?;
+
+	{
+		let market = &mut market_map.get_ref_mut(&smarket_index)?;
+		controller::insurance::attempt_transfer_fees_to_insurance_fund(
+			&ctx.accounts.market_vault,
+			&ctx.accounts.insurance_fund_vault,
+			market,
+			insurance_fund,
+			now,
+			&ctx.accounts.token_program,
+			&ctx.accounts.normal_signer,
+			state,
+			&mint
+		)?;
+
+		// reload the spot market vault balance so it's up-to-date
+		ctx.accounts.market_vault.reload()?;
+		ctx.accounts.insurance_fund_vault.reload()?;
+	}
+
+	let insurance_vault_amount = ctx.accounts.insurance_fund_vault.amount;
+	let market_vault_amount = ctx.accounts.market_vault.amount;
+
+	let pay_from_insurance = {
+		let market = &mut market_map.get_ref_mut(&market_index)?;
+
+		if market.amm.curve_update_intensity > 0 {
+			validate!(
+				market.amm.last_oracle_valid,
+				ErrorCode::InvalidOracle,
+				"Oracle Price detected as invalid"
+			)?;
+
+			validate!(
+				oracle_map.slot == market.amm.last_update_slot,
+				ErrorCode::AMMNotUpdatedInSameSlot,
+				"AMM must be updated in a prior instruction within same slot"
+			)?;
+		}
+
+		validate!(
+			!market.is_in_settlement(now),
+			ErrorCode::MarketActionPaused,
+			"Market is in settlement mode"
+		)?;
+
+		let oracle_price = oracle_map.get_price_data(&market.amm.oracle)?.price;
+		controller::orders::validate_market_within_price_band(
+			market,
+			state,
+			oracle_price
+		)?;
+
+		controller::insurance::resolve_pnl_deficit(
+			market_vault_amount,
+			insurance_vault_amount,
+			market,
+			insurance_fund,
+			clock.unix_timestamp
+		)?
+	};
+
+	if pay_from_insurance > 0 {
+		validate!(
+			pay_from_insurance < ctx.accounts.insurance_fund_vault.amount,
+			ErrorCode::InsufficientCollateral,
+			"Insurance Fund balance InsufficientCollateral for payment: !{} < {}",
+			pay_from_insurance,
+			ctx.accounts.insurance_fund_vault.amount
+		)?;
+
+		controller::token::send_from_program_vault(
+			&ctx.accounts.token_program,
+			&ctx.accounts.insurance_fund_vault,
+			&ctx.accounts.market_vault,
+			&ctx.accounts.normal_signer,
+			state.signer_nonce,
+			pay_from_insurance,
+			&mint
+		)?;
+
+		validate!(
+			ctx.accounts.insurance_fund_vault.amount > 0,
+			ErrorCode::InvalidIFDetected,
+			"insurance_fund_vault.amount must remain > 0"
+		)?;
+	}
+
+	// todo: validate amounts transfered and market before and after are zero-sum
+
+	Ok(())
+}
+
 #[access_control(
     market_valid(&ctx.accounts.market)
     valid_oracle_for_market(&ctx.accounts.oracle, &ctx.accounts.market)
@@ -714,6 +835,29 @@ pub struct SettleLP<'info> {
 	pub state: Box<Account<'info, State>>,
 	#[account(mut)]
 	pub user: AccountLoader<'info, User>,
+}
+
+#[derive(Accounts)]
+#[instruction(market_index: u16,)]
+pub struct ResolvePnlDeficit<'info> {
+	pub state: Box<Account<'info, State>>,
+	pub authority: Signer<'info>,
+	#[account(
+        mut,
+        seeds = [b"market_vault".as_ref(), market_index.to_le_bytes().as_ref()],
+        bump,
+    )]
+	pub market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+	#[account(
+        mut,
+        seeds = [b"insurance_fund_vault".as_ref()],
+        bump,
+    )]
+	pub insurance_fund_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+	#[account(constraint = state.signer.eq(&normal_signer.key()))]
+	/// CHECK: forced normal_signer
+	pub normal_signer: AccountInfo<'info>,
+	pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
