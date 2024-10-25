@@ -4,7 +4,8 @@ use crate::math::casting::Cast;
 use crate::math::constants::{AMM_RESERVE_PRECISION, PERCENTAGE_PRECISION_U64};
 use crate::math::orders::standardize_base_asset_amount;
 use crate::math::safe_math::SafeMath;
-use crate::state::market::{AMMLiquiditySplit, Market};
+use crate::state::market::Market;
+use crate::state::amm::AMMLiquiditySplit;
 
 // #[cfg(test)]
 // mod tests;

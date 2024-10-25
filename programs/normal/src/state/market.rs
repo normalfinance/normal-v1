@@ -8,16 +8,101 @@ use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::math::constants::{ AMM_RESERVE_PRECISION, FIVE_MINUTE, ONE_HOUR };
 #[cfg(test)]
-use crate::math::constants::{ PRICE_PRECISION_I64, SPOT_CUMULATIVE_INTEREST_PRECISION };
+use crate::math::constants::PRICE_PRECISION_I64;
 use crate::math::safe_math::SafeMath;
 
 use crate::math::stats::calculate_new_twap;
-use crate::state::oracle::{ HistoricalIndexData, HistoricalOracleData, OracleSource };
-use crate::state::paused_operations::Operation;
+use crate::state::oracle::{
+	HistoricalIndexData,
+	HistoricalOracleData,
+	OracleSource,
+};
+use crate::state::insurance::InsuranceClaim;
+use crate::state::paused_operations::{ Operation, InsuranceFundOperation };
 use crate::state::traits::{ MarketIndexOffset, Size };
 use crate::{ validate, PERCENTAGE_PRECISION };
 
 use crate::state::amm::AMM;
+
+#[derive(
+	Clone,
+	Copy,
+	BorshSerialize,
+	BorshDeserialize,
+	PartialEq,
+	Debug,
+	Eq,
+	Default
+)]
+pub enum MarketStatus {
+	/// warm up period for initialization, fills are paused
+	#[default]
+	Initialized,
+	/// all operations allowed
+	Active,
+	/// fills only able to reduce liability
+	ReduceOnly,
+	/// market has determined settlement price and positions are expired must be settled
+	Settlement,
+	/// market has no remaining participants
+	Delisted,
+}
+
+#[derive(
+	Clone,
+	Copy,
+	BorshSerialize,
+	BorshDeserialize,
+	PartialEq,
+	Debug,
+	Eq,
+	Default
+)]
+pub enum SyntheticType {
+	#[default]
+	Asset,
+	Index,
+	Yield,
+}
+
+#[derive(
+	Clone,
+	Copy,
+	BorshSerialize,
+	BorshDeserialize,
+	PartialEq,
+	Debug,
+	Eq,
+	PartialOrd,
+	Ord,
+	Default
+)]
+pub enum SyntheticTier {
+	/// max insurance capped at A level
+	A,
+	/// max insurance capped at B level
+	B,
+	/// max insurance capped at C level
+	C,
+	/// no insurance
+	Speculative,
+	/// no insurance, another tranches below
+	#[default]
+	HighlySpeculative,
+	/// no insurance, only single position allowed
+	Isolated,
+}
+
+impl SyntheticTier {
+	pub fn is_as_safe_as(&self, best_contract: &SyntheticTier) -> bool {
+		self.is_as_safe_as_contract(best_contract)
+	}
+
+	pub fn is_as_safe_as_contract(&self, other: &SyntheticTier) -> bool {
+		// Contract Tier A safest
+		self <= other
+	}
+}
 
 #[account(zero_copy(unsafe))]
 #[derive(PartialEq, Eq, Debug)]
@@ -240,7 +325,32 @@ impl Market {
                 last_oracle_price_twap_5min: PRICE_PRECISION_I64,
                 ..HistoricalOracleData::default()
             },
-            ..SpotMarket::default()
+			..Market::default()
+		}
+	}
+}
+
+#[derive(
+	Clone,
+	Copy,
+	BorshSerialize,
+	BorshDeserialize,
+	PartialEq,
+	Eq,
+	Debug,
+	Default
+)]
+pub enum BalanceType {
+	#[default]
+	Deposit,
+	Borrow,
+}
+
+impl Display for BalanceType {
+	fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+		match self {
+			BalanceType::Deposit => write!(f, "BalanceType::Deposit"),
+			BalanceType::Borrow => write!(f, "BalanceType::Borrow"),
         }
     }
 }
@@ -248,75 +358,15 @@ impl Market {
 pub trait Balance {
     fn market_index(&self) -> u16;
 
+	fn balance_type(&self) -> &BalanceType;
+
     fn balance(&self) -> u128;
 
     fn increase_balance(&mut self, delta: u128) -> NormalResult;
 
     fn decrease_balance(&mut self, delta: u128) -> NormalResult;
-}
 
-#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq, Default)]
-pub enum MarketStatus {
-    /// warm up period for initialization, fills are paused
-    #[default]
-    Initialized,
-    /// all operations allowed
-    Active,
-    /// Deprecated in favor of PausedOperations
-    AmmPaused,
-    /// Deprecated in favor of PausedOperations
-    FillPaused,
-    /// fills only able to reduce liability
-    ReduceOnly,
-    /// market has determined settlement price and positions are expired must be settled
-    Settlement,
-    /// market has no remaining participants
-    Delisted,
-}
-
-impl MarketStatus {
-    pub fn validate_not_deprecated(&self) -> NormalResult {
-        if matches!(self, MarketStatus::AmmPaused | MarketStatus::FillPaused) {
-            msg!("MarketStatus is deprecated");
-            Err(ErrorCode::DefaultError)
-        } else {
-            Ok(())
-        }
-    }
-}
-
-#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq, Default)]
-pub enum SyntheticType {
-    #[default]
-    Asset,
-    Index,
-    Yield,
-}
-
-#[derive(
-    Clone,
-    Copy,
-    BorshSerialize,
-    BorshDeserialize,
-    PartialEq,
-    Debug,
-    Eq,
-    PartialOrd,
-    Ord,
-    Default
-)]
-pub enum SyntheticTier {
-    /// full priviledge
-    Collateral,
-    /// collateral, but no borrow
-    Protected,
-    /// not collateral, allow multi-borrow
-    Cross,
-    /// not collateral, only single borrow
-    Isolated,
-    /// no privilege
-    #[default]
-    Unlisted,
+	fn update_balance_type(&mut self, balance_type: BalanceType) -> NormalResult;
 }
 
 #[zero_copy(unsafe)]
@@ -325,7 +375,7 @@ pub enum SyntheticTier {
 pub struct PoolBalance {
     /// precision: SPOT_BALANCE_PRECISION
     pub balance: u128,
-    /// The spot market the pool is for
+	/// The market the pool is for
     pub market_index: u16,
     pub padding: [u8; 6],
 }
@@ -334,6 +384,10 @@ impl Balance for PoolBalance {
     fn market_index(&self) -> u16 {
         self.market_index
     }
+
+	fn balance_type(&self) -> &BalanceType {
+		&BalanceType::Deposit
+	}
 
     fn balance(&self) -> u128 {
         self.balance
@@ -348,4 +402,11 @@ impl Balance for PoolBalance {
         self.balance = self.balance.safe_sub(delta)?;
         Ok(())
     }
+
+	fn update_balance_type(
+		&mut self,
+		_balance_type: BalanceType
+	) -> NormalResult {
+		Err(ErrorCode::CantUpdatePoolBalanceType)
+	}
 }

@@ -8,7 +8,17 @@ use crate::controller::position::{ PositionDirection, PositionDelta };
 
 // use normal_macros::assert_no_slop;
 
-#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq, PartialOrd, Ord)]
+#[derive(
+	Clone,
+	Copy,
+	BorshSerialize,
+	BorshDeserialize,
+	PartialEq,
+	Debug,
+	Eq,
+	PartialOrd,
+	Ord
+)]
 pub enum AMMLiquiditySplit {
     ProtocolOwned,
     LPOwned,
@@ -18,9 +28,12 @@ pub enum AMMLiquiditySplit {
 impl AMMLiquiditySplit {
     pub fn get_order_action_explanation(&self) -> OrderActionExplanation {
         match &self {
-            AMMLiquiditySplit::ProtocolOwned => OrderActionExplanation::OrderFilledWithAMMJit,
-            AMMLiquiditySplit::LPOwned => OrderActionExplanation::OrderFilledWithLPJit,
-            AMMLiquiditySplit::Shared => OrderActionExplanation::OrderFilledWithAMMJitLPSplit,
+			AMMLiquiditySplit::ProtocolOwned =>
+				OrderActionExplanation::OrderFilledWithAMMJit,
+			AMMLiquiditySplit::LPOwned =>
+				OrderActionExplanation::OrderFilledWithLPJit,
+			AMMLiquiditySplit::Shared =>
+				OrderActionExplanation::OrderFilledWithAMMJitLPSplit,
         }
     }
 }

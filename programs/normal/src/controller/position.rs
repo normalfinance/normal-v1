@@ -20,7 +20,8 @@ use crate::math::position::{
 use crate::math::safe_math::SafeMath;
 use crate::math_error;
 use crate::safe_increment;
-use crate::state::market::{ AMMLiquiditySplit, Market };
+use crate::state::market::Market;
+use crate::state::amm::AMMLiquiditySplit;
 use crate::state::user::{ Position, Positions, User };
 use crate::validate;
 
