@@ -86,10 +86,6 @@ pub struct AMM {
 	/// Mint information for token Synth
 	pub token_mint: Pubkey,
 
-	/// oracle price data public key
-	pub oracle: Pubkey,
-	/// stores historically witnessed oracle data
-	pub historical_oracle_data: HistoricalOracleData,
 	/// accumulated base asset amount since inception per lp share
 	/// precision: QUOTE_PRECISION
 	pub base_asset_amount_per_lp: i128,
@@ -97,14 +93,44 @@ pub struct AMM {
 	/// precision: QUOTE_PRECISION
 	pub quote_asset_amount_per_lp: i128,
 
-	pub fee_pool: PoolBalance,
+	/// Oracle
+	///
+	/// oracle price data public key
+	pub oracle: Pubkey,
+	/// stores historically witnessed oracle data
+	pub historical_oracle_data: HistoricalOracleData,
+	/// the oracle provider information. used to decode/scale the oracle public key
+	pub oracle_source: OracleSource,
+	/// the pct size of the oracle confidence interval
+	/// precision: PERCENTAGE_PRECISION
+	pub last_oracle_conf_pct: u64,
+	/// tracks whether the oracle was considered valid at the last AMM update
+	pub last_oracle_valid: bool,
 
+	/// Base Reserve (Synthetic)
+	///
 	/// `x` reserves for constant product mm formula (x * y = k)
 	/// precision: AMM_RESERVE_PRECISION
 	pub base_asset_reserve: u128,
+	/// transformed base_asset_reserve for users going long
+	/// precision: AMM_RESERVE_PRECISION
+	pub ask_base_asset_reserve: u128,
+	/// transformed base_asset_reserve for users going short
+	/// precision: AMM_RESERVE_PRECISION
+	pub bid_base_asset_reserve: u128,
+
+	/// Quote Reserve (SOL and USDC)
+	///
 	/// `y` reserves for constant product mm formula (x * y = k)
 	/// precision: AMM_RESERVE_PRECISION
 	pub quote_asset_reserve: u128,
+	/// transformed quote_asset_reserve for users going long
+	/// precision: AMM_RESERVE_PRECISION
+	pub ask_quote_asset_reserve: u128,
+	/// transformed quote_asset_reserve for users going short
+	/// precision: AMM_RESERVE_PRECISION
+	pub bid_quote_asset_reserve: u128,
+
 	/// determines how close the min/max base asset reserve sit vs base reserves
 	/// allow for decreasing slippage without increasing liquidity and v.v.
 	/// precision: PERCENTAGE_PRECISION
@@ -124,6 +150,9 @@ pub struct AMM {
 	/// y when market is balanced. stored to save computation
 	/// precision: AMM_RESERVE_PRECISION
 	pub terminal_quote_asset_reserve: u128,
+
+	/// Base Asset (Synthetic)
+	///
 	/// always non-negative. tracks number of total longs in market (regardless of counterparty)
 	/// precision: BASE_PRECISION
 	pub base_asset_amount_long: i128,
@@ -136,9 +165,13 @@ pub struct AMM {
 	/// tracks net position (longs-shorts) in market with LPs as counterparty
 	/// precision: BASE_PRECISION
 	pub base_asset_amount_with_unsettled_lp: i128,
+
 	/// max allowed open interest, blocks trades that breach this value
 	/// precision: BASE_PRECISION
 	pub max_open_interest: u128,
+
+	/// Quote Asset (SOL and USDC)
+	///
 	/// sum of all user's quote_asset_amount in market
 	/// precision: QUOTE_PRECISION
 	pub quote_asset_amount: i128,
@@ -154,10 +187,14 @@ pub struct AMM {
 	/// sum of all short user's quote_break_even_amount in market
 	/// precision: QUOTE_PRECISION
 	pub quote_break_even_amount_short: i128,
+
 	/// total user lp shares of sqrt_k (protocol owned liquidity = sqrt_k - last_funding_rate)
 	/// precision: AMM_RESERVE_PRECISION
 	pub user_lp_shares: u128,
 
+	/// Fees
+	///
+	pub fee_pool: PoolBalance,
 	/// total fees collected by this market
 	/// precision: QUOTE_PRECISION
 	pub total_fee: i128,
@@ -173,20 +210,10 @@ pub struct AMM {
 	/// sum of all fees from fee pool withdrawn to revenue pool
 	/// precision: QUOTE_PRECISION
 	pub total_fee_withdrawn: u128,
+
 	/// accumulated social loss paid by users since inception in market
 	pub total_social_loss: u128,
-	/// transformed base_asset_reserve for users going long
-	/// precision: AMM_RESERVE_PRECISION
-	pub ask_base_asset_reserve: u128,
-	/// transformed quote_asset_reserve for users going long
-	/// precision: AMM_RESERVE_PRECISION
-	pub ask_quote_asset_reserve: u128,
-	/// transformed base_asset_reserve for users going short
-	/// precision: AMM_RESERVE_PRECISION
-	pub bid_base_asset_reserve: u128,
-	/// transformed quote_asset_reserve for users going short
-	/// precision: AMM_RESERVE_PRECISION
-	pub bid_quote_asset_reserve: u128,
+
 	/// the last seen oracle price partially shrunk toward the amm reserve price
 	/// precision: PRICE_PRECISION
 	pub last_oracle_normalised_price: i64,
@@ -205,9 +232,7 @@ pub struct AMM {
 	pub last_mark_price_twap_5min: u64,
 	/// the last blockchain slot the amm was updated
 	pub last_update_slot: u64,
-	/// the pct size of the oracle confidence interval
-	/// precision: PERCENTAGE_PRECISION
-	pub last_oracle_conf_pct: u64,
+
 	/// the base step size (increment) of orders
 	/// precision: BASE_PRECISION
 	pub order_step_size: u64,
@@ -220,6 +245,9 @@ pub struct AMM {
 	/// the max base size a single user can have
 	/// precision: BASE_PRECISION
 	pub max_position_size: u64,
+
+	/// Volume
+	///
 	/// estimated total of volume in market
 	/// QUOTE_PRECISION
 	pub volume_24h: u64,
@@ -227,6 +255,11 @@ pub struct AMM {
 	pub long_intensity_volume: u64,
 	/// the volume intensity of short fills against AMM
 	pub short_intensity_volume: u64,
+	/// the count intensity of long fills against AMM
+	pub long_intensity_count: u32,
+	/// the count intensity of short fills against AMM
+	pub short_intensity_count: u32,
+
 	/// the blockchain unix timestamp at the time of the last trade
 	pub last_trade_ts: i64,
 	/// estimate of standard deviation of the fill (mark) prices
@@ -237,6 +270,9 @@ pub struct AMM {
 	pub oracle_std: u64,
 	/// the last unix_timestamp the mark twap was updated
 	pub last_mark_price_twap_ts: i64,
+
+	/// Spread
+	///
 	/// the minimum spread the AMM can quote. also used as step size for some spread logic increases.
 	pub base_spread: u32,
 	/// the maximum spread the AMM can quote
@@ -245,10 +281,7 @@ pub struct AMM {
 	pub long_spread: u32,
 	/// the spread for bids vs the reserve price
 	pub short_spread: u32,
-	/// the count intensity of long fills against AMM
-	pub long_intensity_count: u32,
-	/// the count intensity of short fills against AMM
-	pub short_intensity_count: u32,
+
 	/// the fraction of total available liquidity a single fill on the AMM can consume
 	pub max_fill_reserve_fraction: u16,
 	/// the maximum slippage a single fill on the AMM can push
@@ -258,10 +291,7 @@ pub struct AMM {
 	/// the jit intensity of AMM. larger intensity means larger participation in jit. 0 means no jit participation.
 	/// (0, 100] is intensity for protocol-owned AMM. (100, 200] is intensity for user LP-owned AMM.
 	pub amm_jit_intensity: u8,
-	/// the oracle provider information. used to decode/scale the oracle public key
-	pub oracle_source: OracleSource,
-	/// tracks whether the oracle was considered valid at the last AMM update
-	pub last_oracle_valid: bool,
+
 	/// the target value for `base_asset_amount_per_lp`, used during AMM JIT with LP split
 	/// precision: BASE_PRECISION
 	pub target_base_asset_amount_per_lp: i32,
