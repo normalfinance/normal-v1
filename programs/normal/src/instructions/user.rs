@@ -692,18 +692,17 @@ pub fn handle_place_order<'c: 'info, 'info>(
 pub fn handle_place_and_take_order<'c: 'info, 'info>(
     ctx: Context<'_, '_, 'c, 'info, PlaceAndTake<'info>>,
     params: OrderParams,
-    fulfillment_type: FulfillmentType,
     _maker_order_id: Option<u32>
 ) -> Result<()> {
     let clock = Clock::get()?;
-    let market_index = params.market_index;
+	let state = &ctx.accounts.state;
 
     let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
     let AccountMaps { market_map, mut oracle_map } = load_maps(
         remaining_accounts_iter,
-        &get_writable_market_set_from_many(vec![QUOTE_SPOT_MARKET_INDEX, market_index]),
+		&get_writable_market_set(params.market_index),
         clock.slot,
-        None
+		Some(state.oracle_guard_rails)
     )?;
 
     if params.post_only != PostOnlyParam::None {
@@ -711,29 +710,26 @@ pub fn handle_place_and_take_order<'c: 'info, 'info>(
         return Err(print_error!(ErrorCode::InvalidOrderPostOnly)().into());
     }
 
-    let (makers_and_referrer, makers_and_referrer_stats) = match fulfillment_type {
-        FulfillmentType::Match => load_user_maps(remaining_accounts_iter, true)?,
-        _ => (UserMap::empty(), UserStatsMap::empty()),
-    };
+	let (makers_and_referrer, makers_and_referrer_stats) = load_user_maps(
+		remaining_accounts_iter,
+		true
+	)?;
 
     let is_immediate_or_cancel = params.immediate_or_cancel;
 
-    let mut fulfillment_params: Box<dyn SpotFulfillmentParams> = match fulfillment_type {
-        FulfillmentType::Match => {
-            let base_market = market_map.get_ref(&market_index)?;
-            let quote_market = market_map.get_quote_spot_market()?;
-            Box::new(
-                MatchFulfillmentParams::new(remaining_accounts_iter, &base_market, &quote_market)?
-            )
-        }
-    };
+	controller::repeg::update_amm(
+		params.market_index,
+		&market_map,
+		&mut oracle_map,
+		&ctx.accounts.state,
+		&Clock::get()?
+	)?;
 
     let user_key = ctx.accounts.user.key();
     let mut user = load_mut!(ctx.accounts.user)?;
+	let clock = Clock::get()?;
 
-    let order_id_before = user.get_last_order_id();
-
-    controller::orders::place_spot_order(
+	controller::orders::place_order(
         &ctx.accounts.state,
         &mut user,
         user_key,
@@ -749,12 +745,7 @@ pub fn handle_place_and_take_order<'c: 'info, 'info>(
     let user = &mut ctx.accounts.user;
     let order_id = load!(user)?.get_last_order_id();
 
-    if order_id == order_id_before {
-        msg!("new order failed to be placed");
-        return Err(print_error!(ErrorCode::InvalidOrder)().into());
-    }
-
-    controller::orders::fill_order(
+	let (base_asset_amount_filled, _) = controller::orders::fill_order(
         order_id,
         &ctx.accounts.state,
         user,
@@ -766,8 +757,8 @@ pub fn handle_place_and_take_order<'c: 'info, 'info>(
         &makers_and_referrer,
         &makers_and_referrer_stats,
         None,
-        &clock,
-        fulfillment_params.as_mut()
+		&Clock::get()?,
+		FillMode::PlaceAndTake
     )?;
 
     let order_exists = load!(ctx.accounts.user)?
@@ -780,13 +771,30 @@ pub fn handle_place_and_take_order<'c: 'info, 'info>(
             &ctx.accounts.user,
             &market_map,
             &mut oracle_map,
-            &clock
+			&Clock::get()?
         )?;
     }
 
-    let base_market = market_map.get_ref(&market_index)?;
-    let quote_market = market_map.get_quote_spot_market()?;
-    fulfillment_params.validate_vault_amounts(&base_market, &quote_market)?;
+	if let Some(success_condition) = success_condition {
+		if
+			success_condition ==
+			(PlaceAndTakeOrderSuccessCondition::PartialFill as u32)
+		{
+			validate!(
+				base_asset_amount_filled > 0,
+				ErrorCode::PlaceAndTakeOrderSuccessConditionFailed,
+				"no partial fill"
+			)?;
+		} else if
+			success_condition == (PlaceAndTakeOrderSuccessCondition::FullFill as u32)
+		{
+			validate!(
+				base_asset_amount_filled > 0 && !order_exists,
+				ErrorCode::PlaceAndTakeOrderSuccessConditionFailed,
+				"no full fill"
+			)?;
+		}
+	}
 
     Ok(())
 }
@@ -795,8 +803,7 @@ pub fn handle_place_and_take_order<'c: 'info, 'info>(
 pub fn handle_place_and_make_order<'c: 'info, 'info>(
     ctx: Context<'_, '_, 'c, 'info, PlaceAndMake<'info>>,
     params: OrderParams,
-    taker_order_id: u32,
-    fulfillment_type: FulfillmentType
+	taker_order_id: u32
 ) -> Result<()> {
     let clock = &Clock::get()?;
     let state = &ctx.accounts.state;
@@ -804,12 +811,10 @@ pub fn handle_place_and_make_order<'c: 'info, 'info>(
     let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
     let AccountMaps { market_map, mut oracle_map } = load_maps(
         remaining_accounts_iter,
-        &get_writable_market_set_from_many(vec![QUOTE_SPOT_MARKET_INDEX, params.market_index]),
+		&get_writable_market_set(params.market_index),
         Clock::get()?.slot,
-        None
+		Some(state.oracle_guard_rails)
     )?;
-
-    let (_referrer, _referrer_stats) = get_referrer_and_referrer_stats(remaining_accounts_iter)?;
 
     if
         !params.immediate_or_cancel ||
@@ -820,23 +825,18 @@ pub fn handle_place_and_make_order<'c: 'info, 'info>(
         return Err(print_error!(ErrorCode::InvalidOrderIOCPostOnly)().into());
     }
 
-    let market_index = params.market_index;
-
-    let mut fulfillment_params: Box<dyn SpotFulfillmentParams> = match fulfillment_type {
-        FulfillmentType::Match => {
-            let base_market = market_map.get_ref(&market_index)?;
-            let quote_market = market_map.get_quote_spot_market()?;
-            Box::new(
-                MatchFulfillmentParams::new(remaining_accounts_iter, &base_market, &quote_market)?
-            )
-        }
-    };
+	controller::repeg::update_amm(
+		params.market_index,
+		&market_map,
+		&mut oracle_map,
+		state,
+		clock
+	)?;
 
     let user_key = ctx.accounts.user.key();
     let mut user = load_mut!(ctx.accounts.user)?;
-    let authority = user.authority;
 
-    controller::orders::place_order(
+	controller::orders::place_order(
         state,
         &mut user,
         user_key,
@@ -847,13 +847,18 @@ pub fn handle_place_and_make_order<'c: 'info, 'info>(
         PlaceOrderOptions::default()
     )?;
 
+	let (order_id, authority) = (user.get_last_order_id(), user.authority);
+
     drop(user);
 
-    let order_id = load!(ctx.accounts.user)?.get_last_order_id();
-
-    let mut makers_and_referrer = UserMap::empty();
-    let mut makers_and_referrer_stats = UserStatsMap::empty();
-    makers_and_referrer.insert(ctx.accounts.user.key(), ctx.accounts.user.clone())?;
+	let (mut makers_and_referrer, mut makers_and_referrer_stats) = load_user_maps(
+		remaining_accounts_iter,
+		true
+	)?;
+	makers_and_referrer.insert(
+		ctx.accounts.user.key(),
+		ctx.accounts.user.clone()
+	)?;
     makers_and_referrer_stats.insert(authority, ctx.accounts.user_stats.clone())?;
 
     controller::orders::fill_order(
@@ -869,7 +874,7 @@ pub fn handle_place_and_make_order<'c: 'info, 'info>(
         &makers_and_referrer_stats,
         Some(order_id),
         clock,
-        fulfillment_params.as_mut()
+		FillMode::PlaceAndMake
     )?;
 
     let order_exists = load!(ctx.accounts.user)?
@@ -885,10 +890,6 @@ pub fn handle_place_and_make_order<'c: 'info, 'info>(
             clock
         )?;
     }
-
-    let base_market = market_map.get_ref(&market_index)?;
-    let quote_market = market_map.get_quote_spot_market()?;
-    fulfillment_params.validate_vault_amounts(&base_market, &quote_market)?;
 
     Ok(())
 }
