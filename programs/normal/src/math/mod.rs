@@ -23,5 +23,5 @@ pub mod repeg;
 pub mod safe_math;
 pub mod safe_unwrap;
 
-pub mod spot_balance;
+pub mod balance;
 pub mod stats;

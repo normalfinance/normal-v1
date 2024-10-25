@@ -28,7 +28,7 @@ use crate::math::cp_curve::get_update_k_result;
 use crate::math::orders::is_multiple_of_step_size;
 use crate::math::repeg::get_total_fee_lower_bound;
 use crate::math::safe_math::SafeMath;
-use crate::math::spot_balance::get_token_amount;
+use crate::math::balance::get_token_amount;
 use crate::math::{ amm, bn };
 use crate::optional_accounts::get_token_mint;
 use crate::state::events::CurveRecord;
@@ -716,11 +716,13 @@ pub fn handle_settle_expired_market_pools_to_revenue_pool(
 
     let fee_pool_token_amount = get_token_amount(
         market.amm.fee_pool.balance,
-        spot_market
+        spot_market,
+        market.amm.fee_pool.balance_type(),
     )?;
     let pnl_pool_token_amount = get_token_amount(
         market.pnl_pool.balance,
-        spot_market
+        spot_market,
+        market.pnl_pool.balance_type(),
     )?;
 
     // TODO: update
@@ -745,8 +747,6 @@ pub fn handle_settle_expired_market_pools_to_revenue_pool(
     //     &SpotBalanceType::Deposit,
     //     spot_market
     // )?;
-
-    // math::spot_withdraw::validate_spot_balances(spot_market)?;
 
     market.status = MarketStatus::Delisted;
 
