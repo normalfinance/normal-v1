@@ -2,7 +2,7 @@ pub mod amm;
 pub mod events;
 pub mod fill_mode;
 pub mod fulfillment;
-pub mod fulfillment_params;
+pub mod insurance;
 pub mod load_ref;
 pub mod oracle;
 pub mod oracle_map;
