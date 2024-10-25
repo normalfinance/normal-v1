@@ -156,9 +156,6 @@ pub struct AMM {
 	/// always non-negative. tracks number of total longs in market (regardless of counterparty)
 	/// precision: BASE_PRECISION
 	pub base_asset_amount_long: i128,
-	/// always non-positive. tracks number of total shorts in market (regardless of counterparty)
-	/// precision: BASE_PRECISION
-	pub base_asset_amount_short: i128,
 	/// tracks net position (longs-shorts) in market with AMM as counterparty
 	/// precision: BASE_PRECISION
 	pub base_asset_amount_with_amm: i128,
@@ -178,16 +175,10 @@ pub struct AMM {
 	/// sum of all long user's quote_entry_amount in market
 	/// precision: QUOTE_PRECISION
 	pub quote_entry_amount_long: i128,
-	/// sum of all short user's quote_entry_amount in market
-	/// precision: QUOTE_PRECISION
-	pub quote_entry_amount_short: i128,
 	/// sum of all long user's quote_break_even_amount in market
 	/// precision: QUOTE_PRECISION
 	pub quote_break_even_amount_long: i128,
-	/// sum of all short user's quote_break_even_amount in market
-	/// precision: QUOTE_PRECISION
-	pub quote_break_even_amount_short: i128,
-
+ 
 	/// total user lp shares of sqrt_k (protocol owned liquidity = sqrt_k - last_funding_rate)
 	/// precision: AMM_RESERVE_PRECISION
 	pub user_lp_shares: u128,
@@ -324,15 +315,12 @@ impl Default for AMM {
 			peg_multiplier: 0,
 			terminal_quote_asset_reserve: 0,
 			base_asset_amount_long: 0,
-			base_asset_amount_short: 0,
 			base_asset_amount_with_amm: 0,
 			base_asset_amount_with_unsettled_lp: 0,
 			max_open_interest: 0,
 			quote_asset_amount: 0,
 			quote_entry_amount_long: 0,
-			quote_entry_amount_short: 0,
 			quote_break_even_amount_long: 0,
-			quote_break_even_amount_short: 0,
 			user_lp_shares: 0,
 			total_fee: 0,
 			total_mm_fee: 0,

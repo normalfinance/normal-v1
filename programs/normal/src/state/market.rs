@@ -411,7 +411,6 @@ impl Market {
 	pub fn get_open_interest(&self) -> u128 {
 		self.amm.base_asset_amount_long
 			.abs()
-			.max(self.amm.base_asset_amount_short.abs())
 			.unsigned_abs()
 	}
 

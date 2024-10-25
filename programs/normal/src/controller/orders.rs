@@ -315,7 +315,7 @@ pub fn place_order(
 					.safe_add(order_base_asset_amount.cast()?)?
 					.unsigned_abs(),
 			OrderSide::Sell =>
-				market.amm.base_asset_amount_short
+				market.amm.base_asset_amount_long
 					.safe_sub(order_base_asset_amount.cast()?)?
 					.unsigned_abs(),
 		};

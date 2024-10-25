@@ -208,19 +208,6 @@ pub fn update_position_and_market(
 					market.amm.quote_break_even_amount_long.safe_add(
 						delta.quote_asset_amount.cast()?
 					)?;
-			} else {
-				market.amm.base_asset_amount_short =
-					market.amm.base_asset_amount_short.safe_add(
-						new_settled_base_asset_amount.cast()?
-					)?;
-				market.amm.quote_entry_amount_short =
-					market.amm.quote_entry_amount_short.safe_add(
-						delta.quote_asset_amount.cast()?
-					)?;
-				market.amm.quote_break_even_amount_short =
-					market.amm.quote_break_even_amount_short.safe_add(
-						delta.quote_asset_amount.cast()?
-					)?;
 			}
 		}
 		PositionUpdateType::Reduce | PositionUpdateType::Close => {
@@ -240,80 +227,6 @@ pub fn update_position_and_market(
 						position.quote_break_even_amount
 							.safe_sub(new_quote_break_even_amount)?
 							.cast()?
-					)?;
-			} else {
-				market.amm.base_asset_amount_short =
-					market.amm.base_asset_amount_short.safe_add(
-						new_settled_base_asset_amount.cast()?
-					)?;
-				market.amm.quote_entry_amount_short =
-					market.amm.quote_entry_amount_short.safe_sub(
-						position.quote_entry_amount
-							.safe_sub(new_quote_entry_amount)?
-							.cast()?
-					)?;
-				market.amm.quote_break_even_amount_short =
-					market.amm.quote_break_even_amount_short.safe_sub(
-						position.quote_break_even_amount
-							.safe_sub(new_quote_break_even_amount)?
-							.cast()?
-					)?;
-			}
-		}
-		PositionUpdateType::Flip => {
-			if new_base_asset_amount > 0 {
-				market.amm.base_asset_amount_short =
-					market.amm.base_asset_amount_short.safe_sub(
-						position.base_asset_amount.cast()?
-					)?;
-				market.amm.base_asset_amount_long =
-					market.amm.base_asset_amount_long.safe_add(
-						new_base_asset_amount.cast()?
-					)?;
-
-				market.amm.quote_entry_amount_short =
-					market.amm.quote_entry_amount_short.safe_sub(
-						position.quote_entry_amount.cast()?
-					)?;
-				market.amm.quote_entry_amount_long =
-					market.amm.quote_entry_amount_long.safe_add(
-						new_quote_entry_amount.cast()?
-					)?;
-
-				market.amm.quote_break_even_amount_short =
-					market.amm.quote_break_even_amount_short.safe_sub(
-						position.quote_break_even_amount.cast()?
-					)?;
-				market.amm.quote_break_even_amount_long =
-					market.amm.quote_break_even_amount_long.safe_add(
-						new_quote_break_even_amount.cast()?
-					)?;
-			} else {
-				market.amm.base_asset_amount_long =
-					market.amm.base_asset_amount_long.safe_sub(
-						position.base_asset_amount.cast()?
-					)?;
-				market.amm.base_asset_amount_short =
-					market.amm.base_asset_amount_short.safe_add(
-						new_base_asset_amount.cast()?
-					)?;
-
-				market.amm.quote_entry_amount_long =
-					market.amm.quote_entry_amount_long.safe_sub(
-						position.quote_entry_amount.cast()?
-					)?;
-				market.amm.quote_entry_amount_short =
-					market.amm.quote_entry_amount_short.safe_add(
-						new_quote_entry_amount.cast()?
-					)?;
-
-				market.amm.quote_break_even_amount_long =
-					market.amm.quote_break_even_amount_long.safe_sub(
-						position.quote_break_even_amount.cast()?
-					)?;
-				market.amm.quote_break_even_amount_short =
-					market.amm.quote_break_even_amount_short.safe_add(
-						new_quote_break_even_amount.cast()?
 					)?;
 			}
 		}
@@ -543,15 +456,15 @@ pub fn update_quote_break_even_amount(
 
 	position.quote_break_even_amount =
 		position.quote_break_even_amount.safe_add(delta)?;
-	match position.get_direction() {
+	match position.get_side() {
 		OrderSide::Buy => {
 			market.amm.quote_break_even_amount_long =
 				market.amm.quote_break_even_amount_long.safe_add(delta.cast()?)?;
 		}
-		OrderSide::Sell => {
-			market.amm.quote_break_even_amount_short =
-				market.amm.quote_break_even_amount_short.safe_add(delta.cast()?)?;
-		}
+		// OrderSide::Sell => {
+		// 	market.amm.quote_break_even_amount_short =
+		// 		market.amm.quote_break_even_amount_short.safe_add(delta.cast()?)?;
+		// }
 	}
 
 	Ok(())

@@ -17,31 +17,22 @@ pub fn validate_market(market: &Market) -> NormalResult {
             market.amm.order_step_size.cast()?
         )?;
 
-    let (_, remainder_base_asset_amount_short) =
-        crate::math::orders::standardize_base_asset_amount_with_remainder_i128(
-            market.amm.base_asset_amount_short,
-            market.amm.order_step_size.cast()?
-        )?;
-
     validate!(
-        remainder_base_asset_amount_long == 0 && remainder_base_asset_amount_short == 0,
+        remainder_base_asset_amount_long == 0,
         ErrorCode::InvalidPositionDelta,
-        "invalid base_asset_amount_long/short vs order_step_size, remainder={}/{}",
-        remainder_base_asset_amount_short,
+        "invalid base_asset_amount_long vs order_step_size, remainder={}",
         market.amm.order_step_size
     )?;
     validate!(
-        market.amm.base_asset_amount_long + market.amm.base_asset_amount_short ==
+        market.amm.base_asset_amount_long ==
             market.amm.base_asset_amount_with_amm + market.amm.base_asset_amount_with_unsettled_lp,
         ErrorCode::InvalidAmmDetected,
         "Market NET_BAA Error: 
-        market.amm.base_asset_amount_long={}, 
-        + market.amm.base_asset_amount_short={} 
+        market.amm.base_asset_amount_long={},  
         != 
         market.amm.base_asset_amount_with_amm={}
         +  market.amm.base_asset_amount_with_unsettled_lp={}",
         market.amm.base_asset_amount_long,
-        market.amm.base_asset_amount_short,
         market.amm.base_asset_amount_with_amm,
         market.amm.base_asset_amount_with_unsettled_lp
     )?;

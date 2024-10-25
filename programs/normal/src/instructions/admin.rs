@@ -309,12 +309,9 @@ pub fn handle_initialize_market(
             last_ask_price_twap: init_reserve_price,
             base_asset_amount_with_amm: 0,
             base_asset_amount_long: 0,
-            base_asset_amount_short: 0,
             quote_asset_amount: 0,
             quote_entry_amount_long: 0,
-            quote_entry_amount_short: 0,
             quote_break_even_amount_long: 0,
-            quote_break_even_amount_short: 0,
             max_open_interest,
             mark_std: 0,
             oracle_std: 0,
@@ -678,12 +675,10 @@ pub fn handle_settle_expired_market_pools_to_revenue_pool(
 
     validate!(
         market.amm.base_asset_amount_long == 0 &&
-            market.amm.base_asset_amount_short == 0 &&
             market.number_of_users_with_base == 0,
         ErrorCode::DefaultError,
-        "outstanding base_asset_amounts must be balanced {} {} {}",
+        "outstanding base_asset_amounts must be balanced {} {}",
         market.amm.base_asset_amount_long,
-        market.amm.base_asset_amount_short,
         market.number_of_users_with_base
     )?;
 
@@ -822,7 +817,6 @@ pub fn handle_repeg_amm_curve(ctx: Context<RepegCurve>, new_peg_candidate: u128)
         quote_asset_reserve_after,
         sqrt_k_after,
         base_asset_amount_long: market.amm.base_asset_amount_long.unsigned_abs(),
-        base_asset_amount_short: market.amm.base_asset_amount_short.unsigned_abs(),
         base_asset_amount_with_amm: market.amm.base_asset_amount_with_amm,
         number_of_users: market.number_of_users,
         total_fee: market.amm.total_fee,
@@ -912,7 +906,6 @@ pub fn handle_update_k(ctx: Context<AdminUpdateK>, sqrt_k: u128) -> Result<()> {
 
     msg!("updating k for perp market {}", market.market_index);
     let base_asset_amount_long = market.amm.base_asset_amount_long.unsigned_abs();
-    let base_asset_amount_short = market.amm.base_asset_amount_short.unsigned_abs();
     let base_asset_amount_with_amm = market.amm.base_asset_amount_with_amm;
     let number_of_users = market.number_of_users_with_base;
 
@@ -1058,7 +1051,6 @@ pub fn handle_update_k(ctx: Context<AdminUpdateK>, sqrt_k: u128) -> Result<()> {
         quote_asset_reserve_after,
         sqrt_k_after,
         base_asset_amount_long,
-        base_asset_amount_short,
         base_asset_amount_with_amm,
         number_of_users,
         adjustment_cost,

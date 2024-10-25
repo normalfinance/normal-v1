@@ -36,8 +36,6 @@ pub struct CurveRecord {
 	/// precision: BASE_PRECISION
 	pub base_asset_amount_long: u128,
 	/// precision: BASE_PRECISION
-	pub base_asset_amount_short: u128,
-	/// precision: BASE_PRECISION
 	pub base_asset_amount_with_amm: i128,
 	/// precision: QUOTE_PRECISION
 	pub total_fee: i128,
