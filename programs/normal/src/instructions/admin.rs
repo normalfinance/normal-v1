@@ -1544,6 +1544,273 @@ pub fn handle_update_market_number_of_users(
     Ok(())
 }
 
+
+pub fn handle_initialize_insurance_fund(
+    ctx: Context<InitializeInsuranceFund>,
+    insurance_fund_total_factor: u32
+) -> Result<()> {
+    let state = &mut ctx.accounts.state;
+    let insurance_fund_pubkey = ctx.accounts.insurance_fund.key();
+
+    // protocol must be authority of collateral vault
+    if ctx.accounts.market_vault.owner != state.signer {
+        return Err(ErrorCode::InvalidMarketAuthority.into());
+    }
+
+    let market_index = get_then_update_id!(state, number_of_markets);
+
+    msg!("initializing insurance fund");
+
+    let market = &mut ctx.accounts.market.load_init()?;
+    let clock = Clock::get()?;
+    let now = clock.unix_timestamp.cast().or(Err(ErrorCode::UnableToCastUnixTime))?;
+
+    let decimals = ctx.accounts.market_mint.decimals.cast::<u32>()?;
+
+    **insurance_fund = InsuranceFund {
+        // pubkey: insurance_fund_pubkey,
+        vault: *ctx.accounts.insurance_fund_vault.to_account_info().key,
+        unstaking_period: THIRTEEN_DAY,
+        total_factor: insurance_fund_total_factor,
+        user_factor: insurance_fund_total_factor / 2,
+        ..InsuranceFund::default()
+        },
+    };
+
+    Ok(())
+}
+
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_insurance_fund_factor(
+    ctx: Context<AdminUpdateInsuranceFund>,
+    user_insurance_fund_factor: u32,
+    total_insurance_fund_factor: u32,
+) -> Result<()> {
+    let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
+
+    validate!(
+        user_insurance_fund_factor <= total_insurance_fund_factor,
+        ErrorCode::DefaultError,
+        "user_insurance_fund_factor must be <= total_insurance_fund_factor"
+    )?;
+
+    validate!(
+        total_insurance_fund_factor <= IF_FACTOR_PRECISION.cast()?,
+        ErrorCode::DefaultError,
+        "total_insurance_fund_factor must be <= 100%"
+    )?;
+
+    msg!(
+        "user_insurance_fund_factor: {:?} -> {:?}",
+        insurance_fund.user_factor,
+        user_insurance_fund_factor
+    );
+    msg!(
+        "total_insurance_fund_factor: {:?} -> {:?}",
+        insurance_fund.total_factor,
+        total_insurance_fund_factor
+    );
+
+    insurance_fund.user_factor = user_insurance_fund_factor;
+    insurance_fund.total_factor = total_insurance_fund_factor;
+
+    Ok(())
+}
+
+pub fn handle_update_insurance_fund_paused_operations(
+    ctx: Context<AdminUpdateInsuranceFund>,
+    paused_operations: u8,
+) -> Result<()> {
+    let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
+    insurance_fund.paused_operations = paused_operations;
+    InsuranceFundOperation::log_all_operations_paused(paused_operations);
+    Ok(())
+}
+
+
+pub fn handle_initialize_protocol_insurance_fund_shares_transfer_config(
+    ctx: Context<InitializeProtocolInsuranceFundSharesTransferConfig>,
+) -> Result<()> {
+    let mut config = ctx
+        .accounts
+        .protocol_insurance_fund_shares_transfer_config
+        .load_init()?;
+
+    let now = Clock::get()?.unix_timestamp;
+    msg!(
+        "next_epoch_ts: {:?} -> {:?}",
+        config.next_epoch_ts,
+        now.safe_add(EPOCH_DURATION)?
+    );
+    config.next_epoch_ts = now.safe_add(EPOCH_DURATION)?;
+
+    Ok(())
+}
+
+pub fn handle_update_protocol_insurance_fund_shares_transfer_config(
+    ctx: Context<UpdateProtocolInsuranceFundSharesTransferConfig>,
+    whitelisted_signers: Option<[Pubkey; 4]>,
+    max_transfer_per_epoch: Option<u128>,
+) -> Result<()> {
+    let mut config = ctx.accounts.protocol_insurance_fund_shares_transfer_config.load_mut()?;
+
+    if let Some(whitelisted_signers) = whitelisted_signers {
+        msg!(
+            "whitelisted_signers: {:?} -> {:?}",
+            config.whitelisted_signers,
+            whitelisted_signers
+        );
+        config.whitelisted_signers = whitelisted_signers;
+    } else {
+        msg!("whitelisted_signers: unchanged");
+    }
+
+    if let Some(max_transfer_per_epoch) = max_transfer_per_epoch {
+        msg!(
+            "max_transfer_per_epoch: {:?} -> {:?}",
+            config.max_transfer_per_epoch,
+            max_transfer_per_epoch
+        );
+        config.max_transfer_per_epoch = max_transfer_per_epoch;
+    } else {
+        msg!("max_transfer_per_epoch: unchanged");
+    }
+
+    Ok(())
+}
+
+
+
+pub fn handle_tranfer_fees_to_insurance_fund<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, TransferFeesToInsuranceFund<'info>>,
+    market_index: u16,
+) -> Result<()> {
+    let state = &ctx.accounts.state;
+    let market = &mut load_mut!(ctx.accounts.market)?;
+    let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
+
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    let mint = get_token_mint(remaining_accounts_iter)?;
+
+    validate!(
+       market_index == market.market_index,
+        ErrorCode::InvalidMarketAccount,
+        "invalid market passed"
+    )?;
+
+    // TODO: ensure insurance fund max limit not reached
+    // ...
+
+    let market_vault_amount = ctx.accounts.market_vault.amount;
+    let insurance_vault_amount = ctx.accounts.insurance_fund_vault.amount;
+
+    let clock = Clock::get()?;
+    let now = clock.unix_timestamp;
+
+    // uses proportion of revenue pool allocated to insurance fund
+    let token_amount = controller::insurance::transfer_fees_to_insurance_fund(
+        market_vault_amount,
+        insurance_vault_amount,
+        market,
+        insurance_fund,
+        now,
+        true,
+    )?;
+
+    insurance_fund.last_fee_deposit_ts = now;
+
+    controller::token::send_from_program_vault(
+        &ctx.accounts.token_program,
+        &ctx.accounts.market_fee_pool,
+        &ctx.accounts.insurance_fund_vault,
+        &ctx.accounts.normal_signer,
+        state.signer_nonce,
+        token_amount,
+        &mint,
+    )?;
+
+    // reload the market vault balance so it's up-to-date
+    ctx.accounts.market_vault.reload()?;
+
+    Ok(())
+}
+
+pub fn handle_transfer_fees_to_treasury<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, TransferFeesToTreasury<'info>>,
+    market_index: u16,
+) -> Result<()> {
+    let state = &ctx.accounts.state;
+    let market = &mut load_mut!(ctx.accounts.market)?;
+   
+
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    let mint = get_token_mint(remaining_accounts_iter)?;
+
+    validate!(
+       market_index == market.market_index,
+        ErrorCode::InvalidMarketAccount,
+        "invalid market passed"
+    )?;
+
+    let market_vault_amount = ctx.accounts.market_vault.amount;
+    let insurance_vault_amount = ctx.accounts.insurance_fund_vault.amount;
+    let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
+
+    let clock = Clock::get()?;
+    let now = clock.unix_timestamp;
+
+    // uses proportion of revenue pool allocated to insurance fund
+    let token_amount = controller::insurance::transfer_fees_to_treasury(
+        market_vault_amount,
+        insurance_vault_amount,
+        market,
+        insurance_fund,
+        now,
+        true,
+    )?;
+
+    controller::token::send_from_program_vault(
+        &ctx.accounts.token_program,
+        &ctx.accounts.market_fee_pool,
+        &ctx.accounts.treasury_vault,
+        &ctx.accounts.normal_signer,
+        state.signer_nonce,
+        token_amount,
+        &mint,
+    )?;
+
+    // reload the market vault balance so it's up-to-date
+    ctx.accounts.market_vault.reload()?;
+
+    Ok(())
+}
+
+
+
+pub fn handle_burn_gov_token_with_fees<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, TransferFeesToTreasury<'info>>,
+    market_index: u16,
+) -> Result<()> {
+    // 1) Purchase NORM with fee amount
+
+    // 2) Burn NORM - TODO: this is not complete
+    controller::token::burn_tokens(
+        &ctx.accounts.governance_token_program,
+        &ctx.accounts.market_fee_pool,
+        &ctx.accounts.market_vault,
+        state.signer_nonce,
+        token_amount,
+        &mint,
+    );
+
+
+    Ok(())
+}
+
+
 pub fn handle_update_admin(ctx: Context<AdminUpdateState>, admin: Pubkey) -> Result<()> {
     msg!("admin: {:?} -> {:?}", ctx.accounts.state.admin, admin);
     ctx.accounts.state.admin = admin;
@@ -1705,6 +1972,7 @@ pub struct InitializeMarket<'info> {
     pub state: Box<Account<'info, State>>,
     /// CHECK: checked in `initialize_market`
     pub oracle: AccountInfo<'info>,
+    pub insurance_fund: AccountInfo<'info>,
     #[account(mut)]
     pub admin: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
@@ -1838,4 +2106,194 @@ pub struct InitPythPullPriceFeed<'info> {
     pub system_program: Program<'info, System>,
     #[account(has_one = admin)]
     pub state: Box<Account<'info, State>>,
+}
+
+/// Insurance Fund
+
+// TODO: finish
+#[derive(Accounts)]
+pub struct InitializeInsuranceFund<'info> {
+    #[account(
+        init,
+        seeds = [b"market", state.number_of_markets.to_le_bytes().as_ref()],
+        space = Market::SIZE,
+        bump,
+        payer = admin
+    )]
+    pub market: AccountLoader<'info, Market>,
+    pub market_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        init,
+        seeds = [b"market_vault".as_ref(), state.number_of_markets.to_le_bytes().as_ref()],
+        bump,
+        payer = admin,
+        token::mint = market_mint,
+        token::authority = normal_signer
+    )]
+    pub market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(constraint = state.signer.eq(&normal_signer.key()))]
+    /// CHECK: program signer
+    pub normal_signer: AccountInfo<'info>,
+    #[account(
+        mut,
+        has_one = admin
+    )]
+    pub state: Box<Account<'info, State>>,
+    /// CHECK: checked in `initialize_market`
+   
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>
+}
+
+#[derive(Accounts)]
+pub struct AdminUpdateInsuranceFund<'info> {
+    pub admin: Signer<'info>,
+    #[account(has_one = admin)]
+    pub state: Box<Account<'info, State>>,
+    #[account(mut)]
+    pub insurance_fund: AccountLoader<'info, InsuranceFund>,
+}
+
+
+#[derive(Accounts)]
+pub struct InitializeProtocolInsuranceFundSharesTransferConfig<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(
+        init,
+        seeds = [b"insurance_fund_shares_transfer_config".as_ref()],
+        space = ProtocolInsuranceFundSharesTransferConfig::SIZE,
+        bump,
+        payer = admin
+    )]
+    pub protocol_insurance_fund_shares_transfer_config: AccountLoader<'info, ProtocolInsuranceFundSharesTransferConfig>,
+    #[account(
+        has_one = admin
+    )]
+    pub state: Box<Account<'info, State>>,
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateProtocolInsuranceFundSharesTransferConfig<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"insurance_fund_shares_transfer_config".as_ref()],
+        bump,
+    )]
+    pub protocol_insurance_fund_shares_transfer_config: AccountLoader<'info, ProtocolInsuranceFundSharesTransferConfig>,
+    #[account(
+        has_one = admin
+    )]
+    pub state: Box<Account<'info, State>>,
+}
+
+#[derive(Accounts)]
+#[instruction(market_index: u16,)]
+pub struct TransferFeesToInsuranceFund<'info> {
+	pub state: Box<Account<'info, State>>,
+	#[account(
+        mut,
+        seeds = [b"market", market_index.to_le_bytes().as_ref()],
+        bump
+    )]
+	pub market: AccountLoader<'info, Market>,
+	#[account(
+        mut,
+        seeds = [b"market_fee_pool".as_ref(), market_index.to_le_bytes().as_ref()],
+        bump,
+    )]
+	pub market_fee_pool: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"insurance_fund"],
+        bump
+    )]
+	pub insurance_fund: AccountLoader<'info, InsuranceFund>,
+	#[account(constraint = state.signer.eq(&normal_signer.key()))]
+	/// CHECK: forced normal_signer
+	pub normal_signer: AccountInfo<'info>,
+	#[account(
+        mut,
+        seeds = [b"insurance_fund_vault".as_ref()],
+        bump,
+    )]
+	pub insurance_fund_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+	pub token_program: Interface<'info, TokenInterface>,
+}
+
+
+
+#[derive(Accounts)]
+#[instruction(market_index: u16,)]
+pub struct TransferFeesToTreasury<'info> {
+	pub state: Box<Account<'info, State>>,
+	#[account(
+        mut,
+        seeds = [b"market", market_index.to_le_bytes().as_ref()],
+        bump
+    )]
+	pub market: AccountLoader<'info, Market>,
+	#[account(
+        mut,
+        seeds = [b"market_fee_pool".as_ref(), market_index.to_le_bytes().as_ref()],
+        bump,
+    )]
+	pub market_fee_pool: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"insurance_fund"],
+        bump
+    )]
+	pub insurance_fund: AccountLoader<'info, InsuranceFund>,
+	#[account(constraint = state.signer.eq(&normal_signer.key()))]
+	/// CHECK: forced normal_signer
+	pub normal_signer: AccountInfo<'info>,
+	#[account(
+        mut,
+        seeds = [b"treasury_vault".as_ref()],
+        bump,
+    )]
+	pub treasury_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+	pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+#[instruction(market_index: u16,)]
+pub struct BurnGovTokenWithFees<'info> {
+	pub state: Box<Account<'info, State>>,
+	#[account(
+        mut,
+        seeds = [b"market", market_index.to_le_bytes().as_ref()],
+        bump
+    )]
+	pub market: AccountLoader<'info, Market>,
+	#[account(
+        mut,
+        seeds = [b"market_fee_pool".as_ref(), market_index.to_le_bytes().as_ref()],
+        bump,
+    )]
+	pub market_fee_pool: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"insurance_fund"],
+        bump
+    )]
+	pub insurance_fund: AccountLoader<'info, InsuranceFund>,
+	#[account(constraint = state.signer.eq(&normal_signer.key()))]
+	/// CHECK: forced normal_signer
+	pub normal_signer: AccountInfo<'info>,
+	#[account(
+        mut,
+        seeds = [b"treasury_vault".as_ref()],
+        bump,
+    )]
+	pub treasury_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+	pub token_program: Interface<'info, TokenInterface>,
 }

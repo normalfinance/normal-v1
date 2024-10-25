@@ -255,23 +255,40 @@ impl Size for LPRecord {
 
 #[event]
 #[derive(Default)]
-pub struct SettlePnlRecord {
+pub struct InsuranceFundRecord {
     pub ts: i64,
-    pub user: Pubkey,
     pub market_index: u16,
-    pub pnl: i128,
-    pub base_asset_amount: i64,
-    pub quote_asset_amount_after: i64,
-    pub quote_entry_amount: i64,
-    pub settle_price: i64,
-    pub explanation: SettlePnlExplanation,
+	/// precision: PERCENTAGE_PRECISION
+	pub user_if_factor: u32,
+	/// precision: PERCENTAGE_PRECISION
+	pub total_if_factor: u32,
+	/// precision: token mint precision
+	pub vault_amount_before: u64,
+	/// precision: token mint precision
+	pub insurance_vault_amount_before: u64,
+	pub total_if_shares_before: u128,
+	pub total_if_shares_after: u128,
+	/// precision: token mint precision
+	pub amount: i64,
 }
 
-#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default)]
-pub enum SettlePnlExplanation {
-    #[default]
-    None,
-    ExpiredPosition,
+#[event]
+#[derive(Default)]
+pub struct InsuranceFundStakeRecord {
+	pub ts: i64,
+	pub user_authority: Pubkey,
+	pub action: StakeAction,
+	/// precision: token mint precision
+	pub amount: u64,
+
+	/// precision: token mint precision
+	pub insurance_vault_amount_before: u64,
+	pub if_shares_before: u128,
+	pub user_if_shares_before: u128,
+	pub total_if_shares_before: u128,
+	pub if_shares_after: u128,
+	pub user_if_shares_after: u128,
+	pub total_if_shares_after: u128,
 }
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default)]

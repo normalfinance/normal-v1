@@ -350,7 +350,6 @@ pub mod normal {
 		base_spread: u32,
 		max_spread: u32,
 		max_open_interest: u128,
-		max_revenue_withdraw_per_period: u64,
 		order_step_size: u64,
 		order_tick_size: u64,
 		min_order_size: u64,
@@ -374,7 +373,6 @@ pub mod normal {
 			base_spread,
 			max_spread,
 			max_open_interest,
-			max_revenue_withdraw_per_period,
 			order_step_size,
 			order_tick_size,
 			min_order_size,
@@ -482,6 +480,33 @@ pub mod normal {
 		market_index: u16
 	) -> Result<()> {
 		handle_delete_initialized_market(ctx, market_index)
+	}
+
+	/**
+	 *
+	 * FEE POOL INSTRUCTIONS
+	 *
+	 */
+
+	pub fn transfer_fees_to_insurance_fund<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, TransferFeesToInsuranceFund<'info>>,
+		market_index: u16
+	) -> Result<()> {
+		handle_tranfer_fees_to_insurance_fund(ctx, market_index)
+	}
+
+	pub fn transfer_fees_to_treasury<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, TransferFeesToTreasury<'info>>,
+		market_index: u16
+	) -> Result<()> {
+		handle_transfer_fees_to_treasury(ctx, market_index)
+	}
+
+	pub fn burn_gov_token_with_fees<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, BurnGovTokenWithFees<'info>>,
+		market_index: u16
+	) -> Result<()> {
+		handle_burn_gov_token_with_fees(ctx, market_index)
 	}
 
 	/**
@@ -726,6 +751,56 @@ pub mod normal {
 		params: Vec<u8>
 	) -> Result<()> {
 		handle_post_multi_pyth_pull_oracle_updates_atomic(ctx, params)
+	}
+
+	/**
+	 *
+	 * INSURANCE INSTUCTIONS (ADMIN)
+	 *
+	 */
+
+	pub fn initialize_insurance_fund(
+		ctx: Context<InitializeInsuranceFund>,
+		insurance_fund_total_factor: u32
+	) -> Result<()> {
+		handle_initialize_insurance_fund(ctx, insurance_fund_total_factor)
+	}
+
+	pub fn update_insurance_fund_factor(
+		ctx: Context<AdminUpdateInsuranceFund>,
+		user_insurance_fund_factor: u32,
+		total_insurance_fund_factor: u32
+	) -> Result<()> {
+		handle_update_insurance_fund_factor(
+			ctx,
+			user_insurance_fund_factor,
+			total_insurance_fund_factor
+		)
+	}
+
+	pub fn update_insurance_fund_paused_operations(
+		ctx: Context<AdminUpdateInsuranceFund>,
+		paused_operations: u8
+	) -> Result<()> {
+		handle_update_insurance_fund_paused_operations(ctx, paused_operations)
+	}
+
+	pub fn initialize_protocol_insurance_fund_shares_transfer_config(
+		ctx: Context<InitializeProtocolInsuranceFundSharesTransferConfig>
+	) -> Result<()> {
+		handle_initialize_protocol_insurance_fund_shares_transfer_config(ctx)
+	}
+
+	pub fn update_protocol_insurance_fund_shares_transfer_config(
+		ctx: Context<UpdateProtocolInsuranceFundSharesTransferConfig>,
+		whitelisted_signers: Option<[Pubkey; 4]>,
+		max_transfer_per_epoch: Option<u128>
+	) -> Result<()> {
+		handle_update_protocol_insurance_fund_shares_transfer_config(
+			ctx,
+			whitelisted_signers,
+			max_transfer_per_epoch
+		)
 	}
 
 	/**
