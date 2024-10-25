@@ -139,7 +139,11 @@ pub fn send_from_program_vault<'info>(
         };
 
         let cpi_program = token_program.to_account_info();
-        let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
+		let cpi_context = CpiContext::new_with_signer(
+			cpi_program,
+			cpi_accounts,
+			signers
+		);
         #[allow(deprecated)]
         token_interface::transfer(cpi_context, amount)
     }
@@ -195,14 +199,23 @@ pub fn close_vault<'info>(
         authority: authority.to_account_info(),
     };
     let cpi_program = token_program.to_account_info();
-    let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signers);
+	let cpi_context = CpiContext::new_with_signer(
+		cpi_program,
+		cpi_accounts,
+		signers
+	);
     token_interface::close_account(cpi_context)
 }
 
 pub fn validate_mint_fee(account_info: &AccountInfo) -> Result<()> {
     let mint_data = account_info.try_borrow_data()?;
-    let mint_with_extension = StateWithExtensions::<MintInner>::unpack(&mint_data)?;
-    if let Ok(fee_config) = mint_with_extension.get_extension::<TransferFeeConfig>() {
+	let mint_with_extension = StateWithExtensions::<MintInner>::unpack(
+		&mint_data
+	)?;
+	if
+		let Ok(fee_config) =
+			mint_with_extension.get_extension::<TransferFeeConfig>()
+	{
         let fee = u16::from(
             fee_config.get_epoch_fee(Clock::get()?.epoch).transfer_fee_basis_points
         );

@@ -25,7 +25,7 @@ use crate::math::oracle;
 use crate::math::oracle::{ is_oracle_valid_for_action, oracle_validity, NormalAction };
 use crate::math::repeg;
 use crate::math::safe_math::SafeMath;
-use crate::math::spot_balance::get_token_amount;
+use crate::math::balance::get_token_amount;
 
 use crate::state::oracle::{ OraclePriceData, OracleSource };
 use crate::state::oracle_map::OracleMap;

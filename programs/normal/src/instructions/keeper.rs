@@ -22,7 +22,6 @@ use crate::math::orders::{
 };
 use crate::optional_accounts::{ get_token_mint };
 use crate::state::fill_mode::FillMode;
-use crate::state::spot_fulfillment_params::normal::MatchFulfillmentParams;
 use crate::state::oracle_map::OracleMap;
 use crate::state::order_params::{
 	OrderParams,
@@ -40,7 +39,6 @@ use crate::state::market_map::{
 	MarketSet,
 	MarketMap,
 };
-use crate::state::spot_fulfillment_params::FulfillmentParams;
 
 use crate::state::state::State;
 use crate::state::user::{
@@ -504,7 +502,6 @@ pub fn handle_settle_lp<'c: 'info, 'info>(
 
 #[access_control(
     market_valid(&ctx.accounts.market)
-    funding_not_paused(&ctx.accounts.state)
     valid_oracle_for_market(&ctx.accounts.oracle, &ctx.accounts.market)
 )]
 pub fn handle_update_bid_ask_twap<'c: 'info, 'info>(
@@ -543,7 +540,7 @@ pub fn handle_update_bid_ask_twap<'c: 'info, 'info>(
 	let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
 	let makers = load_user_map(remaining_accounts_iter, false)?;
 
-	let depth = market.get_market_depth_for_funding_rate()?;
+	let depth = market.get_market_depth()?;
 
 	let (bids, asks) = find_bids_and_asks_from_users(
 		market,

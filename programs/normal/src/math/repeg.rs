@@ -12,8 +12,8 @@ use crate::math::constants::{
     BID_ASK_SPREAD_PRECISION_U128,
     PEG_PRECISION_I128,
     PRICE_TO_PEG_PRECISION_RATIO,
-    SHARE_OF_FEES_ALLOCATED_TO_DRIFT_DENOMINATOR,
-    SHARE_OF_FEES_ALLOCATED_TO_DRIFT_NUMERATOR,
+    SHARE_OF_FEES_ALLOCATED_TO_NORMAL_DENOMINATOR,
+    SHARE_OF_FEES_ALLOCATED_TO_NORMAL_NUMERATOR,
 };
 use crate::math::cp_curve;
 use crate::math::oracle;
@@ -405,8 +405,8 @@ pub fn calculate_fee_pool(market: &Market) -> NormalResult<u128> {
 pub fn get_total_fee_lower_bound(market: &Market) -> NormalResult<u128> {
     // market to retain half of exchange fees
     let total_fee_lower_bound = market.amm.total_exchange_fee
-        .safe_mul(SHARE_OF_FEES_ALLOCATED_TO_DRIFT_NUMERATOR)?
-        .safe_div(SHARE_OF_FEES_ALLOCATED_TO_DRIFT_DENOMINATOR)?;
+        .safe_mul(SHARE_OF_FEES_ALLOCATED_TO_NORMAL_NUMERATOR)?
+        .safe_div(SHARE_OF_FEES_ALLOCATED_TO_NORMAL_DENOMINATOR)?;
 
     Ok(total_fee_lower_bound)
 }

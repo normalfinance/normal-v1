@@ -1,16 +1,12 @@
-
-![Logo](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/th5xamgrr6se0x5ro4g6.png)
-
+![Logo](https://cdn.prod.website-files.com/6595b2282ea917577755d3a5/6595bb9290625dfff5df3f7e_Logo%20-%20Color.svg)
 
 # Normal v1
 
 Normal is a synthetic asset protocol on Solana enabling low fee and deep liquidity trading on Top 100 crypto assets.
 
-
 ## Documentation
 
 [Documentation](https://docs.normalfinance.io)
-
 
 ## Features
 
@@ -19,17 +15,15 @@ Normal is a synthetic asset protocol on Solana enabling low fee and deep liquidi
 - Fullscreen mode
 - Cross platform
 
-
 ## Usage/Examples
 
 ```javascript
-import Component from 'my-project'
+import Component from 'my-project';
 
 function App() {
-  return <Component />
+	return <Component />;
 }
 ```
-
 
 ## Roadmap
 
@@ -37,19 +31,15 @@ function App() {
 
 - Add more integrations
 
-
 ## FAQ
 
 #### Wen FAQ?
 
 Coming soon fren
 
-
-
 ## Authors
 
 - [@jblewnormal](https://www.github.com/jblewnormal)
-
 
 ## Contributing
 
@@ -59,13 +49,10 @@ See `contributing.md` for ways to get started.
 
 Please adhere to this project's `code of conduct`.
 
-
 ## Feedback
 
 If you have any feedback, please reach out to us at fake@fake.com
 
-
 ## License
 
 [MIT](https://choosealicense.com/licenses/mit/)
-

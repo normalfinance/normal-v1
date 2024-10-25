@@ -50,7 +50,7 @@ use crate::math::oracle::{
 	OracleValidity,
 };
 use crate::math::safe_math::SafeMath;
-use crate::math::spot_balance::{ get_signed_token_amount, get_token_amount };
+use crate::math::balance::{ get_signed_token_amount, get_token_amount };
 use crate::math::{ amm, fees, orders::* };
 use crate::state::order_params::{
 	ModifyOrderParams,
@@ -1160,6 +1160,20 @@ pub fn fill_order(
 			max_open_interest
 		)?;
 	}
+
+
+	
+	let total_open_interest = 0;
+	for (_key, market_account_loader) in market_map.0.iter_mut() {
+        let market = &mut load_mut!(market_account_loader)?;
+		let open_interest = market.get_open_interest();
+		total_open_interest = total_open_interest.safe_add(open_interest);
+    }
+
+	let insurance_fund = &mut load_mut!(market.insurance_fund);
+	insurance_fund.max_insurance = total_open_interest;
+
+	
 
 	user.update_last_active_slot(slot);
 
@@ -2834,7 +2848,7 @@ pub fn force_cancel_orders(
 			oracle_map,
 			now,
 			slot,
-			OrderActionExplanation::InsufficientFreeCollateral,
+			OrderActionExplanation::InsufficientFunds,
 			Some(&filler_key),
 			fee,
 			false

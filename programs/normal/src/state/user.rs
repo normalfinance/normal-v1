@@ -25,7 +25,7 @@ use crate::math::position::{
 	calculate_perp_liability_value,
 };
 use crate::math::safe_math::SafeMath;
-use crate::math::spot_balance::{
+use crate::math::balance::{
 	get_signed_token_amount,
 	get_strict_token_value,
 	get_token_amount,
@@ -622,19 +622,13 @@ impl Position {
 		self.open_orders != 0 || self.open_bids != 0 || self.open_asks != 0
 	}
 
-	pub fn get_token_amount(
-		&self,
-		spot_market: &SpotMarket
-	) -> NormalResult<u128> {
-		get_token_amount(self.scaled_balance.cast()?, spot_market)
+	pub fn get_token_amount(&self, market: &Market) -> NormalResult<u128> {
+		get_token_amount(self.scaled_balance.cast()?, market)
 	}
 
-	pub fn get_signed_token_amount(
-		&self,
-		spot_market: &SpotMarket
-	) -> NormalResult<i128> {
+	pub fn get_signed_token_amount(&self, market: &Market) -> NormalResult<i128> {
 		get_signed_token_amount(
-			get_token_amount(self.scaled_balance.cast()?, spot_market)?
+			get_token_amount(self.scaled_balance.cast()?, market)?
 		)
 	}
 
@@ -1123,6 +1117,11 @@ pub struct UserStats {
 	/// The timestamp of the next epoch
 	/// Epoch is used to limit referrer rewards earned in single epoch
 	pub next_epoch_ts: i64,
+
+	/// Insurance
+	///
+	/// The amount of tokens staked in the quote spot markets if
+	pub insurance_fund_staked_amount: u64,
 
 	/// Rolling 30day maker volume for user
 	/// precision: QUOTE_PRECISION

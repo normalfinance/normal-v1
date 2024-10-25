@@ -21,8 +21,8 @@ use crate::math::constants::{
     MAX_UPDATE_K_PRICE_CHANGE,
     PERCENTAGE_PRECISION,
     QUOTE_SPOT_MARKET_INDEX,
-    SPOT_CUMULATIVE_INTEREST_PRECISION,
     TWENTY_FOUR_HOUR,
+    THIRTEEN_DAY,
 };
 use crate::math::cp_curve::get_update_k_result;
 use crate::math::orders::is_multiple_of_step_size;
@@ -31,7 +31,7 @@ use crate::math::safe_math::SafeMath;
 use crate::math::spot_balance::get_token_amount;
 use crate::math::{ amm, bn };
 use crate::optional_accounts::get_token_mint;
-use crate::state::events::{ CurveRecord, SpotMarketVaultDepositRecord };
+use crate::state::events::CurveRecord;
 use crate::state::oracle::get_sb_on_demand_price;
 use crate::state::oracle::{
     get_oracle_price,
@@ -53,6 +53,7 @@ use crate::state::amm::AMM;
 use crate::state::state::{ ExchangeStatus, FeeStructure, OracleGuardRails, State };
 use crate::state::traits::Size;
 use crate::state::user::{ User, UserStats };
+use crate::state::insurance::InsuranceFund;
 use crate::validate;
 use crate::validation::fee_structure::validate_fee_structure;
 use crate::validation::market::validate_market;
@@ -112,7 +113,6 @@ pub fn handle_initialize_market(
     base_spread: u32,
     max_spread: u32,
     max_open_interest: u128,
-    max_revenue_withdraw_per_period: u64,
     quote_max_insurance: u64,
     order_step_size: u64,
     order_tick_size: u64,
@@ -126,7 +126,7 @@ pub fn handle_initialize_market(
 
     // protocol must be authority of collateral vault
     if ctx.accounts.market_vault.owner != state.signer {
-        return Err(ErrorCode::InvalidSpotMarketAuthority.into());
+        return Err(ErrorCode::InvalidMarketAuthority.into());
     }
 
     let market_index = get_then_update_id!(state, number_of_markets);
@@ -248,6 +248,13 @@ pub fn handle_initialize_market(
 
         token_program,
         padding: [0; 41],
+
+        /// Insurance
+        insurance_fund: ctx.accounts.insurance_fund.key(),
+        insurance_claim: InsuranceClaim {
+            quote_max_insurance,
+            ..InsuranceClaim::default()
+        },
 
         amm: AMM {
             // TODO: are these inits correct?
@@ -1110,7 +1117,6 @@ pub fn handle_update_market_status(
     ctx: Context<AdminUpdateMarket>,
     status: MarketStatus
 ) -> Result<()> {
-    status.validate_not_deprecated()?;
     let market = &mut load_mut!(ctx.accounts.market)?;
     msg!("spot market {}", market.market_index);
 
