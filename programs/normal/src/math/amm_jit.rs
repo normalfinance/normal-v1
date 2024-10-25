@@ -1,4 +1,4 @@
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::NormalResult;
 use crate::math::casting::Cast;
 use crate::math::constants::{AMM_RESERVE_PRECISION, PERCENTAGE_PRECISION_U64};
@@ -17,7 +17,7 @@ pub fn calculate_jit_base_asset_amount(
     maker_base_asset_amount: u64,
     auction_price: u64,
     valid_oracle_price: Option<i64>,
-    taker_direction: PositionDirection,
+    taker_side: OrderSide,
     liquidity_split: AMMLiquiditySplit,
 ) -> NormalResult<u64> {
     // AMM can only take up to 50% of size the maker is offering
@@ -31,13 +31,13 @@ pub fn calculate_jit_base_asset_amount(
         // maker taking a short below oracle = likely to be a wash
         // so we want to take under 50% of typical
 
-        if taker_direction == PositionDirection::Long
+        if takerside == OrderSide::Buy
             && auction_price < baseline_price_u64.safe_sub(five_bps_of_baseline)?
-            || taker_direction == PositionDirection::Short
+            || takerside == OrderSide::Sell
                 && auction_price > baseline_price_u64.saturating_add(five_bps_of_baseline)
         {
             // shrink by at least 50% based on distance from oracle
-            let opposite_spread_price = if taker_direction == PositionDirection::Long {
+            let opposite_spread_price = if takerside == OrderSide::Buy {
                 market
                     .amm
                     .sell_spread
@@ -156,7 +156,7 @@ pub fn calculate_clamped_jit_base_asset_amount(
 
 pub fn calculate_amm_jit_liquidity(
     market: &mut Market,
-    taker_direction: PositionDirection,
+    taker_side: OrderSide,
     maker_price: u64,
     valid_oracle_price: Option<i64>,
     base_asset_amount: u64,
@@ -176,9 +176,9 @@ pub fn calculate_amm_jit_liquidity(
     if amm_will_fill_next_round {
         return Ok((jit_base_asset_amount, liquidity_split));
     }
-    let amm_wants_to_jit_make = market.amm.amm_wants_to_jit_make(taker_direction)?;
+    let amm_wants_to_jit_make = market.amm.amm_wants_to_jit_make(taker_side)?;
 
-    let amm_lp_wants_to_jit_make = market.amm.amm_lp_wants_to_jit_make(taker_direction)?;
+    let amm_lp_wants_to_jit_make = market.amm.amm_lp_wants_to_jit_make(taker_side)?;
     let amm_lp_allowed_to_jit_make = market
         .amm
         .amm_lp_allowed_to_jit_make(amm_wants_to_jit_make)?;
@@ -196,7 +196,7 @@ pub fn calculate_amm_jit_liquidity(
             base_asset_amount,
             maker_price,
             valid_oracle_price,
-            taker_direction,
+            taker_side,
             liquidity_split,
         )?;
     } else if split_with_lps {
@@ -207,7 +207,7 @@ pub fn calculate_amm_jit_liquidity(
             base_asset_amount,
             maker_price,
             valid_oracle_price,
-            taker_direction,
+            taker_side,
             liquidity_split,
         )?;
     }

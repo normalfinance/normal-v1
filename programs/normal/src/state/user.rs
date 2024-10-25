@@ -2,7 +2,7 @@ use crate::controller::lp::apply_lp_rebase_to_position;
 use crate::controller::position::{
 	add_new_position,
 	get_position_index,
-	PositionDirection,
+	OrderSide,
 };
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::auction::{ calculate_auction_price, is_auction_complete };
@@ -477,19 +477,19 @@ impl Position {
 		}
 	}
 
-	pub fn get_direction(&self) -> PositionDirection {
+	pub fn get_side(&self) -> OrderSide {
 		if self.base_asset_amount >= 0 {
-			PositionDirection::Long
+			OrderSide::Buy
 		} else {
-			PositionDirection::Short
+			OrderSide::Sell
 		}
 	}
 
-	pub fn get_direction_to_close(&self) -> PositionDirection {
+	pub fn get_side_to_close(&self) -> OrderSide {
 		if self.base_asset_amount >= 0 {
-			PositionDirection::Short
+			OrderSide::Sell
 		} else {
-			PositionDirection::Long
+			OrderSide::Buy
 		}
 	}
 
@@ -780,9 +780,9 @@ pub struct Order {
 	/// User generated order id. Can make it easier to place/cancel orders
 	pub user_order_id: u8,
 	/// What the users position was when the order was placed
-	pub existing_position_direction: PositionDirection,
-	/// Whether the user is going long or short. LONG = bid, SHORT = ask
-	pub direction: PositionDirection,
+	pub existing_position_side: OrderSide,
+	/// Whether the user is buying or selling
+	pub side: OrderSide,
 	/// Whether the order is allowed to only reduce position size
 	pub reduce_only: bool,
 	/// Whether the order must be a maker
@@ -821,7 +821,7 @@ impl Order {
 		} else if self.price == 0 {
 			match fallback_price {
 				Some(price) =>
-					Some(standardize_price(price, tick_size, self.direction)?),
+					Some(standardize_price(price, tick_size, self.side)?),
 				None => None,
 			}
 		} else {
@@ -912,15 +912,15 @@ impl Order {
 			return Ok(0);
 		}
 
-		match self.direction {
-			PositionDirection::Long => {
+		match self.side {
+			OrderSide::Buy => {
 				if existing_position > 0 {
 					Ok(0)
 				} else {
 					Ok(base_asset_amount_unfilled.min(existing_position.unsigned_abs()))
 				}
 			}
-			PositionDirection::Short => {
+			OrderSide::Sell => {
 				if existing_position < 0 {
 					Ok(0)
 				} else {
@@ -986,11 +986,11 @@ impl Order {
 		}
 
 		if self.order_type == OrderType::TriggerLimit {
-			return match self.direction {
-				PositionDirection::Long if self.trigger_price < self.price => {
+			return match self.side {
+				OrderSide::Buy if self.trigger_price < self.price => {
 					return Ok(false);
 				}
-				PositionDirection::Short if self.trigger_price > self.price => {
+				OrderSide::Sell if self.trigger_price > self.price => {
 					return Ok(false);
 				}
 				_ => self.is_auction_complete(slot),
@@ -1012,11 +1012,11 @@ impl Default for Order {
 			user_order_id: 0,
 			market_index: 0,
 			price: 0,
-			existing_position_direction: PositionDirection::Long,
+			existing_position_side: OrderSide::Buy,
 			base_asset_amount: 0,
 			base_asset_amount_filled: 0,
 			quote_asset_amount_filled: 0,
-			direction: PositionDirection::Long,
+			side: OrderSide::Buy,
 			reduce_only: false,
 			post_only: false,
 			immediate_or_cancel: false,

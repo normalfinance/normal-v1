@@ -1,4 +1,4 @@
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::math::constants::MAX_BASE_ASSET_AMOUNT_WITH_AMM;
@@ -207,8 +207,8 @@ pub fn validate_market(market: &Market) -> NormalResult {
 }
 
 #[allow(clippy::comparison_chain)]
-pub fn validate_amm_account_for_fill(amm: &AMM, direction: PositionDirection) -> NormalResult {
-    if direction == PositionDirection::Long {
+pub fn validate_amm_account_for_fill(amm: &AMM, side: OrderSide) -> NormalResult {
+    if side == OrderSide::Buy {
         validate!(
             amm.base_asset_reserve >= amm.min_base_asset_reserve,
             ErrorCode::InvalidAmmForFillDetected,
@@ -218,7 +218,7 @@ pub fn validate_amm_account_for_fill(amm: &AMM, direction: PositionDirection) ->
         )?;
     }
 
-    if direction == PositionDirection::Short {
+    if side == OrderSide::Sell {
         validate!(
             amm.base_asset_reserve <= amm.max_base_asset_reserve,
             ErrorCode::InvalidAmmForFillDetected,

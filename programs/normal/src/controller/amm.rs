@@ -3,7 +3,7 @@ use std::cmp::{ max, min, Ordering };
 use anchor_lang::prelude::*;
 use solana_program::msg;
 
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::controller::repeg::apply_cost_to_market;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::get_then_update_id;
@@ -104,8 +104,8 @@ pub fn calculate_base_swap_output_with_spread(
 	// first do the swap with spread reserves to figure out how much base asset is acquired
 	let (base_asset_reserve_with_spread, quote_asset_reserve_with_spread) =
 		get_spread_reserves(amm, match direction {
-			SwapDirection::Add => PositionDirection::Short,
-			SwapDirection::Remove => PositionDirection::Long,
+			SwapDirection::Add => OrderSide::Sell,
+			SwapDirection::Remove => OrderSide::Buy,
 		})?;
 
 	let (new_quote_asset_reserve_with_spread, _) = amm::calculate_swap_output(
@@ -154,9 +154,9 @@ pub fn calculate_base_swap_output_with_spread(
 
 pub fn update_spread_reserves(market: &mut Market) -> NormalResult {
 	let (new_ask_base_asset_reserve, new_ask_quote_asset_reserve) =
-		calculate_spread_reserves(market, PositionDirection::Long)?;
+		calculate_spread_reserves(market, OrderSide::Buy)?;
 	let (new_bid_base_asset_reserve, new_bid_quote_asset_reserve) =
-		calculate_spread_reserves(market, PositionDirection::Short)?;
+		calculate_spread_reserves(market, OrderSide::Sell)?;
 
 	market.amm.ask_base_asset_reserve = new_ask_base_asset_reserve.min(
 		market.amm.base_asset_reserve

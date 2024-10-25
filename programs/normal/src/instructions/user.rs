@@ -9,7 +9,7 @@ use solana_program::program::invoke;
 use solana_program::system_instruction::transfer;
 
 use crate::controller::orders::{ cancel_orders, ModifyOrderId };
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::ErrorCode;
 use crate::instructions::constraints::*;
 use crate::instructions::optional_accounts::{
@@ -334,7 +334,7 @@ pub fn handle_cancel_orders<'c: 'info, 'info>(
 	ctx: Context<'_, '_, 'c, 'info, CancelOrder<'info>>,
 	market_type: Option<MarketType>,
 	market_index: Option<u16>,
-	direction: Option<PositionDirection>
+	side: Option<OrderSide>
 ) -> Result<()> {
 	let clock = &Clock::get()?;
 	let state = &ctx.accounts.state;
@@ -360,7 +360,7 @@ pub fn handle_cancel_orders<'c: 'info, 'info>(
 		OrderActionExplanation::None,
 		market_type,
 		market_index,
-		direction
+		side
 	)?;
 
 	Ok(())

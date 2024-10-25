@@ -1,4 +1,4 @@
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::math::constants::AUCTION_DERIVE_PRICE_FRACTION;
@@ -18,15 +18,15 @@ use std::cmp::min;
 
 pub fn calculate_auction_prices(
     oracle_price_data: &OraclePriceData,
-    direction: PositionDirection,
+    side: OrderSide,
     limit_price: u64
 ) -> NormalResult<(i64, i64)> {
     let oracle_price = oracle_price_data.price;
     let limit_price = limit_price.cast::<i64>()?;
     if limit_price > 0 {
-        let (auction_start_price, auction_end_price) = match direction {
+        let (auction_start_price, auction_end_price) = match side {
             // Long and limit price is better than oracle price
-            PositionDirection::Long if limit_price < oracle_price => {
+            OrderSide::Buy if limit_price < oracle_price => {
                 let limit_derive_start_price = limit_price.safe_sub(
                     limit_price / AUCTION_DERIVE_PRICE_FRACTION
                 )?;
@@ -37,7 +37,7 @@ pub fn calculate_auction_prices(
                 (limit_derive_start_price.min(oracle_derive_start_price), limit_price)
             }
             // Long and limit price is worse than oracle price
-            PositionDirection::Long if limit_price >= oracle_price => {
+            OrderSide::Buy if limit_price >= oracle_price => {
                 let oracle_derive_end_price = oracle_price.safe_add(
                     oracle_price / AUCTION_DERIVE_PRICE_FRACTION
                 )?;
@@ -45,7 +45,7 @@ pub fn calculate_auction_prices(
                 (oracle_price, limit_price.min(oracle_derive_end_price))
             }
             // Short and limit price is better than oracle price
-            PositionDirection::Short if limit_price > oracle_price => {
+            OrderSide::Sell if limit_price > oracle_price => {
                 let limit_derive_start_price = limit_price.safe_add(
                     limit_price / AUCTION_DERIVE_PRICE_FRACTION
                 )?;
@@ -56,7 +56,7 @@ pub fn calculate_auction_prices(
                 (limit_derive_start_price.max(oracle_derive_start_price), limit_price)
             }
             // Short and limit price is worse than oracle price
-            PositionDirection::Short if limit_price <= oracle_price => {
+            OrderSide::Sell if limit_price <= oracle_price => {
                 let oracle_derive_end_price = oracle_price.safe_sub(
                     oracle_price / AUCTION_DERIVE_PRICE_FRACTION
                 )?;
@@ -69,11 +69,11 @@ pub fn calculate_auction_prices(
         return Ok((auction_start_price, auction_end_price));
     }
 
-    let auction_end_price = match direction {
-        PositionDirection::Long => {
+    let auction_end_price = match side {
+        OrderSide::Buy => {
             oracle_price.safe_add(oracle_price / AUCTION_DERIVE_PRICE_FRACTION)?
         }
-        PositionDirection::Short => {
+        OrderSide::Sell => {
             oracle_price.safe_sub(oracle_price / AUCTION_DERIVE_PRICE_FRACTION)?
         }
     };
@@ -111,28 +111,28 @@ fn calculate_auction_price_for_fixed_auction(
     let auction_end_price = order.auction_end_price.cast::<u64>()?;
 
     if delta_denominator == 0 {
-        return standardize_price(auction_end_price, tick_size, order.direction);
+        return standardize_price(auction_end_price, tick_size, order.side);
     }
 
-    let price_delta = match order.direction {
-        PositionDirection::Long =>
+    let price_delta = match order.side {
+        OrderSide::Buy =>
             auction_end_price
                 .safe_sub(auction_start_price)?
                 .safe_mul(delta_numerator.cast()?)?
                 .safe_div(delta_denominator.cast()?)?,
-        PositionDirection::Short =>
+        OrderSide::Sell =>
             auction_start_price
                 .safe_sub(auction_end_price)?
                 .safe_mul(delta_numerator.cast()?)?
                 .safe_div(delta_denominator.cast()?)?,
     };
 
-    let price = match order.direction {
-        PositionDirection::Long => auction_start_price.safe_add(price_delta)?,
-        PositionDirection::Short => auction_start_price.safe_sub(price_delta)?,
+    let price = match order.side {
+        OrderSide::Buy => auction_start_price.safe_add(price_delta)?,
+        OrderSide::Sell => auction_start_price.safe_sub(price_delta)?,
     };
 
-    standardize_price(price, tick_size, order.direction)
+    standardize_price(price, tick_size, order.side)
 }
 
 pub fn is_auction_complete(order_slot: u64, auction_duration: u8, slot: u64) -> NormalResult<bool> {
@@ -166,7 +166,7 @@ pub fn calculate_auction_params_for_trigger_order(
         let (auction_start_price, auction_end_price, derived_auction_duration) =
             OrderParams::derive_market_order_auction_params(
                 market,
-                order.direction,
+                order.side,
                 oracle_price_data.price,
                 order.price,
                 0
@@ -178,7 +178,7 @@ pub fn calculate_auction_params_for_trigger_order(
     } else {
         let (auction_start_price, auction_end_price) = calculate_auction_prices(
             oracle_price_data,
-            order.direction,
+            order.side,
             order.price
         )?;
 

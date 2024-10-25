@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 
 use std::cmp::max;
 
-use crate::controller::position::{ PositionDelta, PositionDirection };
+use crate::controller::position::{ PositionDelta, OrderSide };
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::amm;
 use crate::math::casting::Cast;
@@ -42,7 +42,7 @@ use num_integer::Roots;
 
 use crate::state::oracle::{ HistoricalOracleData, OracleSource };
 use crate::state::market::PoolBalance;
-use crate::controller::position::{ PositionDirection, PositionDelta };
+use crate::controller::position::{ OrderSide, PositionDelta };
 
 // use normal_macros::assert_no_slop;
 
@@ -390,13 +390,13 @@ impl Default for AMM {
 impl AMM {
 	pub fn get_fallback_price(
 		self,
-		direction: &PositionDirection,
+		side: &OrderSide,
 		amm_available_liquidity: u64,
 		oracle_price: i64,
 		seconds_til_order_expiry: i64
 	) -> NormalResult<u64> {
 		// PRICE_PRECISION
-		if direction.eq(&PositionDirection::Long) {
+		if side.eq(&OrderSide::Buy) {
 			// pick amm ask + buffer if theres liquidity
 			// otherwise be aggressive vs oracle + 1hr premium
 			if amm_available_liquidity >= self.min_order_size {
@@ -591,13 +591,13 @@ impl AMM {
 
 	pub fn amm_wants_to_jit_make(
 		&self,
-		taker_direction: PositionDirection
+		taker_side: OrderSide
 	) -> NormalResult<bool> {
-		let amm_wants_to_jit_make = match taker_direction {
-			PositionDirection::Long => {
+		let amm_wants_to_jit_make = match taker_side {
+			OrderSide::Buy => {
 				self.base_asset_amount_with_amm < -self.order_step_size.cast()?
 			}
-			PositionDirection::Short => {
+			OrderSide::Sell => {
 				self.base_asset_amount_with_amm > self.order_step_size.cast()?
 			}
 		};
@@ -606,18 +606,18 @@ impl AMM {
 
 	pub fn amm_lp_wants_to_jit_make(
 		&self,
-		taker_direction: PositionDirection
+		taker_side: OrderSide
 	) -> NormalResult<bool> {
 		if self.user_lp_shares == 0 {
 			return Ok(false);
 		}
 
-		let amm_lp_wants_to_jit_make = match taker_direction {
-			PositionDirection::Long => {
+		let amm_lp_wants_to_jit_make = match taker_side {
+			OrderSide::Buy => {
 				self.base_asset_amount_per_lp >
 					self.get_target_base_asset_amount_per_lp()?
 			}
-			PositionDirection::Short => {
+			OrderSide::Sell => {
 				self.base_asset_amount_per_lp <
 					self.get_target_base_asset_amount_per_lp()?
 			}
@@ -805,7 +805,7 @@ impl AMM {
 	pub fn update_volume_24h(
 		&mut self,
 		quote_asset_amount: u64,
-		position_direction: PositionDirection,
+		position_side: OrderSide,
 		now: i64
 	) -> NormalResult {
 		let since_last = max(1_i64, now.safe_sub(self.last_trade_ts)?);
@@ -814,7 +814,7 @@ impl AMM {
 			self,
 			now,
 			quote_asset_amount,
-			position_direction
+			position_side
 		)?;
 
 		self.volume_24h = stats::calculate_rolling_sum(

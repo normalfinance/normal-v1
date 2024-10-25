@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use borsh::{ BorshDeserialize, BorshSerialize };
 
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode::InvalidOrder };
 use crate::math::casting::Cast;
 use crate::math::safe_unwrap::SafeUnwrap;
@@ -93,7 +93,7 @@ pub struct OrderActionRecord {
 
 	pub taker: Option<Pubkey>,
 	pub taker_order_id: Option<u32>,
-	pub taker_order_direction: Option<PositionDirection>,
+	pub taker_order_side: Option<OrderSide>,
 	/// precision: BASE_PRECISION (perp) or MINT_PRECISION (spot)
 	pub taker_order_base_asset_amount: Option<u64>,
 	/// precision: BASE_PRECISION (perp) or MINT_PRECISION (spot)
@@ -103,7 +103,7 @@ pub struct OrderActionRecord {
 
 	pub maker: Option<Pubkey>,
 	pub maker_order_id: Option<u32>,
-	pub maker_order_direction: Option<PositionDirection>,
+	pub maker_order_side: Option<OrderSide>,
 	/// precision: BASE_PRECISION (perp) or MINT_PRECISION (spot)
 	pub maker_order_base_asset_amount: Option<u64>,
 	/// precision: BASE_PRECISION (perp) or MINT_PRECISION (spot)
@@ -171,7 +171,7 @@ pub fn get_order_action_record(
 		spot_fulfillment_method_fee,
 		taker,
 		taker_order_id: taker_order.map(|order| order.order_id),
-		taker_order_direction: taker_order.map(|order| order.direction),
+		taker_order_side: taker_order.map(|order| order.side),
 		taker_order_base_asset_amount: taker_order.map(
 			|order| order.base_asset_amount
 		),
@@ -183,7 +183,7 @@ pub fn get_order_action_record(
 			.map(|order| order.quote_asset_amount_filled),
 		maker,
 		maker_order_id: maker_order.map(|order| order.order_id),
-		maker_order_direction: maker_order.map(|order| order.direction),
+		maker_order_side: maker_order.map(|order| order.side),
 		maker_order_base_asset_amount: maker_order.map(
 			|order| order.base_asset_amount
 		),

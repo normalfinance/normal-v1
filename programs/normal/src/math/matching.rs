@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::NormalResult;
 use crate::math::casting::Cast;
 use crate::math::constants::{BID_ASK_SPREAD_PRECISION_I128, TEN_BPS_I64};
@@ -45,17 +45,17 @@ pub fn are_orders_same_market_but_different_sides(
 ) -> bool {
     maker_order.market_index == taker_order.market_index
         && maker_order.market_type == taker_order.market_type
-        && maker_order.direction != taker_order.direction
+        && maker_order.side != taker_order.side
 }
 
 pub fn do_orders_cross(
-    maker_direction: PositionDirection,
+    maker_side: OrderSide,
     maker_price: u64,
     taker_price: u64,
 ) -> bool {
-    match maker_direction {
-        PositionDirection::Long => taker_price <= maker_price,
-        PositionDirection::Short => taker_price >= maker_price,
+    match maker_side {
+        OrderSide::Buy => taker_price <= maker_price,
+        OrderSide::Sell => taker_price >= maker_price,
     }
 }
 
@@ -64,7 +64,7 @@ pub fn calculate_fill_for_matched_orders(
     maker_price: u64,
     taker_base_asset_amount: u64,
     base_decimals: u32,
-    maker_direction: PositionDirection,
+    maker_side: OrderSide,
 ) -> NormalResult<(u64, u64)> {
     let base_asset_amount = min(maker_base_asset_amount, taker_base_asset_amount);
 
@@ -72,7 +72,7 @@ pub fn calculate_fill_for_matched_orders(
         base_asset_amount,
         maker_price,
         base_decimals,
-        maker_direction,
+        maker_side,
     )?;
 
     Ok((base_asset_amount, quote_asset_amount))
@@ -80,7 +80,7 @@ pub fn calculate_fill_for_matched_orders(
 
 pub fn calculate_filler_multiplier_for_matched_orders(
     maker_price: u64,
-    maker_direction: PositionDirection,
+    maker_side: OrderSide,
     oracle_price: i64,
 ) -> NormalResult<u64> {
     // percentage oracle_price is above maker_price
@@ -93,9 +93,9 @@ pub fn calculate_filler_multiplier_for_matched_orders(
 
     // offer filler multiplier based on price improvement from reasonable baseline
     // multiplier between 1x and 100x
-    let multiplier = match maker_direction {
-        PositionDirection::Long => (-price_pct_diff).safe_add(TEN_BPS_I64 * 2)?,
-        PositionDirection::Short => price_pct_diff.safe_add(TEN_BPS_I64 * 2)?,
+    let multiplier = match maker_side {
+        OrderSide::Buy => (-price_pct_diff).safe_add(TEN_BPS_I64 * 2)?,
+        OrderSide::Sell => price_pct_diff.safe_add(TEN_BPS_I64 * 2)?,
     }
     .max(TEN_BPS_I64)
     .min(TEN_BPS_I64 * 100);

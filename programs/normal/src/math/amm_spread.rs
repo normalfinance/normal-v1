@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 
 use solana_program::msg;
 
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::{NormalResult, ErrorCode};
 use crate::math::amm::_calculate_market_open_bids_asks;
 use crate::math::bn::U192;
@@ -25,8 +25,8 @@ use crate::validate;
 pub fn calculate_base_asset_amount_to_trade_to_price(
     amm: &AMM,
     limit_price: u64,
-    direction: PositionDirection,
-) -> NormalResult<(u64, PositionDirection)> {
+    side: OrderSide,
+) -> NormalResult<(u64, OrderSide)> {
     let invariant_sqrt_u192 = U192::from(amm.sqrt_k);
     let invariant = invariant_sqrt_u192.safe_mul(invariant_sqrt_u192)?;
 
@@ -47,7 +47,7 @@ pub fn calculate_base_asset_amount_to_trade_to_price(
         .try_to_u128()?;
 
     let base_asset_reserve_before = if amm.base_spread > 0 {
-        let (spread_base_asset_reserve, _) = get_spread_reserves(amm, direction)?;
+        let (spread_base_asset_reserve, _) = get_spread_reserves(amm, side)?;
         spread_base_asset_reserve
     } else {
         amm.base_asset_reserve
@@ -58,13 +58,13 @@ pub fn calculate_base_asset_amount_to_trade_to_price(
             .safe_sub(base_asset_reserve_before)?
             .cast::<u64>()
             .unwrap_or(u64::MAX);
-        Ok((max_trade_amount, PositionDirection::Short))
+        Ok((max_trade_amount, OrderSide::Sell))
     } else {
         let max_trade_amount = base_asset_reserve_before
             .safe_sub(new_base_asset_reserve)?
             .cast::<u64>()
             .unwrap_or(u64::MAX);
-        Ok((max_trade_amount, PositionDirection::Long))
+        Ok((max_trade_amount, OrderSide::Buy))
     }
 }
 
@@ -410,10 +410,10 @@ pub fn calculate_spread(
     Ok((buy_spread.cast::<u32>()?, sell_spread.cast::<u32>()?))
 }
 
-pub fn get_spread_reserves(amm: &AMM, direction: PositionDirection) -> NormalResult<(u128, u128)> {
-    let (base_asset_reserve, quote_asset_reserve) = match direction {
-        PositionDirection::Long => (amm.ask_base_asset_reserve, amm.ask_quote_asset_reserve),
-        PositionDirection::Short => (amm.bid_base_asset_reserve, amm.bid_quote_asset_reserve),
+pub fn get_spread_reserves(amm: &AMM, side: OrderSide) -> NormalResult<(u128, u128)> {
+    let (base_asset_reserve, quote_asset_reserve) = match side {
+        OrderSide::Buy => (amm.ask_base_asset_reserve, amm.ask_quote_asset_reserve),
+        OrderSide::Sell => (amm.bid_base_asset_reserve, amm.bid_quote_asset_reserve),
     };
 
     Ok((base_asset_reserve, quote_asset_reserve))
@@ -421,14 +421,14 @@ pub fn get_spread_reserves(amm: &AMM, direction: PositionDirection) -> NormalRes
 
 pub fn calculate_spread_reserves(
     market: &Market,
-    direction: PositionDirection,
+    side: OrderSide,
 ) -> NormalResult<(u128, u128)> {
-    let spread = match direction {
-        PositionDirection::Long => market.amm.buy_spread,
-        PositionDirection::Short => market.amm.sell_spread,
+    let spread = match side {
+        OrderSide::Buy => market.amm.buy_spread,
+        OrderSide::Sell => market.amm.sell_spread,
     };
 
-    let spread_with_offset: i32 = if direction == PositionDirection::Short {
+    let spread_with_offset: i32 = if side == OrderSide::Sell {
         (-spread.cast::<i32>()?).safe_add(market.amm.reference_price_offset)?
     } else {
         spread

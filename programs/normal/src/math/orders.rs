@@ -4,7 +4,7 @@ use std::ops::Sub;
 use solana_program::msg;
 
 use crate::controller::position::PositionDelta;
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::amm::calculate_amm_available_liquidity;
 use crate::math::auction::is_amm_available_liquidity_source;
@@ -59,9 +59,9 @@ pub fn calculate_base_asset_amount_for_amm_to_fulfill(
         if let Some(limit_price) = limit_price {
             validate!(
                 (limit_price >= override_fill_price &&
-                    order.direction == PositionDirection::Long) ||
+                    order.side == OrderSide::Buy) ||
                     (limit_price <= override_fill_price &&
-                        order.direction == PositionDirection::Short),
+                        order.side == OrderSide::Sell),
                 ErrorCode::InvalidAmmLimitPriceOverride,
                 "override_limit_price={} not better than order_limit_price={}",
                 override_fill_price,
@@ -91,7 +91,7 @@ pub fn calculate_base_asset_amount_for_amm_to_fulfill(
         limit_price_with_buffer,
         Some(existing_base_asset_amount)
     )?;
-    let max_base_asset_amount = calculate_amm_available_liquidity(&market.amm, &order.direction)?;
+    let max_base_asset_amount = calculate_amm_available_liquidity(&market.amm, &order.side)?;
 
     Ok((min(base_asset_amount, max_base_asset_amount), limit_price))
 }
@@ -121,9 +121,9 @@ fn calculate_limit_price_with_buffer(
             buffer = buffer.saturating_add(buffer_adjustment);
         }
 
-        match order.direction {
-            PositionDirection::Long => limit_price.safe_sub(buffer).map(Some),
-            PositionDirection::Short => limit_price.safe_add(buffer).map(Some),
+        match order.side {
+            OrderSide::Buy => limit_price.safe_sub(buffer).map(Some),
+            OrderSide::Sell => limit_price.safe_add(buffer).map(Some),
         }
     } else {
         Ok(None)
@@ -140,23 +140,23 @@ pub fn calculate_base_asset_amount_to_fill_up_to_limit_price(
         existing_base_asset_amount
     )?;
 
-    let (max_trade_base_asset_amount, max_trade_direction) = if let Some(limit_price) = limit_price {
+    let (max_trade_base_asset_amount, max_trade_side) = if let Some(limit_price) = limit_price {
         // buy to right below or sell up right above the limit price
-        let adjusted_limit_price = match order.direction {
-            PositionDirection::Long => limit_price.safe_sub(market.amm.order_tick_size)?,
-            PositionDirection::Short => limit_price.safe_add(market.amm.order_tick_size)?,
+        let adjusted_limit_price = match order.side {
+            OrderSide::Buy => limit_price.safe_sub(market.amm.order_tick_size)?,
+            OrderSide::Sell => limit_price.safe_add(market.amm.order_tick_size)?,
         };
 
         math::amm_spread::calculate_base_asset_amount_to_trade_to_price(
             &market.amm,
             adjusted_limit_price,
-            order.direction
+            order.side
         )?
     } else {
-        (base_asset_amount_unfilled, order.direction)
+        (base_asset_amount_unfilled, order.side)
     };
 
-    if max_trade_direction != order.direction || max_trade_base_asset_amount == 0 {
+    if max_trade_side != order.side || max_trade_base_asset_amount == 0 {
         return Ok(0);
     }
 
@@ -170,18 +170,18 @@ pub fn calculate_quote_asset_amount_for_maker_order(
     base_asset_amount: u64,
     fill_price: u64,
     base_decimals: u32,
-    position_direction: PositionDirection
+    position_side: OrderSide
 ) -> NormalResult<u64> {
     let precision_decrease = (10_u128).pow(base_decimals);
 
-    match position_direction {
-        PositionDirection::Long =>
+    match position_side {
+        OrderSide::Buy =>
             fill_price
                 .cast::<u128>()?
                 .safe_mul(base_asset_amount.cast()?)?
                 .safe_div(precision_decrease)?
                 .cast::<u64>(),
-        PositionDirection::Short =>
+        OrderSide::Sell =>
             fill_price
                 .cast::<u128>()?
                 .safe_mul(base_asset_amount.cast()?)?
@@ -234,7 +234,7 @@ pub fn is_multiple_of_step_size(base_asset_amount: u64, step_size: u64) -> Norma
 pub fn standardize_price(
     price: u64,
     tick_size: u64,
-    direction: PositionDirection
+    side: OrderSide
 ) -> NormalResult<u64> {
     if price == 0 {
         return Ok(0);
@@ -246,16 +246,16 @@ pub fn standardize_price(
         return Ok(price);
     }
 
-    match direction {
-        PositionDirection::Long => price.safe_sub(remainder),
-        PositionDirection::Short => price.safe_add(tick_size)?.safe_sub(remainder),
+    match side {
+        OrderSide::Buy => price.safe_sub(remainder),
+        OrderSide::Sell => price.safe_add(tick_size)?.safe_sub(remainder),
     }
 }
 
 pub fn standardize_price_i64(
     price: i64,
     tick_size: i64,
-    direction: PositionDirection
+    side: OrderSide
 ) -> NormalResult<i64> {
     if price == 0 {
         return Ok(0);
@@ -267,30 +267,30 @@ pub fn standardize_price_i64(
         return Ok(price);
     }
 
-    match direction {
-        PositionDirection::Long => price.safe_sub(remainder),
-        PositionDirection::Short => price.safe_add(tick_size)?.safe_sub(remainder),
+    match side {
+        OrderSide::Buy => price.safe_sub(remainder),
+        OrderSide::Sell => price.safe_add(tick_size)?.safe_sub(remainder),
     }
 }
 
 pub fn get_price_for_order(
     price: u64,
-    direction: PositionDirection,
+    side: OrderSide,
     post_only: PostOnlyParam,
     amm: &AMM
 ) -> NormalResult<u64> {
-    let mut limit_price = standardize_price(price, amm.order_tick_size, direction)?;
+    let mut limit_price = standardize_price(price, amm.order_tick_size, side)?;
 
     if post_only == PostOnlyParam::Slide {
         let reserve_price = amm.reserve_price()?;
-        match direction {
-            PositionDirection::Long => {
+        match side {
+            OrderSide::Buy => {
                 let amm_ask = amm.ask_price(reserve_price)?;
                 if limit_price >= amm_ask {
                     limit_price = amm_ask.safe_sub(amm.order_tick_size)?;
                 }
             }
-            PositionDirection::Short => {
+            OrderSide::Sell => {
                 let amm_bid = amm.bid_price(reserve_price)?;
                 if limit_price <= amm_bid {
                     limit_price = amm_bid.safe_add(amm.order_tick_size)?;
@@ -305,16 +305,16 @@ pub fn get_price_for_order(
 pub fn get_position_delta_for_fill(
     base_asset_amount: u64,
     quote_asset_amount: u64,
-    direction: PositionDirection
+    side: OrderSide
 ) -> NormalResult<PositionDelta> {
     Ok(PositionDelta {
-        quote_asset_amount: match direction {
-            PositionDirection::Long => -quote_asset_amount.cast()?,
-            PositionDirection::Short => quote_asset_amount.cast()?,
+        quote_asset_amount: match side {
+            OrderSide::Buy => -quote_asset_amount.cast()?,
+            OrderSide::Sell => quote_asset_amount.cast()?,
         },
-        base_asset_amount: match direction {
-            PositionDirection::Long => base_asset_amount.cast()?,
-            PositionDirection::Short => -base_asset_amount.cast()?,
+        base_asset_amount: match side {
+            OrderSide::Buy => base_asset_amount.cast()?,
+            OrderSide::Sell => -base_asset_amount.cast()?,
         },
         remainder_base_asset_amount: None,
     })
@@ -392,7 +392,7 @@ pub fn should_cancel_reduce_only_order(
 
 pub fn validate_fill_price_within_price_bands(
     fill_price: u64,
-    direction: PositionDirection,
+    side: OrderSide,
     oracle_price: i64,
     oracle_twap_5min: i64,
     oracle_twap_5min_percent_divergence: u64
@@ -403,7 +403,7 @@ pub fn validate_fill_price_within_price_bands(
     // let max_oracle_diff = margin_ratio_initial.cast::<u128>()?;
     let max_oracle_twap_diff = oracle_twap_5min_percent_divergence.cast::<u128>()?; // 50%
 
-    if direction == PositionDirection::Long {
+    if side == OrderSide::Buy {
         if fill_price < oracle_price && fill_price < oracle_twap_5min {
             return Ok(());
         }
@@ -522,8 +522,8 @@ pub fn is_new_order_risk_increasing(
         return Ok(false);
     }
 
-    match order.direction {
-        PositionDirection::Long => {
+    match order.side {
+        OrderSide::Buy => {
             if position_base_asset_amount >= 0 {
                 return Ok(true);
             }
@@ -533,7 +533,7 @@ pub fn is_new_order_risk_increasing(
                     position_base_asset_amount.abs()
             )
         }
-        PositionDirection::Short => {
+        OrderSide::Sell => {
             if position_base_asset_amount <= 0 {
                 return Ok(true);
             }
@@ -547,17 +547,17 @@ pub fn is_new_order_risk_increasing(
 }
 
 pub fn is_order_position_reducing(
-    order_direction: &PositionDirection,
+    order_side: &OrderSide,
     order_base_asset_amount: u64,
     position_base_asset_amount: i64
 ) -> NormalResult<bool> {
-    Ok(match order_direction {
+    Ok(match order_side {
         // User is short and order is long
-        PositionDirection::Long if position_base_asset_amount < 0 => {
+        OrderSide::Buy if position_base_asset_amount < 0 => {
             order_base_asset_amount <= position_base_asset_amount.unsigned_abs()
         }
         // User is long and order is short
-        PositionDirection::Short if position_base_asset_amount > 0 => {
+        OrderSide::Sell if position_base_asset_amount > 0 => {
             order_base_asset_amount <= position_base_asset_amount.unsigned_abs()
         }
         _ => false,
@@ -568,14 +568,14 @@ pub fn validate_fill_price(
     quote_asset_amount: u64,
     base_asset_amount: u64,
     base_precision: u64,
-    order_direction: PositionDirection,
+    order_side: OrderSide,
     order_limit_price: u64,
     is_taker: bool
 ) -> NormalResult {
     let rounded_quote_asset_amount = if is_taker {
-        match order_direction {
-            PositionDirection::Long => quote_asset_amount.saturating_sub(1),
-            PositionDirection::Short => quote_asset_amount.saturating_add(1),
+        match order_side {
+            OrderSide::Buy => quote_asset_amount.saturating_sub(1),
+            OrderSide::Sell => quote_asset_amount.saturating_add(1),
         }
     } else {
         quote_asset_amount
@@ -587,7 +587,7 @@ pub fn validate_fill_price(
         base_precision
     )?;
 
-    if order_direction == PositionDirection::Long && fill_price > order_limit_price {
+    if order_side == OrderSide::Buy && fill_price > order_limit_price {
         msg!(
             "long order fill price ({} = {}/{} * 1000) > limit price ({}) is_taker={}",
             fill_price,
@@ -599,7 +599,7 @@ pub fn validate_fill_price(
         return Err(ErrorCode::InvalidOrderFillPrice);
     }
 
-    if order_direction == PositionDirection::Short && fill_price < order_limit_price {
+    if order_side == OrderSide::Sell && fill_price < order_limit_price {
         msg!(
             "short order fill price ({} = {}/{} * 1000) < limit price ({}) is_taker={}",
             fill_price,
@@ -628,7 +628,7 @@ pub fn calculate_fill_price(
 
 pub fn find_maker_orders(
     user: &User,
-    direction: &PositionDirection,
+    side: &OrderSide,
     market_type: &MarketType,
     market_index: u16,
     valid_oracle_price: Option<i64>,
@@ -642,9 +642,9 @@ pub fn find_maker_orders(
             continue;
         }
 
-        // if order direction is not same or market type is not same or market index is the same, skip
+        // if order side is not same or market type is not same or market index is the same, skip
         if
-            order.direction != *direction ||
+            order.side != *side ||
             order.market_type != *market_type ||
             order.market_index != market_index
         {
@@ -668,7 +668,7 @@ pub fn calculate_max_order_size(
     user: &User,
     position_index: usize,
     market_index: u16,
-    direction: PositionDirection,
+    side: OrderSide,
     market_map: &MarketMap,
     oracle_map: &mut OracleMap
 ) -> NormalResult<u64> {
@@ -686,14 +686,14 @@ pub fn calculate_max_order_size(
 
     let mut order_size_to_reduce_position = 0_u64;
     // account for order flipping worst case base asset amount
-    if worst_case_base_asset_amount < 0 && direction == PositionDirection::Long {
+    if worst_case_base_asset_amount < 0 && side == OrderSide::Buy {
         order_size_to_reduce_position = worst_case_base_asset_amount
             .abs()
             .cast::<i64>()?
             .safe_sub(position.open_bids)?
             .max(0)
             .unsigned_abs();
-    } else if worst_case_base_asset_amount > 0 && direction == PositionDirection::Short {
+    } else if worst_case_base_asset_amount > 0 && side == OrderSide::Sell {
         order_size_to_reduce_position = worst_case_base_asset_amount
             .cast::<i64>()?
             .safe_add(position.open_asks)?
@@ -727,16 +727,16 @@ pub fn find_bids_and_asks_from_users(
     let tick_size = market.amm.order_tick_size;
     let oracle_price = Some(oracle_price_date.price);
 
-    let mut insert_order = |base_asset_amount: u64, price: u64, direction: PositionDirection| {
-        let orders = match direction {
-            PositionDirection::Long => &mut bids,
-            PositionDirection::Short => &mut asks,
+    let mut insert_order = |base_asset_amount: u64, price: u64, side: OrderSide| {
+        let orders = match side {
+            OrderSide::Buy => &mut bids,
+            OrderSide::Sell => &mut asks,
         };
         let index = match
             orders.binary_search_by(|level| {
-                match direction {
-                    PositionDirection::Long => price.cmp(&level.price),
-                    PositionDirection::Short => level.price.cmp(&price),
+                match side {
+                    OrderSide::Buy => price.cmp(&level.price),
+                    OrderSide::Sell => level.price.cmp(&price),
                 }
             })
         {
@@ -785,7 +785,7 @@ pub fn find_bids_and_asks_from_users(
             let base_amount = order.get_base_asset_amount_unfilled(Some(existing_position))?;
             let limit_price = order.force_get_limit_price(oracle_price, None, slot, tick_size)?;
 
-            insert_order(base_amount, limit_price, order.direction);
+            insert_order(base_amount, limit_price, order.side);
         }
     }
 

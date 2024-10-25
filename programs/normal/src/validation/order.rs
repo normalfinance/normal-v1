@@ -1,6 +1,6 @@
 use solana_program::msg;
 
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode };
 
 use crate::math::casting::Cast;
@@ -165,9 +165,9 @@ fn validate_post_only_order(
         if let Some(valid_oracle_price) = valid_oracle_price {
             if
                 (valid_oracle_price > limit_price.cast()? &&
-                    order.direction == PositionDirection::Long) ||
+                    order.side == OrderSide::Buy) ||
                 (valid_oracle_price < limit_price.cast()? &&
-                    order.direction == PositionDirection::Short)
+                    order.side == OrderSide::Sell)
             {
                 invalid = false;
             }
@@ -294,8 +294,8 @@ fn validate_auction_params(order: &Order) -> NormalResult {
         "Auction end price was 0"
     )?;
 
-    match order.direction {
-        PositionDirection::Long => {
+    match order.side {
+        OrderSide::Buy => {
             if order.auction_start_price > order.auction_end_price {
                 msg!(
                     "Auction start price ({}) was greater than auction end price ({})",
@@ -314,7 +314,7 @@ fn validate_auction_params(order: &Order) -> NormalResult {
                 return Err(ErrorCode::InvalidOrderAuction);
             }
         }
-        PositionDirection::Short => {
+        OrderSide::Sell => {
             if order.auction_start_price < order.auction_end_price {
                 msg!(
                     "Auction start price ({}) was less than auction end price ({})",
@@ -351,16 +351,16 @@ pub fn validate_order_for_force_reduce_only(order: &Order, existing_position: i6
         "user must have position to submit order"
     )?;
 
-    let existing_position_direction = if existing_position > 0 {
-        PositionDirection::Long
+    let existing_position_side = if existing_position > 0 {
+        OrderSide::Buy
     } else {
-        PositionDirection::Short
+        OrderSide::Sell
     };
 
     validate!(
-        order.direction != existing_position_direction,
+        order.side != existing_position_side,
         ErrorCode::InvalidOrderNotRiskReducing,
-        "order direction must be opposite of existing position in reduce only mode"
+        "order side must be opposite of existing position in reduce only mode"
     )?;
 
     Ok(())

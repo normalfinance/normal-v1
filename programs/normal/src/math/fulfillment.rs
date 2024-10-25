@@ -1,4 +1,4 @@
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::NormalResult;
 use crate::math::auction::is_amm_available_liquidity_source;
 use crate::math::casting::Cast;
@@ -45,16 +45,16 @@ pub fn determine_fulfillment_methods(
         && valid_oracle_price.is_some()
         && is_amm_available_liquidity_source(order, min_auction_duration, slot, fill_mode)?;
 
-    let maker_direction = order.direction.opposite();
+    let maker_side = order.side.opposite();
 
-    let mut amm_price = match maker_direction {
-        PositionDirection::Long => amm.bid_price(amm_reserve_price)?,
-        PositionDirection::Short => amm.ask_price(amm_reserve_price)?,
+    let mut amm_price = match maker_side {
+        OrderSide::Buy => amm.bid_price(amm_reserve_price)?,
+        OrderSide::Sell => amm.ask_price(amm_reserve_price)?,
     };
 
     for (maker_key, maker_order_index, maker_price) in maker_orders_info.iter() {
         let taker_crosses_maker = match limit_price {
-            Some(taker_price) => do_orders_cross(maker_direction, *maker_price, taker_price),
+            Some(taker_price) => do_orders_cross(maker_side, *maker_price, taker_price),
             None => true,
         };
 
@@ -63,9 +63,9 @@ pub fn determine_fulfillment_methods(
         }
 
         if can_fill_with_amm {
-            let maker_better_than_amm = match order.direction {
-                PositionDirection::Long => *maker_price <= amm_price,
-                PositionDirection::Short => *maker_price >= amm_price,
+            let maker_better_than_amm = match order.side {
+                OrderSide::Buy => *maker_price <= amm_price,
+                OrderSide::Sell => *maker_price >= amm_price,
             };
 
             if !maker_better_than_amm {
@@ -86,7 +86,7 @@ pub fn determine_fulfillment_methods(
 
     if can_fill_with_amm {
         let taker_crosses_amm = match limit_price {
-            Some(taker_price) => do_orders_cross(maker_direction, amm_price, taker_price),
+            Some(taker_price) => do_orders_cross(maker_side, amm_price, taker_price),
             None => true,
         };
 
@@ -109,7 +109,7 @@ fn determine_fulfillment_methods_for_maker(
     min_auction_duration: u8,
     fill_mode: FillMode,
 ) -> NormalResult<Vec<FulfillmentMethod>> {
-    let maker_direction = order.direction;
+    let maker_side = order.side;
 
     let can_fill_with_amm = amm_is_available
         && valid_oracle_price.is_some()
@@ -119,14 +119,14 @@ fn determine_fulfillment_methods_for_maker(
         return Ok(vec![]);
     }
 
-    let amm_price = match maker_direction {
-        PositionDirection::Long => amm.ask_price(amm_reserve_price)?,
-        PositionDirection::Short => amm.bid_price(amm_reserve_price)?,
+    let amm_price = match maker_side {
+        OrderSide::Buy => amm.ask_price(amm_reserve_price)?,
+        OrderSide::Sell => amm.bid_price(amm_reserve_price)?,
     };
 
     let maker_price = limit_price.safe_unwrap()?;
 
-    let amm_crosses_maker = do_orders_cross(maker_direction, maker_price, amm_price);
+    let amm_crosses_maker = do_orders_cross(maker_side, maker_price, amm_price);
 
     if amm_crosses_maker {
         Ok(vec![FulfillmentMethod::AMM(None)])

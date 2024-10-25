@@ -17,7 +17,7 @@ use crate::controller::position::{
 	update_lp_market_position,
 	update_position_and_market,
 	update_quote_asset_amount,
-	PositionDirection,
+	OrderSide,
 };
 use crate::error::NormalResult;
 use crate::error::ErrorCode;
@@ -164,7 +164,7 @@ pub fn place_order(
 	).or_else(|_| add_new_position(&mut user.positions, market_index))?;
 
 	// Increment open orders for existing position
-	let (existing_position_direction, order_base_asset_amount) = {
+	let (existing_position_side, order_base_asset_amount) = {
 		validate!(
 			params.base_asset_amount >= market.amm.order_step_size,
 			ErrorCode::OrderAmountTooSmall,
@@ -178,7 +178,7 @@ pub fn place_order(
 				user,
 				position_index,
 				params.market_index,
-				params.direction,
+				params.side,
 				market_map,
 				oracle_map
 			)?
@@ -190,12 +190,12 @@ pub fn place_order(
 		};
 
 		let market_position = &user.positions[position_index];
-		let existing_position_direction = if market_position.base_asset_amount >= 0 {
-			PositionDirection::Long
+		let existing_position_side = if market_position.base_asset_amount >= 0 {
+			OrderSide::Buy
 		} else {
-			PositionDirection::Short
+			OrderSide::Sell
 		};
-		(existing_position_direction, base_asset_amount)
+		(existing_position_side, base_asset_amount)
 	};
 
 	let oracle_price_data = oracle_map.get_price_data(&market.amm.oracle)?;
@@ -246,20 +246,20 @@ pub fn place_order(
 		market_index: params.market_index,
 		price: get_price_for_order(
 			params.price,
-			params.direction,
+			params.side,
 			params.post_only,
 			&market.amm
 		)?,
-		existing_position_direction,
+		existing_position_side,
 		base_asset_amount: order_base_asset_amount,
 		base_asset_amount_filled: 0,
 		quote_asset_amount_filled: 0,
-		direction: params.direction,
+		side: params.side,
 		reduce_only: params.reduce_only || force_reduce_only,
 		trigger_price: standardize_price(
 			params.trigger_price.unwrap_or(0),
 			market.amm.order_tick_size,
-			params.direction
+			params.side
 		)?,
 		trigger_condition: params.trigger_condition,
 		post_only: params.post_only != PostOnlyParam::None,
@@ -300,7 +300,7 @@ pub fn place_order(
 	if !new_order.must_be_triggered() {
 		increase_open_bids_and_asks(
 			&mut user.positions[position_index],
-			&params.direction,
+			&params.side,
 			order_base_asset_amount
 		)?;
 	}
@@ -316,12 +316,12 @@ pub fn place_order(
 
 	let max_oi = market.amm.max_open_interest;
 	if max_oi != 0 && risk_increasing {
-		let oi_plus_order = match params.direction {
-			PositionDirection::Long =>
+		let oi_plus_order = match params.side {
+			OrderSide::Buy =>
 				market.amm.base_asset_amount_long
 					.safe_add(order_base_asset_amount.cast()?)?
 					.unsigned_abs(),
-			PositionDirection::Short =>
+			OrderSide::Sell =>
 				market.amm.base_asset_amount_short
 					.safe_sub(order_base_asset_amount.cast()?)?
 					.unsigned_abs(),
@@ -408,12 +408,12 @@ fn get_auction_params(
 					standardize_price_i64(
 						auction_start_price,
 						tick_size.cast()?,
-						params.direction
+						params.side
 					)?,
 					standardize_price_i64(
 						auction_end_price,
 						tick_size.cast()?,
-						params.direction
+						params.side
 					)?,
 					auction_duration,
 				))
@@ -435,7 +435,7 @@ fn get_auction_params(
 		_ =>
 			calculate_auction_prices(
 				oracle_price_data,
-				params.direction,
+				params.side,
 				params.price
 			)?,
 	};
@@ -444,12 +444,12 @@ fn get_auction_params(
 		standardize_price_i64(
 			auction_start_price,
 			tick_size.cast()?,
-			params.direction
+			params.side
 		)?,
 		standardize_price_i64(
 			auction_end_price,
 			tick_size.cast()?,
-			params.direction
+			params.side
 		)?,
 		auction_duration,
 	))
@@ -466,7 +466,7 @@ pub fn cancel_orders(
 	explanation: OrderActionExplanation,
 	market_type: Option<MarketType>,
 	market_index: Option<u16>,
-	direction: Option<PositionDirection>
+	side: Option<OrderSide>
 ) -> NormalResult<Vec<u32>> {
 	let mut canceled_order_ids: Vec<u32> = vec![];
 	for order_index in 0..user.orders.len() {
@@ -486,8 +486,8 @@ pub fn cancel_orders(
 			}
 		}
 
-		if let Some(direction) = direction {
-			if user.orders[order_index].direction != direction {
+		if let Some(side) = side {
+			if user.orders[order_index].side != side {
 				continue;
 			}
 		}
@@ -600,12 +600,12 @@ pub fn cancel_order(
 	filler_reward: u64,
 	skip_log: bool
 ) -> NormalResult {
-	let (order_status, order_market_index, order_direction, order_market_type) =
+	let (order_status, order_market_index, order_side, order_market_type) =
 		get_struct_values!(
 			user.orders[order_index],
 			status,
 			market_index,
-			direction,
+			side,
 			market_type
 		);
 
@@ -655,7 +655,7 @@ pub fn cancel_order(
 			user.orders[order_index].get_base_asset_amount_unfilled(None)?;
 		position::decrease_open_bids_and_asks(
 			&mut user.positions[position_index],
-			&order_direction,
+			&order_side,
 			base_asset_amount_unfilled.cast()?
 		)?;
 	}
@@ -754,8 +754,8 @@ fn merge_modify_order_params_with_existing_order(
 ) -> NormalResult<OrderParams> {
 	let order_type = existing_order.order_type;
 	let market_type = existing_order.market_type;
-	let direction = modify_order_params.direction.unwrap_or(
-		existing_order.direction
+	let side = modify_order_params.side.unwrap_or(
+		existing_order.side
 	);
 	let user_order_id = existing_order.user_order_id;
 	let base_asset_amount = modify_order_params.base_asset_amount.unwrap_or(
@@ -806,7 +806,7 @@ fn merge_modify_order_params_with_existing_order(
 	Ok(OrderParams {
 		order_type,
 		market_type,
-		direction,
+		side,
 		user_order_id,
 		base_asset_amount,
 		price,
@@ -851,13 +851,13 @@ pub fn fill_order(
 		.position(|order| order.order_id == order_id)
 		.ok_or_else(print_error!(ErrorCode::OrderDoesNotExist))?;
 
-	let (order_status, market_index, order_market_type, order_direction) =
+	let (order_status, market_index, order_market_type, order_side) =
 		get_struct_values!(
 			user.orders[order_index],
 			status,
 			market_index,
 			market_type,
-			direction
+			side
 		);
 
 	validate!(
@@ -1098,7 +1098,7 @@ pub fn fill_order(
 		let market = market_map.get_ref(&market_index)?;
 		validate_fill_price_within_price_bands(
 			fill_price,
-			order_direction,
+			order_side,
 			oracle_price,
 			oracle_twap_5min,
 			state.oracle_guard_rails.max_oracle_twap_5min_percent_divergence()
@@ -1251,7 +1251,7 @@ fn get_maker_orders_info(
 	now: i64,
 	slot: u64
 ) -> NormalResult<Vec<(Pubkey, usize, u64)>> {
-	let maker_direction = taker_order.direction.opposite();
+	let maker_side = taker_order.side.opposite();
 
 	let mut maker_orders_info = Vec::with_capacity(16);
 
@@ -1265,7 +1265,7 @@ fn get_maker_orders_info(
 		let mut market = market_map.get_ref_mut(&taker_order.market_index)?;
 		let maker_order_price_and_indexes = find_maker_orders(
 			&maker,
-			&maker_direction,
+			&maker_side,
 			&MarketType::Synthetic,
 			taker_order.market_index,
 			Some(oracle_price),
@@ -1361,7 +1361,7 @@ fn get_maker_orders_info(
 			insert_maker_order_info(
 				&mut maker_orders_info,
 				(*maker_key, maker_order_index, maker_order_price),
-				maker_direction
+				maker_side
 			);
 		}
 	}
@@ -1373,14 +1373,14 @@ fn get_maker_orders_info(
 fn insert_maker_order_info(
 	maker_orders_info: &mut Vec<(Pubkey, usize, u64)>,
 	maker_order_info: (Pubkey, usize, u64),
-	direction: PositionDirection
+	side: OrderSide
 ) {
 	let price = maker_order_info.2;
 	let index = match
 		maker_orders_info.binary_search_by(|item| {
-			match direction {
-				PositionDirection::Short => item.2.cmp(&price),
-				PositionDirection::Long => price.cmp(&item.2),
+			match side {
+				OrderSide::Sell => item.2.cmp(&price),
+				OrderSide::Buy => price.cmp(&item.2),
 			}
 		})
 	{
@@ -1502,14 +1502,14 @@ fn fulfill_order(
 	let mut base_asset_amount = 0_u64;
 	let mut quote_asset_amount = 0_u64;
 	let mut maker_fills: BTreeMap<Pubkey, i64> = BTreeMap::new();
-	let maker_direction = user.orders[user_order_index].direction.opposite();
+	let maker_side = user.orders[user_order_index].side.opposite();
 	for fulfillment_method in fulfillment_methods.iter() {
 		if user.orders[user_order_index].status != OrderStatus::Open {
 			break;
 		}
 		let mut market = market_map.get_ref_mut(&market_index)?;
-		let user_order_direction: PositionDirection = user.orders
-			[user_order_index].direction;
+		let user_order_side: OrderSide = user.orders
+			[user_order_index].side;
 
 		let (fill_base_asset_amount, fill_quote_asset_amount) = match
 			fulfillment_method
@@ -1615,7 +1615,7 @@ fn fulfill_order(
 					update_maker_fills_map(
 						&mut maker_fills,
 						maker_key,
-						maker_direction,
+						maker_side,
 						maker_fill_base_asset_amount
 					)?;
 				}
@@ -1628,7 +1628,7 @@ fn fulfill_order(
 		quote_asset_amount = quote_asset_amount.safe_add(fill_quote_asset_amount)?;
 		market.amm.update_volume_24h(
 			fill_quote_asset_amount,
-			user_order_direction,
+			user_order_side,
 			now
 		)?;
 	}
@@ -1686,12 +1686,12 @@ fn get_referrer<'a>(
 fn update_maker_fills_map(
 	map: &mut BTreeMap<Pubkey, i64>,
 	maker_key: &Pubkey,
-	maker_direction: PositionDirection,
+	maker_side: OrderSide,
 	fill: u64
 ) -> NormalResult {
-	let signed_fill = match maker_direction {
-		PositionDirection::Long => fill.cast::<i64>()?,
-		PositionDirection::Short => -fill.cast::<i64>()?,
+	let signed_fill = match maker_side {
+		OrderSide::Buy => fill.cast::<i64>()?,
+		OrderSide::Sell => -fill.cast::<i64>()?,
 	};
 
 	if let Some(maker_filled) = map.get_mut(maker_key) {
@@ -1709,11 +1709,11 @@ fn determine_if_user_order_is_position_decreasing(
 	order_index: usize
 ) -> NormalResult<bool> {
 	let position_index = get_position_index(&user.positions, market_index)?;
-	let order_direction = user.orders[order_index].direction;
+	let order_side = user.orders[order_index].side;
 	let position_base_asset_amount_before = user.positions
 		[position_index].base_asset_amount;
 	is_order_position_reducing(
-		&order_direction,
+		&order_side,
 		user.orders[order_index].get_base_asset_amount_unfilled(
 			Some(position_base_asset_amount_before)
 		)?,
@@ -1807,21 +1807,21 @@ pub fn fulfill_order_with_amm(
 		return Ok((0, 0));
 	}
 
-	let (order_post_only, order_slot, order_direction) = get_struct_values!(
+	let (order_post_only, order_slot, order_side) = get_struct_values!(
 		user.orders[order_index],
 		post_only,
 		slot,
-		direction
+		side
 	);
 
 	validation::market::validate_amm_account_for_fill(
 		&market.amm,
-		order_direction
+		order_side
 	)?;
 
-	let market_side_price = match order_direction {
-		PositionDirection::Long => market.amm.ask_price(reserve_price_before)?,
-		PositionDirection::Short => market.amm.bid_price(reserve_price_before)?,
+	let market_side_price = match order_side {
+		OrderSide::Buy => market.amm.ask_price(reserve_price_before)?,
+		OrderSide::Sell => market.amm.bid_price(reserve_price_before)?,
 	};
 
 	let sanitize_clamp_denominator = market.get_sanitize_clamp_denominator()?;
@@ -1829,14 +1829,14 @@ pub fn fulfill_order_with_amm(
 		&mut market.amm,
 		now,
 		Some(market_side_price),
-		Some(order_direction),
+		Some(order_side),
 		sanitize_clamp_denominator
 	)?;
 
 	let (quote_asset_amount, quote_asset_amount_surplus, _) =
 		controller::position::update_position_with_base_asset_amount(
 			base_asset_amount,
-			order_direction,
+			order_side,
 			market,
 			user,
 			position_index,
@@ -1848,7 +1848,7 @@ pub fn fulfill_order_with_amm(
 			quote_asset_amount,
 			base_asset_amount,
 			BASE_PRECISION_U64,
-			order_direction,
+			order_side,
 			limit_price,
 			!order_post_only
 		)?;
@@ -1884,7 +1884,7 @@ pub fn fulfill_order_with_amm(
 	let user_position_delta = get_position_delta_for_fill(
 		base_asset_amount,
 		quote_asset_amount,
-		order_direction
+		order_side
 	)?;
 
 	if liquidity_split != AMMLiquiditySplit::ProtocolOwned {
@@ -2005,7 +2005,7 @@ pub fn fulfill_order_with_amm(
 
 	decrease_open_bids_and_asks(
 		&mut user.positions[position_index],
-		&order_direction,
+		&order_side,
 		base_asset_amount
 	)?;
 
@@ -2158,18 +2158,18 @@ pub fn fulfill_order_with_match(
 	}
 
 	let oracle_price = oracle_map.get_price_data(&market.amm.oracle)?.price;
-	let taker_direction: PositionDirection = taker.orders
-		[taker_order_index].direction;
+	let taker_side: OrderSide = taker.orders
+		[taker_order_index].side;
 
 	let taker_price = if let Some(taker_limit_price) = taker_limit_price {
 		taker_limit_price
 	} else {
 		let amm_available_liquidity = calculate_amm_available_liquidity(
 			&market.amm,
-			&taker_direction
+			&taker_side
 		)?;
 		market.amm.get_fallback_price(
-			&taker_direction,
+			&taker_side,
 			amm_available_liquidity,
 			oracle_price,
 			taker.orders[taker_order_index].seconds_til_expiry(now)
@@ -2189,7 +2189,7 @@ pub fn fulfill_order_with_match(
 		slot,
 		market.amm.order_tick_size
 	)?;
-	let maker_direction = maker.orders[maker_order_index].direction;
+	let maker_side = maker.orders[maker_order_index].side;
 	let maker_existing_position = maker.get_position(
 		market.market_index
 	)?.base_asset_amount;
@@ -2197,7 +2197,7 @@ pub fn fulfill_order_with_match(
 		maker_order_index
 	].get_base_asset_amount_unfilled(Some(maker_existing_position))?;
 
-	let orders_cross = do_orders_cross(maker_direction, maker_price, taker_price);
+	let orders_cross = do_orders_cross(maker_side, maker_price, taker_price);
 
 	if !orders_cross {
 		msg!(
@@ -2213,7 +2213,7 @@ pub fn fulfill_order_with_match(
 		maker_price,
 		taker_base_asset_amount,
 		PERP_DECIMALS,
-		maker_direction
+		maker_side
 	)?;
 
 	if base_asset_amount == 0 {
@@ -2225,7 +2225,7 @@ pub fn fulfill_order_with_match(
 		&mut market.amm,
 		now,
 		Some(maker_price),
-		Some(taker_direction),
+		Some(taker_side),
 		sanitize_clamp_denominator
 	)?;
 
@@ -2235,7 +2235,7 @@ pub fn fulfill_order_with_match(
 	let (jit_base_asset_amount, amm_liquidity_split) =
 		calculate_amm_jit_liquidity(
 			market,
-			taker_direction,
+			taker_side,
 			maker_price,
 			valid_oracle_price,
 			base_asset_amount,
@@ -2288,14 +2288,14 @@ pub fn fulfill_order_with_match(
 			maker_price,
 			taker_base_asset_amount,
 			PERP_DECIMALS,
-			maker_direction
+			maker_side
 		)?;
 
 	validate_fill_price(
 		quote_asset_amount,
 		base_asset_amount_fulfilled_by_maker,
 		BASE_PRECISION_U64,
-		taker_direction,
+		taker_side,
 		taker_price,
 		true
 	)?;
@@ -2304,7 +2304,7 @@ pub fn fulfill_order_with_match(
 		quote_asset_amount,
 		base_asset_amount_fulfilled_by_maker,
 		BASE_PRECISION_U64,
-		maker_direction,
+		maker_side,
 		maker_price,
 		false
 	)?;
@@ -2323,7 +2323,7 @@ pub fn fulfill_order_with_match(
 	let maker_position_delta = get_position_delta_for_fill(
 		base_asset_amount_fulfilled_by_maker,
 		quote_asset_amount,
-		maker.orders[maker_order_index].direction
+		maker.orders[maker_order_index].side
 	)?;
 
 	update_position_and_market(
@@ -2347,7 +2347,7 @@ pub fn fulfill_order_with_match(
 	let taker_position_delta = get_position_delta_for_fill(
 		base_asset_amount_fulfilled_by_maker,
 		quote_asset_amount,
-		taker.orders[taker_order_index].direction
+		taker.orders[taker_order_index].side
 	)?;
 
 	update_position_and_market(
@@ -2364,7 +2364,7 @@ pub fn fulfill_order_with_match(
 	let filler_multiplier = if reward_filler {
 		calculate_filler_multiplier_for_matched_orders(
 			maker_price,
-			maker_direction,
+			maker_side,
 			oracle_price
 		)?
 	} else {
@@ -2475,7 +2475,7 @@ pub fn fulfill_order_with_match(
 
 	decrease_open_bids_and_asks(
 		&mut taker.positions[taker_position_index],
-		&taker.orders[taker_order_index].direction,
+		&taker.orders[taker_order_index].side,
 		base_asset_amount_fulfilled_by_maker
 	)?;
 
@@ -2487,7 +2487,7 @@ pub fn fulfill_order_with_match(
 
 	decrease_open_bids_and_asks(
 		&mut maker.positions[maker_position_index],
-		&maker.orders[maker_order_index].direction,
+		&maker.orders[maker_order_index].side,
 		base_asset_amount_fulfilled_by_maker
 	)?;
 
@@ -2703,11 +2703,11 @@ pub fn trigger_order(
 			user.increment_open_auctions();
 		}
 
-		let direction = user.orders[order_index].direction;
+		let side = user.orders[order_index].side;
 		let base_asset_amount = user.orders[order_index].base_asset_amount;
 
 		let user_position = user.get_position_mut(market_index)?;
-		increase_open_bids_and_asks(user_position, &direction, base_asset_amount)?;
+		increase_open_bids_and_asks(user_position, &side, base_asset_amount)?;
 	}
 
 	let is_filler_taker = user_key == filler_key;
@@ -2825,7 +2825,7 @@ pub fn force_cancel_orders(
 				market_index
 			)?.base_asset_amount;
 			let is_position_reducing = is_order_position_reducing(
-				&user.orders[order_index].direction,
+				&user.orders[order_index].side,
 				user.orders[order_index].get_base_asset_amount_unfilled(
 					Some(base_asset_amount)
 				)?,
@@ -2963,12 +2963,12 @@ pub fn burn_user_lp_shares_for_risk_reduction(
 		pnl,
 	})?;
 
-	let direction_to_close =
-		user.positions[position_index].get_direction_to_close();
+	let side_to_close =
+		user.positions[position_index].get_side_to_close();
 
 	let params = OrderParams::get_close_params(
 		&market,
-		direction_to_close,
+		side_to_close,
 		base_asset_amount_to_close
 	)?;
 

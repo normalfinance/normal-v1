@@ -3,7 +3,7 @@ use std::cmp::{ max, min };
 use solana_program::msg;
 
 use crate::controller::amm::SwapDirection;
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::bn::U192;
 use crate::math::casting::Cast;
@@ -161,7 +161,7 @@ pub fn update_mark_twap_crank(
 pub fn estimate_best_bid_ask_price(
 	amm: &mut AMM,
 	precomputed_trade_price: Option<u64>,
-	direction: Option<PositionDirection>
+	side: Option<OrderSide>
 ) -> NormalResult<(u64, u64)> {
 	let base_spread_u64 = amm.base_spread.cast::<u64>()?;
 	let last_oracle_price_u64 =
@@ -210,12 +210,12 @@ pub fn estimate_best_bid_ask_price(
 		}
 	).min(amm_ask_price);
 
-	let (bid_price, ask_price) = match direction {
-		Some(direction) =>
-			match direction {
-				PositionDirection::Long =>
+	let (bid_price, ask_price) = match side {
+		Some(side) =>
+			match side {
+				OrderSide::Buy =>
 					(best_bid_estimate, trade_price.max(best_bid_estimate)),
-				PositionDirection::Short =>
+				OrderSide::Sell =>
 					(trade_price.min(best_ask_estimate), best_ask_estimate),
 			}
 		None =>
@@ -351,13 +351,13 @@ pub fn update_mark_twap_from_estimates(
 	amm: &mut AMM,
 	now: i64,
 	precomputed_trade_price: Option<u64>,
-	direction: Option<PositionDirection>,
+	side: Option<OrderSide>,
 	sanitize_clamp: Option<i64>
 ) -> NormalResult<u64> {
 	let (bid_price, ask_price) = estimate_best_bid_ask_price(
 		amm,
 		precomputed_trade_price,
-		direction
+		side
 	)?;
 	update_mark_twap(
 		amm,
@@ -592,11 +592,11 @@ pub fn update_amm_long_short_intensity(
 	amm: &mut AMM,
 	now: i64,
 	quote_asset_amount: u64,
-	direction: PositionDirection
+	side: OrderSide
 ) -> NormalResult<bool> {
 	let since_last = max(1, now.safe_sub(amm.last_trade_ts)?);
 	let (long_quote_amount, short_quote_amount) = if
-		direction == PositionDirection::Long
+		side == OrderSide::Buy
 	{
 		(quote_asset_amount, 0_u64)
 	} else {
@@ -832,7 +832,7 @@ pub fn is_oracle_mark_too_divergent(
 
 pub fn calculate_amm_available_liquidity(
 	amm: &AMM,
-	order_direction: &PositionDirection
+	order_side: &OrderSide
 ) -> NormalResult<u64> {
 	let max_fill_size: u64 = (
 		amm.base_asset_reserve / (amm.max_fill_reserve_fraction as u128)
@@ -842,11 +842,11 @@ pub fn calculate_amm_available_liquidity(
 
 	// one fill can only take up to half of side's liquidity
 	let max_base_asset_amount_on_side = (
-		match order_direction {
-			PositionDirection::Long => {
+		match order_side {
+			OrderSide::Buy => {
 				amm.base_asset_reserve.saturating_sub(amm.min_base_asset_reserve) / 2
 			}
-			PositionDirection::Short => {
+			OrderSide::Sell => {
 				amm.max_base_asset_reserve.saturating_sub(amm.base_asset_reserve) / 2
 			}
 		}

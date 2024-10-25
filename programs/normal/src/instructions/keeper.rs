@@ -9,7 +9,7 @@ use solana_program::sysvar::instructions::{
 	ID as IX_ID,
 };
 
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::error::ErrorCode;
 use crate::ids::swift_server;
 use crate::instructions::constraints::*;
@@ -404,11 +404,11 @@ pub fn place_swift_taker_order<'c: 'info, 'info>(
 	{
 		let stop_loss_order = OrderParams {
 			order_type: OrderType::TriggerMarket,
-			direction: matching_taker_order_params.direction.opposite(),
+			side: matching_taker_order_params.side.opposite(),
 			trigger_price: Some(stop_loss_order_params.trigger_price),
 			base_asset_amount: stop_loss_order_params.base_asset_amount,
 			trigger_condition: if
-				matching_taker_order_params.direction == PositionDirection::Long
+				matching_taker_order_params.side == OrderSide::Buy
 			{
 				OrderTriggerCondition::Below
 			} else {
@@ -440,11 +440,11 @@ pub fn place_swift_taker_order<'c: 'info, 'info>(
 	{
 		let take_profit_order = OrderParams {
 			order_type: OrderType::TriggerMarket,
-			direction: matching_taker_order_params.direction.opposite(),
+			side: matching_taker_order_params.side.opposite(),
 			trigger_price: Some(take_profit_order_params.trigger_price),
 			base_asset_amount: take_profit_order_params.base_asset_amount,
 			trigger_condition: if
-				matching_taker_order_params.direction == PositionDirection::Long
+				matching_taker_order_params.side == OrderSide::Buy
 			{
 				OrderTriggerCondition::Above
 			} else {

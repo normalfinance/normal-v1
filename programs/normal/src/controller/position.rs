@@ -28,31 +28,6 @@ use crate::validate;
 // #[cfg(test)]
 // mod tests;
 
-#[derive(
-	Clone,
-	Copy,
-	BorshSerialize,
-	BorshDeserialize,
-	PartialEq,
-	Debug,
-	Eq,
-	Default
-)]
-pub enum PositionDirection {
-	#[default]
-	Long,
-	Short,
-}
-
-impl PositionDirection {
-	pub fn opposite(&self) -> Self {
-		match self {
-			PositionDirection::Long => PositionDirection::Short,
-			PositionDirection::Short => PositionDirection::Long,
-		}
-	}
-}
-
 pub fn add_new_position(
 	user_positions: &mut Positions,
 	market_index: u16
@@ -432,15 +407,15 @@ pub fn update_lp_market_position(
 
 pub fn update_position_with_base_asset_amount(
 	base_asset_amount: u64,
-	direction: PositionDirection,
+	side: OrderSide,
 	market: &mut Market,
 	user: &mut User,
 	position_index: usize,
 	fill_price: Option<u64>
 ) -> NormalResult<(u64, i64, i64)> {
-	let swap_direction = match direction {
-		PositionDirection::Long => SwapDirection::Remove,
-		PositionDirection::Short => SwapDirection::Add,
+	let swap_direction = match side {
+		OrderSide::Buy => SwapDirection::Remove,
+		OrderSide::Sell => SwapDirection::Add,
 	};
 
 	let (quote_asset_swapped, quote_asset_amount_surplus) =
@@ -453,7 +428,7 @@ pub fn update_position_with_base_asset_amount(
 	let (quote_asset_amount, quote_asset_amount_surplus) = match fill_price {
 		Some(fill_price) =>
 			calculate_quote_asset_amount_surplus(
-				direction,
+				side,
 				quote_asset_swapped,
 				base_asset_amount,
 				fill_price
@@ -464,7 +439,7 @@ pub fn update_position_with_base_asset_amount(
 	let position_delta = get_position_delta_for_fill(
 		base_asset_amount,
 		quote_asset_amount,
-		direction
+		side
 	)?;
 
 	let pnl = update_position_and_market(
@@ -492,7 +467,7 @@ pub fn update_position_with_base_asset_amount(
 }
 
 fn calculate_quote_asset_amount_surplus(
-	position_direction: PositionDirection,
+	position_side: OrderSide,
 	quote_asset_swapped: u64,
 	base_asset_amount: u64,
 	fill_price: u64
@@ -501,13 +476,13 @@ fn calculate_quote_asset_amount_surplus(
 		base_asset_amount,
 		fill_price,
 		PERP_DECIMALS,
-		position_direction
+		position_side
 	)?;
 
-	let quote_asset_amount_surplus = match position_direction {
-		PositionDirection::Long =>
+	let quote_asset_amount_surplus = match position_side {
+		OrderSide::Buy =>
 			quote_asset_amount.cast::<i64>()?.safe_sub(quote_asset_swapped.cast()?)?,
-		PositionDirection::Short =>
+		OrderSide::Sell =>
 			quote_asset_swapped.cast::<i64>()?.safe_sub(quote_asset_amount.cast()?)?,
 	};
 
@@ -569,11 +544,11 @@ pub fn update_quote_break_even_amount(
 	position.quote_break_even_amount =
 		position.quote_break_even_amount.safe_add(delta)?;
 	match position.get_direction() {
-		PositionDirection::Long => {
+		OrderSide::Buy => {
 			market.amm.quote_break_even_amount_long =
 				market.amm.quote_break_even_amount_long.safe_add(delta.cast()?)?;
 		}
-		PositionDirection::Short => {
+		OrderSide::Sell => {
 			market.amm.quote_break_even_amount_short =
 				market.amm.quote_break_even_amount_short.safe_add(delta.cast()?)?;
 		}
@@ -584,16 +559,16 @@ pub fn update_quote_break_even_amount(
 
 pub fn increase_open_bids_and_asks(
 	position: &mut Position,
-	direction: &PositionDirection,
+	side: &OrderSide,
 	base_asset_amount_unfilled: u64
 ) -> NormalResult {
-	match direction {
-		PositionDirection::Long => {
+	match side {
+		OrderSide::Buy => {
 			position.open_bids = position.open_bids.safe_add(
 				base_asset_amount_unfilled.cast()?
 			)?;
 		}
-		PositionDirection::Short => {
+		OrderSide::Sell => {
 			position.open_asks = position.open_asks.safe_sub(
 				base_asset_amount_unfilled.cast()?
 			)?;
@@ -605,16 +580,16 @@ pub fn increase_open_bids_and_asks(
 
 pub fn decrease_open_bids_and_asks(
 	position: &mut Position,
-	direction: &PositionDirection,
+	side: &OrderSide,
 	base_asset_amount_unfilled: u64
 ) -> NormalResult {
-	match direction {
-		PositionDirection::Long => {
+	match side {
+		OrderSide::Buy => {
 			position.open_bids = position.open_bids.safe_sub(
 				base_asset_amount_unfilled.cast()?
 			)?;
 		}
-		PositionDirection::Short => {
+		OrderSide::Sell => {
 			position.open_asks = position.open_asks.safe_add(
 				base_asset_amount_unfilled.cast()?
 			)?;

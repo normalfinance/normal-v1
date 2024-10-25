@@ -10,7 +10,7 @@ use math::amm;
 use math::{ bn, constants::* };
 use state::oracle::OracleSource;
 
-use crate::controller::position::PositionDirection;
+use crate::controller::position::OrderSide;
 use crate::state::order_params::{ ModifyOrderParams, OrderParams };
 use crate::state::market::{ SyntheticTier, MarketStatus };
 use crate::state::state::FeeStructure;
@@ -177,9 +177,9 @@ pub mod normal {
 		ctx: Context<'_, '_, 'c, 'info, CancelOrder<'info>>,
 		market_type: Option<MarketType>,
 		market_index: Option<u16>,
-		direction: Option<PositionDirection>
+		side: Option<OrderSide>
 	) -> Result<()> {
-		handle_cancel_orders(ctx, market_type, market_index, direction)
+		handle_cancel_orders(ctx, market_type, market_index, side)
 	}
 
 	pub fn cancel_orders_by_ids<'c: 'info, 'info>(
