@@ -164,7 +164,7 @@ pub fn place_order(
 	).or_else(|_| add_new_position(&mut user.positions, market_index))?;
 
 	// Increment open orders for existing position
-	let (existing_position_side, order_base_asset_amount) = {
+	let order_base_asset_amount = {
 		validate!(
 			params.base_asset_amount >= market.amm.order_step_size,
 			ErrorCode::OrderAmountTooSmall,
@@ -189,13 +189,7 @@ pub fn place_order(
 			)?
 		};
 
-		let market_position = &user.positions[position_index];
-		let existing_position_side = if market_position.base_asset_amount >= 0 {
-			OrderSide::Buy
-		} else {
-			OrderSide::Sell
-		};
-		(existing_position_side, base_asset_amount)
+		base_asset_amount
 	};
 
 	let oracle_price_data = oracle_map.get_price_data(&market.amm.oracle)?;
@@ -250,7 +244,6 @@ pub fn place_order(
 			params.post_only,
 			&market.amm
 		)?,
-		existing_position_side,
 		base_asset_amount: order_base_asset_amount,
 		base_asset_amount_filled: 0,
 		quote_asset_amount_filled: 0,
@@ -433,24 +426,12 @@ fn get_auction_params(
 			(auction_start_price, auction_end_price)
 		}
 		_ =>
-			calculate_auction_prices(
-				oracle_price_data,
-				params.side,
-				params.price
-			)?,
+			calculate_auction_prices(oracle_price_data, params.side, params.price)?,
 	};
 
 	Ok((
-		standardize_price_i64(
-			auction_start_price,
-			tick_size.cast()?,
-			params.side
-		)?,
-		standardize_price_i64(
-			auction_end_price,
-			tick_size.cast()?,
-			params.side
-		)?,
+		standardize_price_i64(auction_start_price, tick_size.cast()?, params.side)?,
+		standardize_price_i64(auction_end_price, tick_size.cast()?, params.side)?,
 		auction_duration,
 	))
 }
@@ -754,9 +735,7 @@ fn merge_modify_order_params_with_existing_order(
 ) -> NormalResult<OrderParams> {
 	let order_type = existing_order.order_type;
 	let market_type = existing_order.market_type;
-	let side = modify_order_params.side.unwrap_or(
-		existing_order.side
-	);
+	let side = modify_order_params.side.unwrap_or(existing_order.side);
 	let user_order_id = existing_order.user_order_id;
 	let base_asset_amount = modify_order_params.base_asset_amount.unwrap_or(
 		existing_order.get_base_asset_amount_unfilled(None)?
@@ -1161,19 +1140,15 @@ pub fn fill_order(
 		)?;
 	}
 
-
-	
 	let total_open_interest = 0;
 	for (_key, market_account_loader) in market_map.0.iter_mut() {
-        let market = &mut load_mut!(market_account_loader)?;
+		let market = &mut load_mut!(market_account_loader)?;
 		let open_interest = market.get_open_interest();
 		total_open_interest = total_open_interest.safe_add(open_interest);
-    }
+	}
 
 	let insurance_fund = &mut load_mut!(market.insurance_fund);
 	insurance_fund.max_insurance = total_open_interest;
-
-	
 
 	user.update_last_active_slot(slot);
 
@@ -1508,8 +1483,7 @@ fn fulfill_order(
 			break;
 		}
 		let mut market = market_map.get_ref_mut(&market_index)?;
-		let user_order_side: OrderSide = user.orders
-			[user_order_index].side;
+		let user_order_side: OrderSide = user.orders[user_order_index].side;
 
 		let (fill_base_asset_amount, fill_quote_asset_amount) = match
 			fulfillment_method
@@ -1814,10 +1788,7 @@ pub fn fulfill_order_with_amm(
 		side
 	);
 
-	validation::market::validate_amm_account_for_fill(
-		&market.amm,
-		order_side
-	)?;
+	validation::market::validate_amm_account_for_fill(&market.amm, order_side)?;
 
 	let market_side_price = match order_side {
 		OrderSide::Buy => market.amm.ask_price(reserve_price_before)?,
@@ -2158,8 +2129,7 @@ pub fn fulfill_order_with_match(
 	}
 
 	let oracle_price = oracle_map.get_price_data(&market.amm.oracle)?.price;
-	let taker_side: OrderSide = taker.orders
-		[taker_order_index].side;
+	let taker_side: OrderSide = taker.orders[taker_order_index].side;
 
 	let taker_price = if let Some(taker_limit_price) = taker_limit_price {
 		taker_limit_price
@@ -2963,8 +2933,7 @@ pub fn burn_user_lp_shares_for_risk_reduction(
 		pnl,
 	})?;
 
-	let side_to_close =
-		user.positions[position_index].get_side_to_close();
+	let side_to_close = user.positions[position_index].get_side_to_close();
 
 	let params = OrderParams::get_close_params(
 		&market,

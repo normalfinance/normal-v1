@@ -20,7 +20,6 @@ use crate::math::lp::{
 };
 use crate::math::orders::{ standardize_base_asset_amount, standardize_price };
 use crate::math::position::{
-	calculate_base_asset_value_and_pnl_with_oracle_price,
 	calculate_base_asset_value_with_oracle_price,
 	calculate_perp_liability_value,
 };
@@ -283,21 +282,22 @@ pub struct UserFees {
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]
 pub struct Position {
-	// /// the size of the users perp position
-	// /// precision: BASE_PRECISION
-	// pub base_asset_amount: i64,
-	// /// Used to calculate the users pnl. Upon entry, is equal to base_asset_amount * avg entry price - fees
-	// /// Updated when the user open/closes position or settles pnl. Includes fees/funding
-	// /// precision: QUOTE_PRECISION
-	// pub quote_asset_amount: i64,
-	// /// The amount of quote the user would need to exit their position at to break even
-	// /// Updated when the user open/closes position or settles pnl. Includes fees/funding
-	// /// precision: QUOTE_PRECISION
-	// pub quote_break_even_amount: i64,
-	// /// The amount quote the user entered the position with. Equal to base asset amount * avg entry price
-	// /// Updated when the user open/closes position. Excludes fees/funding
-	// /// precision: QUOTE_PRECISION
-	// pub quote_entry_amount: i64,
+	/// the size of the users perp position
+	/// precision: BASE_PRECISION
+	pub base_asset_amount: i64,
+	/// Used to calculate the users pnl. Upon entry, is equal to base_asset_amount * avg entry price - fees
+	/// Updated when the user open/closes position or settles pnl. Includes fees/funding
+	/// precision: QUOTE_PRECISION
+	pub quote_asset_amount: i64,
+	/// The amount of quote the user would need to exit their position at to break even
+	/// Updated when the user open/closes position or settles pnl. Includes fees/funding
+	/// precision: QUOTE_PRECISION
+	pub quote_break_even_amount: i64,
+	/// The amount quote the user entered the position with. Equal to base asset amount * avg entry price
+	/// Updated when the user open/closes position. Excludes fees/funding
+	/// precision: QUOTE_PRECISION
+	pub quote_entry_amount: i64,
+
 	/// The amount of open bids the user has in this perp market
 	/// precision: BASE_PRECISION
 	pub open_bids: i64,
@@ -334,13 +334,12 @@ impl Position {
 	}
 
 	pub fn is_available(&self) -> bool {
-		!self.is_open_position() &&
-			!self.has_open_order() &&
-			!self.is_lp()
+		!self.is_open_position() && !self.has_open_order() && !self.is_lp()
 	}
 
 	pub fn is_open_position(&self) -> bool {
-		self.base_asset_amount != 0
+		// self.base_asset_amount != 0
+
 	}
 
 	pub fn has_open_order(&self) -> bool {
@@ -470,26 +469,11 @@ impl Position {
 	}
 
 	pub fn get_side(&self) -> OrderSide {
-		if self.base_asset_amount >= 0 {
-			OrderSide::Buy
-		} else {
-			OrderSide::Sell
-		}
+		if self.base_asset_amount >= 0 { OrderSide::Buy } else { OrderSide::Sell }
 	}
 
 	pub fn get_side_to_close(&self) -> OrderSide {
-		if self.base_asset_amount >= 0 {
-			OrderSide::Sell
-		} else {
-			OrderSide::Buy
-		}
-	}
-
-	pub fn get_unrealized_pnl(&self, oracle_price: i64) -> NormalResult<i128> {
-		let (_, unrealized_pnl) =
-			calculate_base_asset_value_and_pnl_with_oracle_price(self, oracle_price)?;
-
-		Ok(unrealized_pnl)
+		if self.base_asset_amount >= 0 { OrderSide::Sell } else { OrderSide::Buy }
 	}
 
 	pub fn get_base_asset_amount_with_remainder(&self) -> NormalResult<i128> {
@@ -504,36 +488,6 @@ impl Position {
 
 	pub fn get_base_asset_amount_with_remainder_abs(&self) -> NormalResult<i128> {
 		Ok(self.get_base_asset_amount_with_remainder()?.abs())
-	}
-
-	pub fn get_claimable_pnl(
-		&self,
-		oracle_price: i64,
-		pnl_pool_excess: i128
-	) -> NormalResult<i128> {
-		let (_, unrealized_pnl) =
-			calculate_base_asset_value_and_pnl_with_oracle_price(self, oracle_price)?;
-		if unrealized_pnl > 0 {
-			// this limits the amount of positive pnl that can be settled to be the amount of positive pnl
-			// realized by reducing/closing position
-			let max_positive_pnl = self.quote_asset_amount
-				.cast::<i128>()?
-				.safe_sub(self.quote_entry_amount.cast()?)
-				.map(|delta| delta.max(0))?
-				.safe_add(pnl_pool_excess.max(0))?;
-
-			if max_positive_pnl < unrealized_pnl {
-				msg!(
-					"Claimable pnl below position upnl: {} < {}",
-					max_positive_pnl,
-					unrealized_pnl
-				);
-			}
-
-			Ok(unrealized_pnl.min(max_positive_pnl))
-		} else {
-			Ok(unrealized_pnl)
-		}
 	}
 }
 
@@ -771,8 +725,6 @@ pub struct Order {
 	pub market_type: MarketType,
 	/// User generated order id. Can make it easier to place/cancel orders
 	pub user_order_id: u8,
-	/// What the users position was when the order was placed
-	pub existing_position_side: OrderSide,
 	/// Whether the user is buying or selling
 	pub side: OrderSide,
 	/// Whether the order is allowed to only reduce position size
@@ -812,8 +764,7 @@ impl Order {
 			Some(calculate_auction_price(self, slot, tick_size, valid_oracle_price)?)
 		} else if self.price == 0 {
 			match fallback_price {
-				Some(price) =>
-					Some(standardize_price(price, tick_size, self.side)?),
+				Some(price) => Some(standardize_price(price, tick_size, self.side)?),
 				None => None,
 			}
 		} else {
@@ -1004,7 +955,6 @@ impl Default for Order {
 			user_order_id: 0,
 			market_index: 0,
 			price: 0,
-			existing_position_side: OrderSide::Buy,
 			base_asset_amount: 0,
 			base_asset_amount_filled: 0,
 			quote_asset_amount_filled: 0,
