@@ -141,7 +141,7 @@ pub fn calculate_lp_shares_to_burn_for_risk_reduction(
         )?
         .cast::<u64>()?;
 
-    let current_base_asset_amount = settled_lp_position.base_asset_amount.unsigned_abs();
+    let current_base_asset_amount = settled_lp_position.base_asset_amount().unsigned_abs();
 
     // if closing position is enough to cover margin shortage, then only a small % of lp shares need to be burned
     if base_asset_amount_to_cover < current_base_asset_amount {

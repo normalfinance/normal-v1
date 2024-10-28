@@ -19,10 +19,7 @@ use crate::math::lp::{
 	calculate_settle_lp_metrics,
 };
 use crate::math::orders::{ standardize_base_asset_amount, standardize_price };
-use crate::math::position::{
-	calculate_base_asset_value_with_oracle_price,
-	calculate_perp_liability_value,
-};
+use crate::math::position::{ calculate_base_asset_value_with_oracle_price };
 use crate::math::safe_math::SafeMath;
 use crate::math::balance::{
 	get_signed_token_amount,
@@ -46,6 +43,8 @@ use std::fmt;
 use std::ops::Neg;
 use std::panic::Location;
 
+use anchor_spl::token::{ mint_to, Mint, MintTo, Token, TokenAccount };
+
 use crate::state::oracle_map::OracleMap;
 use crate::state::market_map::MarketMap;
 
@@ -54,11 +53,8 @@ use crate::state::market_map::MarketMap;
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
 pub enum UserStatus {
-	// Active = 0
-	// BeingLiquidated = 0b00000001,
-	// Bankrupt = 0b00000010,
-	ReduceOnly = 0b00000100,
-	AdvancedLp = 0b00001000,
+	Active = 0,
+	AdvancedLp = 0b00000010,
 }
 
 // implement SIZE const for User
@@ -82,12 +78,6 @@ pub struct User {
 	pub orders: [Order; 32],
 	/// The last time the user added perp lp positions
 	pub last_add_lp_shares_ts: i64,
-	/// The total socialized loss the users has incurred upon the protocol
-	/// precision: QUOTE_PRECISION
-	pub total_social_loss: u64,
-	/// Fees (taker fees, maker rebate, referrer reward, filler reward) and pnl for perps
-	/// precision: QUOTE_PRECISION
-	pub settled_perp_pnl: i64,
 	/// The last slot a user was active. Used to determine if a user is idle
 	pub last_active_slot: u64,
 	/// Every user order has an order id. This is the next order id to be used
@@ -180,15 +170,6 @@ impl User {
 		if self.next_order_id == 1 { u32::MAX } else { self.next_order_id - 1 }
 	}
 
-	pub fn increment_total_socialized_loss(
-		&mut self,
-		value: u64
-	) -> NormalResult {
-		self.total_social_loss = self.total_social_loss.saturating_add(value);
-
-		Ok(())
-	}
-
 	pub fn update_last_active_slot(&mut self, slot: u64) {
 		self.last_active_slot = slot;
 
@@ -264,9 +245,6 @@ pub struct UserFees {
 	/// Total maker fee rebate
 	/// precision: QUOTE_PRECISION
 	pub total_fee_rebate: u64,
-	/// Total discount from holding token
-	/// precision: QUOTE_PRECISION
-	pub total_token_discount: u64,
 	/// Total discount from being referred
 	/// precision: QUOTE_PRECISION
 	pub total_referee_discount: u64,
@@ -282,29 +260,15 @@ pub struct UserFees {
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]
 pub struct Position {
-	/// the size of the users perp position
-	/// precision: BASE_PRECISION
-	pub base_asset_amount: i64,
-	/// Used to calculate the users pnl. Upon entry, is equal to base_asset_amount * avg entry price - fees
-	/// Updated when the user open/closes position or settles pnl. Includes fees/funding
-	/// precision: QUOTE_PRECISION
-	pub quote_asset_amount: i64,
-	/// The amount of quote the user would need to exit their position at to break even
-	/// Updated when the user open/closes position or settles pnl. Includes fees/funding
-	/// precision: QUOTE_PRECISION
-	pub quote_break_even_amount: i64,
-	/// The amount quote the user entered the position with. Equal to base asset amount * avg entry price
-	/// Updated when the user open/closes position. Excludes fees/funding
-	/// precision: QUOTE_PRECISION
-	pub quote_entry_amount: i64,
-
-	/// The amount of open bids the user has in this perp market
+	/// User Synthetic Token account
+	pub token_account: Pubkey,
+	/// The amount of open bids the user has in this market
 	/// precision: BASE_PRECISION
 	pub open_bids: i64,
-	/// The amount of open asks the user has in this perp market
+	/// The amount of open asks the user has in this market
 	/// precision: BASE_PRECISION
 	pub open_asks: i64,
-	/// The number of lp (liquidity provider) shares the user has in this perp market
+	/// The number of lp (liquidity provider) shares the user has in this market
 	/// LP shares allow users to provide liquidity via the AMM
 	/// precision: BASE_PRECISION
 	pub lp_shares: u64,
@@ -320,7 +284,7 @@ pub struct Position {
 	/// This records that remainder so it can be settled later on
 	/// precision: BASE_PRECISION
 	pub remainder_base_asset_amount: i32,
-	/// The market index for the perp market
+	/// The market index for the market
 	pub market_index: u16,
 	/// The number of open orders
 	pub open_orders: u8,
@@ -337,9 +301,12 @@ impl Position {
 		!self.is_open_position() && !self.has_open_order() && !self.is_lp()
 	}
 
-	pub fn is_open_position(&self) -> bool {
-		// self.base_asset_amount != 0
+	pub fn base_asset_amount(&self) -> u64 {
+		self.token_account.amount
+	}
 
+	pub fn is_open_position(&self) -> bool {
+		self.base_asset_amount() != 0
 	}
 
 	pub fn has_open_order(&self) -> bool {
@@ -370,13 +337,9 @@ impl Position {
 		)?;
 
 		// compute settled position
-		let base_asset_amount = settled_position.base_asset_amount.safe_add(
-			lp_metrics.base_asset_amount.cast()?
-		)?;
-
-		let mut quote_asset_amount = settled_position.quote_asset_amount.safe_add(
-			lp_metrics.quote_asset_amount.cast()?
-		)?;
+		let base_asset_amount = settled_position
+			.base_asset_amount()
+			.safe_add(lp_metrics.base_asset_amount.cast()?)?;
 
 		let mut new_remainder_base_asset_amount =
 			settled_position.remainder_base_asset_amount
@@ -404,18 +367,6 @@ impl Position {
 			new_remainder_base_asset_amount = new_remainder_base_asset_amount.cast()?;
 		}
 
-		// dust position in baa/qaa
-		if new_remainder_base_asset_amount != 0 {
-			let dust_base_asset_value = calculate_base_asset_value_with_oracle_price(
-				new_remainder_base_asset_amount.cast()?,
-				valuation_price
-			)?.safe_add(1)?;
-
-			quote_asset_amount = quote_asset_amount.safe_sub(
-				dust_base_asset_value.cast()?
-			)?;
-		}
-
 		let (lp_bids, lp_asks) = calculate_lp_open_bids_asks(
 			&settled_position,
 			market
@@ -425,8 +376,6 @@ impl Position {
 
 		let open_asks = settled_position.open_asks.safe_add(lp_asks)?;
 
-		settled_position.base_asset_amount = base_asset_amount;
-		settled_position.quote_asset_amount = quote_asset_amount;
 		settled_position.open_bids = open_bids;
 		settled_position.open_asks = open_asks;
 
@@ -444,22 +393,24 @@ impl Position {
 		&self,
 		oracle_price: i64
 	) -> NormalResult<(i128, u128)> {
-		let base_asset_amount_all_bids_fill = self.base_asset_amount
+		let base_asset_amount_all_bids_fill = self.base_asset_amount()
 			.safe_add(self.open_bids)?
 			.cast::<i128>()?;
-		let base_asset_amount_all_asks_fill = self.base_asset_amount
+		let base_asset_amount_all_asks_fill = self.base_asset_amount()
 			.safe_add(self.open_asks)?
 			.cast::<i128>()?;
 
-		let liability_value_all_bids_fill = calculate_perp_liability_value(
-			base_asset_amount_all_bids_fill,
-			oracle_price
-		)?;
+		let liability_value_all_bids_fill =
+			calculate_base_asset_value_with_oracle_price(
+				base_asset_amount_all_bids_fill,
+				oracle_price
+			)?;
 
-		let liability_value_all_asks_fill = calculate_perp_liability_value(
-			base_asset_amount_all_asks_fill,
-			oracle_price
-		)?;
+		let liability_value_all_asks_fill =
+			calculate_base_asset_value_with_oracle_price(
+				base_asset_amount_all_asks_fill,
+				oracle_price
+			)?;
 
 		if liability_value_all_asks_fill >= liability_value_all_bids_fill {
 			Ok((base_asset_amount_all_asks_fill, liability_value_all_asks_fill))
@@ -469,20 +420,20 @@ impl Position {
 	}
 
 	pub fn get_side(&self) -> OrderSide {
-		if self.base_asset_amount >= 0 { OrderSide::Buy } else { OrderSide::Sell }
+		if self.base_asset_amount() >= 0 { OrderSide::Buy } else { OrderSide::Sell }
 	}
 
 	pub fn get_side_to_close(&self) -> OrderSide {
-		if self.base_asset_amount >= 0 { OrderSide::Sell } else { OrderSide::Buy }
+		if self.base_asset_amount() >= 0 { OrderSide::Sell } else { OrderSide::Buy }
 	}
 
 	pub fn get_base_asset_amount_with_remainder(&self) -> NormalResult<i128> {
 		if self.remainder_base_asset_amount != 0 {
-			self.base_asset_amount
+			self.base_asset_amount()
 				.cast::<i128>()?
 				.safe_add(self.remainder_base_asset_amount.cast::<i128>()?)
 		} else {
-			self.base_asset_amount.cast::<i128>()
+			self.base_asset_amount().cast::<i128>()
 		}
 	}
 
@@ -498,43 +449,6 @@ use crate::math::constants::{
 	AMM_TO_QUOTE_PRECISION_RATIO_I128,
 	PRICE_PRECISION_I128,
 };
-#[cfg(test)]
-impl Position {
-	pub fn get_breakeven_price(&self) -> NormalResult<i128> {
-		let base_with_remainder = self.get_base_asset_amount_with_remainder()?;
-		if base_with_remainder == 0 {
-			return Ok(0);
-		}
-
-		(-self.quote_break_even_amount.cast::<i128>()?)
-			.safe_mul(PRICE_PRECISION_I128)?
-			.safe_mul(AMM_TO_QUOTE_PRECISION_RATIO_I128)?
-			.safe_div(base_with_remainder)
-	}
-
-	pub fn get_entry_price(&self) -> NormalResult<i128> {
-		let base_with_remainder = self.get_base_asset_amount_with_remainder()?;
-		if base_with_remainder == 0 {
-			return Ok(0);
-		}
-
-		(-self.quote_entry_amount.cast::<i128>()?)
-			.safe_mul(PRICE_PRECISION_I128)?
-			.safe_mul(AMM_TO_QUOTE_PRECISION_RATIO_I128)?
-			.safe_div(base_with_remainder)
-	}
-
-	pub fn get_cost_basis(&self) -> NormalResult<i128> {
-		if self.base_asset_amount == 0 {
-			return Ok(0);
-		}
-
-		(-self.quote_asset_amount.cast::<i128>()?)
-			.safe_mul(PRICE_PRECISION_I128)?
-			.safe_mul(AMM_TO_QUOTE_PRECISION_RATIO_I128)?
-			.safe_div(self.base_asset_amount.cast()?)
-	}
-}
 
 #[derive(Clone, Copy, Default, Eq, PartialEq, Debug)]
 pub struct OrderFillSimulation {

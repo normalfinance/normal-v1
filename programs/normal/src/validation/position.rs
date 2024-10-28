@@ -27,18 +27,17 @@ pub fn validate_position_with_market(
 
 	validate!(
 		is_multiple_of_step_size(
-			position.base_asset_amount.unsigned_abs().cast()?,
+			position.base_asset_amount().unsigned_abs().cast()?,
 			market.amm.order_step_size
 		)?,
 		ErrorCode::InvalidPositionDetected,
 		"position not multiple of stepsize"
 	)?;
 
-	// From spot validation
 	validate!(
 		position.open_orders <= MAX_OPEN_ORDERS,
 		ErrorCode::InvalidPositionDetected,
-		"user spot={} position.open_orders={} is greater than MAX_OPEN_ORDERS={}",
+		"user market={} position.open_orders={} is greater than MAX_OPEN_ORDERS={}",
 		position.market_index,
 		position.open_orders,
 		MAX_OPEN_ORDERS
@@ -47,7 +46,7 @@ pub fn validate_position_with_market(
 	validate!(
 		position.open_bids >= 0,
 		ErrorCode::InvalidPositionDetected,
-		"user spot={} position.open_bids={} is less than 0",
+		"user market={} position.open_bids={} is less than 0",
 		position.market_index,
 		position.open_bids
 	)?;
@@ -55,7 +54,7 @@ pub fn validate_position_with_market(
 	validate!(
 		position.open_asks <= 0,
 		ErrorCode::InvalidPositionDetected,
-		"user spot={} position.open_asks={} is greater than 0",
+		"user market={} position.open_asks={} is greater than 0",
 		position.market_index,
 		position.open_asks
 	)?;

@@ -103,65 +103,22 @@ pub fn update_position_and_market(
 	let (
 		new_base_asset_amount,
 		new_settled_base_asset_amount,
-		new_quote_asset_amount,
 		new_remainder_base_asset_amount,
 	) = get_new_position_amounts(position, delta, market)?;
 
 	market.update_market_with_counterparty(delta, new_settled_base_asset_amount)?;
 
-	let (new_quote_entry_amount, new_quote_break_even_amount, pnl) = match
-		update_type
-	{
-		PositionUpdateType::Open | PositionUpdateType::Increase => {
-			let new_quote_entry_amount = position.quote_entry_amount.safe_add(
-				delta.quote_asset_amount
-			)?;
-
-			let new_quote_break_even_amount =
-				position.quote_break_even_amount.safe_add(delta.quote_asset_amount)?;
-
-			(new_quote_entry_amount, new_quote_break_even_amount, 0_i64)
-		}
-		PositionUpdateType::Reduce | PositionUpdateType::Close => {
-			let current_base_i128 =
-				position.get_base_asset_amount_with_remainder_abs()?;
-			let delta_base_i128 = delta.get_delta_base_with_remainder_abs()?;
-
-			let new_quote_entry_amount = position.quote_entry_amount.safe_sub(
-				position.quote_entry_amount
-					.cast::<i128>()?
-					.safe_mul(delta_base_i128)?
-					.safe_div(current_base_i128)?
-					.cast()?
-			)?;
-
-			let new_quote_break_even_amount =
-				position.quote_break_even_amount.safe_sub(
-					position.quote_break_even_amount
-						.cast::<i128>()?
-						.safe_mul(delta_base_i128)?
-						.safe_div(current_base_i128)?
-						.cast()?
-				)?;
-
-			let pnl = position.quote_entry_amount
-				.safe_sub(new_quote_entry_amount)?
-				.safe_add(delta.quote_asset_amount)?;
-
-			(new_quote_entry_amount, new_quote_break_even_amount, pnl)
-		}
-	};
-
 	// Update Market open interest
 	if let PositionUpdateType::Open = update_type {
-		if position.quote_asset_amount == 0 && position.base_asset_amount == 0 {
+		// If the user is new
+		if position.base_asset_amount() == 0 {
 			market.number_of_users = market.number_of_users.safe_add(1)?;
 		}
 
 		market.number_of_users_with_base =
 			market.number_of_users_with_base.safe_add(1)?;
 	} else if let PositionUpdateType::Close = update_type {
-		if new_base_asset_amount == 0 && new_quote_asset_amount == 0 {
+		if new_base_asset_amount == 0 {
 			market.number_of_users = market.number_of_users.safe_sub(1)?;
 		}
 
@@ -180,33 +137,13 @@ pub fn update_position_and_market(
 					market.amm.base_asset_amount_long.safe_add(
 						new_settled_base_asset_amount.cast()?
 					)?;
-				market.amm.quote_entry_amount_long =
-					market.amm.quote_entry_amount_long.safe_add(
-						delta.quote_asset_amount.cast()?
-					)?;
-				market.amm.quote_break_even_amount_long =
-					market.amm.quote_break_even_amount_long.safe_add(
-						delta.quote_asset_amount.cast()?
-					)?;
 			}
 		}
 		PositionUpdateType::Reduce | PositionUpdateType::Close => {
-			if position.base_asset_amount > 0 {
+			if position.base_asset_amount() > 0 {
 				market.amm.base_asset_amount_long =
 					market.amm.base_asset_amount_long.safe_add(
 						new_settled_base_asset_amount.cast()?
-					)?;
-				market.amm.quote_entry_amount_long =
-					market.amm.quote_entry_amount_long.safe_sub(
-						position.quote_entry_amount
-							.safe_sub(new_quote_entry_amount)?
-							.cast()?
-					)?;
-				market.amm.quote_break_even_amount_long =
-					market.amm.quote_break_even_amount_long.safe_sub(
-						position.quote_break_even_amount
-							.safe_sub(new_quote_break_even_amount)?
-							.cast()?
 					)?;
 			}
 		}
@@ -218,22 +155,17 @@ pub fn update_position_and_market(
 
 	validate!(
 		is_multiple_of_step_size(
-			position.base_asset_amount.unsigned_abs(),
+			position.base_asset_amount().unsigned_abs(),
 			market.amm.order_step_size
 		)?,
 		ErrorCode::InvalidPositionDetected,
 		"update_position_and_market left invalid position before {} after {}",
-		position.base_asset_amount,
+		position.base_asset_amount(),
 		new_base_asset_amount
 	)?;
 
 	position.remainder_base_asset_amount =
 		new_remainder_base_asset_amount.cast::<i32>()?;
-	position.base_asset_amount = new_base_asset_amount;
-
-	position.quote_asset_amount = new_quote_asset_amount;
-	position.quote_entry_amount = new_quote_entry_amount;
-	position.quote_break_even_amount = new_quote_break_even_amount;
 
 	Ok(pnl)
 }
@@ -382,15 +314,6 @@ fn calculate_quote_asset_amount_surplus(
 	Ok((quote_asset_amount, quote_asset_amount_surplus))
 }
 
-pub fn update_quote_asset_and_break_even_amount(
-	position: &mut Position,
-	market: &mut Market,
-	delta: i64
-) -> NormalResult {
-	update_quote_asset_amount(position, market, delta)?;
-	update_quote_break_even_amount(position, market, delta)
-}
-
 pub fn update_quote_asset_amount(
 	position: &mut Position,
 	market: &mut Market,
@@ -401,50 +324,21 @@ pub fn update_quote_asset_amount(
 	}
 
 	if
-		position.quote_asset_amount == 0 &&
-		position.base_asset_amount == 0 &&
+		position.base_asset_amount() == 0 &&
 		position.remainder_base_asset_amount == 0
 	{
 		market.number_of_users = market.number_of_users.safe_add(1)?;
 	}
-
-	position.quote_asset_amount = position.quote_asset_amount.safe_add(delta)?;
 
 	market.amm.quote_asset_amount = market.amm.quote_asset_amount.safe_add(
 		delta.cast()?
 	)?;
 
 	if
-		position.quote_asset_amount == 0 &&
-		position.base_asset_amount == 0 &&
+		position.base_asset_amount() == 0 &&
 		position.remainder_base_asset_amount == 0
 	{
 		market.number_of_users = market.number_of_users.saturating_sub(1);
-	}
-
-	Ok(())
-}
-
-pub fn update_quote_break_even_amount(
-	position: &mut Position,
-	market: &mut Market,
-	delta: i64
-) -> NormalResult<()> {
-	if delta == 0 || position.base_asset_amount == 0 {
-		return Ok(());
-	}
-
-	position.quote_break_even_amount =
-		position.quote_break_even_amount.safe_add(delta)?;
-	match position.get_side() {
-		OrderSide::Buy => {
-			market.amm.quote_break_even_amount_long =
-				market.amm.quote_break_even_amount_long.safe_add(delta.cast()?)?;
-		}
-		// OrderSide::Sell => {
-		// 	market.amm.quote_break_even_amount_short =
-		// 		market.amm.quote_break_even_amount_short.safe_add(delta.cast()?)?;
-		// }
 	}
 
 	Ok(())

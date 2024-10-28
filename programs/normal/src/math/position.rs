@@ -106,25 +106,16 @@ pub fn calculate_base_asset_value_with_oracle_price(
 		.safe_div(PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO)
 }
 
-pub fn calculate_perp_liability_value(
-	base_asset_amount: i128,
-	oracle_price: i64
-) -> NormalResult<u128> {
-	return calculate_base_asset_value_with_oracle_price(
-		base_asset_amount,
-		oracle_price
-	);
-}
-
 pub fn calculate_base_asset_value_with_expiry_price(
 	market_position: &Position,
 	expiry_price: i64
 ) -> NormalResult<i64> {
-	if market_position.base_asset_amount == 0 {
+	if market_position.base_asset_amount() == 0 {
 		return Ok(0);
 	}
 
-	market_position.base_asset_amount
+	market_position
+		.base_asset_amount()
 		.cast::<i128>()?
 		.safe_mul(expiry_price.cast()?)?
 		.safe_div(PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128)?
@@ -153,7 +144,7 @@ pub fn get_position_update_type(
 	delta: &PositionDelta
 ) -> NormalResult<PositionUpdateType> {
 	if
-		position.base_asset_amount == 0 &&
+		position.base_asset_amount() == 0 &&
 		position.remainder_base_asset_amount == 0
 	{
 		return Ok(PositionUpdateType::Open);
@@ -162,11 +153,11 @@ pub fn get_position_update_type(
 	let position_base_with_remainder = if
 		position.remainder_base_asset_amount != 0
 	{
-		position.base_asset_amount.safe_add(
-			position.remainder_base_asset_amount.cast::<i64>()?
-		)?
+		position
+			.base_asset_amount()
+			.safe_add(position.remainder_base_asset_amount.cast::<i64>()?)?
 	} else {
-		position.base_asset_amount
+		position.base_asset_amount()
 	};
 
 	let delta_base_with_remainder = if
@@ -196,12 +187,8 @@ pub fn get_new_position_amounts(
 	position: &Position,
 	delta: &PositionDelta,
 	market: &PerpMarket
-) -> NormalResult<(i64, i64, i64, i64)> {
-	let new_quote_asset_amount = position.quote_asset_amount.safe_add(
-		delta.quote_asset_amount
-	)?;
-
-	let mut new_base_asset_amount = position.base_asset_amount.safe_add(
+) -> NormalResult<(i64, i64, i64)> {
+	let mut new_base_asset_amount = position.base_asset_amount().safe_add(
 		delta.base_asset_amount
 	)?;
 
@@ -247,7 +234,6 @@ pub fn get_new_position_amounts(
 	Ok((
 		new_base_asset_amount,
 		new_settled_base_asset_amount,
-		new_quote_asset_amount,
 		new_remainder_base_asset_amount,
 	))
 }

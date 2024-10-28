@@ -172,12 +172,6 @@ pub struct AMM {
 	/// sum of all user's quote_asset_amount in market
 	/// precision: QUOTE_PRECISION
 	pub quote_asset_amount: i128,
-	/// sum of all long user's quote_entry_amount in market
-	/// precision: QUOTE_PRECISION
-	pub quote_entry_amount_long: i128,
-	/// sum of all long user's quote_break_even_amount in market
-	/// precision: QUOTE_PRECISION
-	pub quote_break_even_amount_long: i128,
  
 	/// total user lp shares of sqrt_k (protocol owned liquidity = sqrt_k - last_funding_rate)
 	/// precision: AMM_RESERVE_PRECISION
@@ -201,9 +195,6 @@ pub struct AMM {
 	/// sum of all fees from fee pool withdrawn to revenue pool
 	/// precision: QUOTE_PRECISION
 	pub total_fee_withdrawn: u128,
-
-	/// accumulated social loss paid by users since inception in market
-	pub total_social_loss: u128,
 
 	/// the last seen oracle price partially shrunk toward the amm reserve price
 	/// precision: PRICE_PRECISION
@@ -319,15 +310,12 @@ impl Default for AMM {
 			base_asset_amount_with_unsettled_lp: 0,
 			max_open_interest: 0,
 			quote_asset_amount: 0,
-			quote_entry_amount_long: 0,
-			quote_break_even_amount_long: 0,
 			user_lp_shares: 0,
 			total_fee: 0,
 			total_mm_fee: 0,
 			total_exchange_fee: 0,
 			total_fee_minus_distributions: 0,
 			total_fee_withdrawn: 0,
-			total_social_loss: 0,
 			ask_base_asset_reserve: 0,
 			ask_quote_asset_reserve: 0,
 			bid_base_asset_reserve: 0,
