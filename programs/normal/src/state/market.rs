@@ -359,44 +359,6 @@ impl Market {
 
 	// from perp
 
-	pub fn has_too_much_drawdown(&self) -> NormalResult<bool> {
-		let quote_drawdown_limit_breached = match self.synthetic_tier {
-			SyntheticTier::A | SyntheticTier::B => {
-				self.amm.net_revenue_since_last_funding <=
-					DEFAULT_REVENUE_SINCE_LAST_FUNDING_SPREAD_RETREAT * 400
-			}
-			_ => {
-				self.amm.net_revenue_since_last_funding <=
-					DEFAULT_REVENUE_SINCE_LAST_FUNDING_SPREAD_RETREAT * 200
-			}
-		};
-
-		if quote_drawdown_limit_breached {
-			let percent_drawdown = self.amm.net_revenue_since_last_funding
-				.cast::<i128>()?
-				.safe_mul(PERCENTAGE_PRECISION_I128)?
-				.safe_div(self.amm.total_fee_minus_distributions.max(1))?;
-
-			let percent_drawdown_limit_breached = match self.synthetic_tier {
-				SyntheticTier::A => percent_drawdown <= -PERCENTAGE_PRECISION_I128 / 50,
-				SyntheticTier::B => percent_drawdown <= -PERCENTAGE_PRECISION_I128 / 33,
-				SyntheticTier::C => percent_drawdown <= -PERCENTAGE_PRECISION_I128 / 25,
-				_ => percent_drawdown <= -PERCENTAGE_PRECISION_I128 / 20,
-			};
-
-			if percent_drawdown_limit_breached {
-				msg!(
-					"AMM has too much on-the-hour drawdown (percentage={}, quote={}) to accept fills",
-					percent_drawdown,
-					self.amm.net_revenue_since_last_funding
-				);
-				return Ok(true);
-			}
-		}
-
-		Ok(false)
-	}
-
 	pub fn get_auction_end_min_max_divisors(self) -> NormalResult<(u64, u64)> {
 		Ok(match self.synthetic_tier {
 			SyntheticTier::A => (1000, 50), // 10 bps, 2%
