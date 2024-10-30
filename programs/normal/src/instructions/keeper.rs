@@ -474,32 +474,6 @@ pub fn place_swift_taker_order<'c: 'info, 'info>(
 	Ok(())
 }
 
-#[access_control(amm_not_paused(&ctx.accounts.state))]
-pub fn handle_settle_lp<'c: 'info, 'info>(
-	ctx: Context<'_, '_, 'c, 'info, SettleLP>,
-	market_index: u16
-) -> Result<()> {
-	let user_key = ctx.accounts.user.key();
-	let user = &mut load_mut!(ctx.accounts.user)?;
-
-	let state = &ctx.accounts.state;
-	let clock = Clock::get()?;
-	let now = clock.unix_timestamp;
-
-	let AccountMaps { market_map, .. } = load_maps(
-		&mut ctx.remaining_accounts.iter().peekable(),
-		&get_writable_market_set(market_index),
-		clock.slot,
-		Some(state.oracle_guard_rails)
-	)?;
-
-	let market = &mut market_map.get_ref_mut(&market_index)?;
-	controller::lp::settle_lp(user, &user_key, market, now)?;
-	user.update_last_active_slot(clock.slot);
-
-	Ok(())
-}
-
 // TODO: remove, but use for filling orders with IF
 #[access_control(withdraw_not_paused(&ctx.accounts.state))]
 pub fn handle_resolve_pnl_deficit<'c: 'info, 'info>(
@@ -828,13 +802,6 @@ pub struct PlaceSwiftTakerOrder<'info> {
 	/// in the Anchor framework yet, so this is the safe approach.
 	#[account(address = IX_ID)]
 	pub ix_sysvar: AccountInfo<'info>,
-}
-
-#[derive(Accounts)]
-pub struct SettleLP<'info> {
-	pub state: Box<Account<'info, State>>,
-	#[account(mut)]
-	pub user: AccountLoader<'info, User>,
 }
 
 #[derive(Accounts)]

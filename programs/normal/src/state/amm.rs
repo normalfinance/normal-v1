@@ -81,18 +81,6 @@ impl AMMLiquiditySplit {
 #[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct AMM {
-	/// Token Synth
-	pub token: Pubkey,
-	/// Mint information for token Synth
-	pub token_mint: Pubkey,
-
-	/// accumulated base asset amount since inception per lp share
-	/// precision: QUOTE_PRECISION
-	pub base_asset_amount_per_lp: i128,
-	/// accumulated quote asset amount since inception per lp share
-	/// precision: QUOTE_PRECISION
-	pub quote_asset_amount_per_lp: i128,
-
 	/// Oracle
 	///
 	/// oracle price data public key
@@ -172,10 +160,6 @@ pub struct AMM {
 	/// sum of all user's quote_asset_amount in market
 	/// precision: QUOTE_PRECISION
 	pub quote_asset_amount: i128,
- 
-	/// total user lp shares of sqrt_k (protocol owned liquidity = sqrt_k - last_funding_rate)
-	/// precision: AMM_RESERVE_PRECISION
-	pub user_lp_shares: u128,
 
 	/// Fees
 	///
@@ -274,28 +258,18 @@ pub struct AMM {
 	/// (0, 100] is intensity for protocol-owned AMM. (100, 200] is intensity for user LP-owned AMM.
 	pub amm_jit_intensity: u8,
 
-	/// the target value for `base_asset_amount_per_lp`, used during AMM JIT with LP split
-	/// precision: BASE_PRECISION
-	pub target_base_asset_amount_per_lp: i32,
-	/// expo for unit of per_lp, base 10 (if per_lp_base=X, then per_lp unit is 10^X)
-	pub per_lp_base: i8,
 	pub padding1: u8,
 	pub padding2: u16,
-	pub total_fee_earned_per_lp: u64,
-	pub quote_asset_amount_with_unsettled_lp: i64,
 	pub reference_price_offset: i32,
 	pub padding: [u8; 12],
 }
-
-impl Default for AMM {
 	fn default() -> Self {
 		AMM {
 			token: 0,
 			token_mint: 0,
 			oracle: Pubkey::default(),
 			historical_oracle_data: HistoricalOracleData::default(),
-			base_asset_amount_per_lp: 0,
-			quote_asset_amount_per_lp: 0,
+
 			fee_pool: PoolBalance::default(),
 			base_asset_reserve: 0,
 			quote_asset_reserve: 0,
@@ -310,7 +284,6 @@ impl Default for AMM {
 			base_asset_amount_with_unsettled_lp: 0,
 			max_open_interest: 0,
 			quote_asset_amount: 0,
-			user_lp_shares: 0,
 			total_fee: 0,
 			total_mm_fee: 0,
 			total_exchange_fee: 0,
@@ -351,12 +324,9 @@ impl Default for AMM {
 			amm_jit_intensity: 0,
 			oracle_source: OracleSource::default(),
 			last_oracle_valid: false,
-			target_base_asset_amount_per_lp: 0,
-			per_lp_base: 0,
+
 			padding1: 0,
 			padding2: 0,
-			total_fee_earned_per_lp: 0,
-			quote_asset_amount_with_unsettled_lp: 0,
 			reference_price_offset: 0,
 			padding: [0; 12],
 		}
@@ -457,112 +427,6 @@ impl AMM {
 		let max_offset = (self.max_spread.cast::<i64>()? / 5).max(lb_bps);
 
 		Ok(max_offset)
-	}
-
-	pub fn get_per_lp_base_unit(self) -> NormalResult<i128> {
-		let scalar: i128 = (10_i128).pow(self.per_lp_base.abs().cast()?);
-
-		if self.per_lp_base > 0 {
-			AMM_RESERVE_PRECISION_I128.safe_mul(scalar)
-		} else {
-			AMM_RESERVE_PRECISION_I128.safe_div(scalar)
-		}
-	}
-
-	pub fn calculate_lp_base_delta(
-		&self,
-		per_lp_delta_base: i128,
-		base_unit: i128
-	) -> NormalResult<i128> {
-		// calculate dedicated for user lp shares
-		let lp_delta_base = get_proportion_i128(
-			per_lp_delta_base,
-			self.user_lp_shares,
-			base_unit.cast()?
-		)?;
-
-		Ok(lp_delta_base)
-	}
-
-	pub fn calculate_per_lp_delta(
-		&self,
-		delta: &PositionDelta,
-		fee_to_market: i128,
-		liquidity_split: AMMLiquiditySplit,
-		base_unit: i128
-	) -> NormalResult<(i128, i128, i128)> {
-		let total_lp_shares = if liquidity_split == AMMLiquiditySplit::LPOwned {
-			self.user_lp_shares
-		} else {
-			self.sqrt_k
-		};
-
-		// update Market per lp position
-		let per_lp_delta_base = get_proportion_i128(
-			delta.base_asset_amount.cast()?,
-			base_unit.cast()?,
-			total_lp_shares //.safe_div_ceil(rebase_divisor.cast()?)?,
-		)?;
-
-		let mut per_lp_delta_quote = get_proportion_i128(
-			delta.quote_asset_amount.cast()?,
-			base_unit.cast()?,
-			total_lp_shares //.safe_div_ceil(rebase_divisor.cast()?)?,
-		)?;
-
-		// user position delta is short => lp position delta is long
-		if per_lp_delta_base < 0 {
-			// add one => lp subtract 1
-			per_lp_delta_quote = per_lp_delta_quote.safe_add(1)?;
-		}
-
-		// 1/5 of fee auto goes to market
-		// the rest goes to lps/market proportional
-		let per_lp_fee: i128 = if fee_to_market > 0 {
-			get_proportion_i128(
-				fee_to_market,
-				LP_FEE_SLICE_NUMERATOR,
-				LP_FEE_SLICE_DENOMINATOR
-			)?
-				.safe_mul(base_unit)?
-				.safe_div(total_lp_shares.cast::<i128>()?)?
-		} else {
-			0
-		};
-
-		Ok((per_lp_delta_base, per_lp_delta_quote, per_lp_fee))
-	}
-
-	pub fn get_target_base_asset_amount_per_lp(&self) -> NormalResult<i128> {
-		if self.target_base_asset_amount_per_lp == 0 {
-			return Ok(0_i128);
-		}
-
-		let target_base_asset_amount_per_lp: i128 = if self.per_lp_base > 0 {
-			let rebase_divisor = (10_i128).pow(self.per_lp_base.abs().cast()?);
-			self.target_base_asset_amount_per_lp
-				.cast::<i128>()?
-				.safe_mul(rebase_divisor)?
-		} else if self.per_lp_base < 0 {
-			let rebase_divisor = (10_i128).pow(self.per_lp_base.abs().cast()?);
-			self.target_base_asset_amount_per_lp
-				.cast::<i128>()?
-				.safe_div(rebase_divisor)?
-		} else {
-			self.target_base_asset_amount_per_lp.cast::<i128>()?
-		};
-
-		Ok(target_base_asset_amount_per_lp)
-	}
-
-	pub fn imbalanced_base_asset_amount_with_lp(&self) -> NormalResult<i128> {
-		let target_lp_gap = self.base_asset_amount_per_lp.safe_sub(
-			self.get_target_base_asset_amount_per_lp()?
-		)?;
-
-		let base_unit = self.get_per_lp_base_unit()?.cast()?;
-
-		get_proportion_i128(target_lp_gap, self.user_lp_shares, base_unit)
 	}
 
 	pub fn amm_wants_to_jit_make(

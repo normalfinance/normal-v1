@@ -89,14 +89,6 @@ pub mod normal {
 		handle_update_user_reduce_only(ctx, _sub_account_id, reduce_only)
 	}
 
-	pub fn update_user_advanced_lp(
-		ctx: Context<UpdateUser>,
-		_sub_account_id: u16,
-		advanced_lp: bool
-	) -> Result<()> {
-		handle_update_user_advanced_lp(ctx, _sub_account_id, advanced_lp)
-	}
-
 	pub fn delete_user<'c: 'info, 'info>(
 		ctx: Context<'_, '_, 'c, 'info, DeleteUser>
 	) -> Result<()> {
@@ -208,47 +200,6 @@ pub mod normal {
 			modify_order_params
 		)
 	}
-
-	/**
-	 *
-	 * LP INSTRUCTIONS
-	 *
-	 */
-
-	pub fn add_lp_shares<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, AddRemoveLiquidity<'info>>,
-		n_shares: u64,
-		market_index: u16
-	) -> Result<()> {
-		handle_add_lp_shares(ctx, n_shares, market_index)
-	}
-
-	pub fn remove_lp_shares<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, AddRemoveLiquidity<'info>>,
-		shares_to_burn: u64,
-		market_index: u16
-	) -> Result<()> {
-		handle_remove_lp_shares(ctx, shares_to_burn, market_index)
-	}
-
-	pub fn remove_lp_shares_in_expiring_market<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, RemoveLiquidityInExpiredMarket<'info>>,
-		shares_to_burn: u64,
-		market_index: u16
-	) -> Result<()> {
-		handle_remove_lp_shares_in_expiring_market(
-			ctx,
-			shares_to_burn,
-			market_index
-		)
-	}
-
-	// pub fn settle_lp<'c: 'info, 'info>(
-	//     ctx: Context<'_, '_, 'c, 'info, SettleLP>,
-	//     market_index: u16
-	// ) -> Result<()> {
-	//     handle_settle_lp(ctx, market_index)
-	// }
 
 	/**
 	 *
@@ -459,13 +410,6 @@ pub mod normal {
 			ctx,
 			target_base_asset_amount_per_lp
 		)
-	}
-
-	pub fn update_market_per_lp_base(
-		ctx: Context<AdminUpdateMarket>,
-		per_lp_base: i8
-	) -> Result<()> {
-		handle_update_market_per_lp_base(ctx, per_lp_base)
 	}
 
 	/// Send leftover profit from closed market to revenue pool

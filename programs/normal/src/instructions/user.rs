@@ -27,12 +27,7 @@ use crate::optional_accounts::{ get_token_interface, get_token_mint };
 use crate::print_error;
 use crate::safe_decrement;
 use crate::safe_increment;
-use crate::state::events::{
-	LPAction,
-	LPRecord,
-	NewUserRecord,
-	OrderActionExplanation,
-};
+use crate::state::events::{ NewUserRecord, OrderActionExplanation };
 use crate::state::fill_mode::FillMode;
 use crate::state::oracle::StrictOraclePrice;
 use crate::state::order_params::{
@@ -931,160 +926,6 @@ pub fn handle_place_and_make_order<'c: 'info, 'info>(
 	Ok(())
 }
 
-#[access_control(amm_not_paused(&ctx.accounts.state))]
-pub fn handle_add_lp_shares<'c: 'info, 'info>(
-	ctx: Context<'_, '_, 'c, 'info, AddRemoveLiquidity<'info>>,
-	n_shares: u64,
-	market_index: u16
-) -> Result<()> {
-	let user_key = ctx.accounts.user.key();
-	let user = &mut load_mut!(ctx.accounts.user)?;
-	let state = &ctx.accounts.state;
-	let clock = Clock::get()?;
-	let now = clock.unix_timestamp;
-
-	let AccountMaps { market_map, mut oracle_map } = load_maps(
-		&mut ctx.remaining_accounts.iter().peekable(),
-		&get_writable_market_set(market_index),
-		clock.slot,
-		Some(state.oracle_guard_rails)
-	)?;
-
-	{
-		let mut market = market_map.get_ref_mut(&market_index)?;
-
-		validate!(
-			matches!(market.status, MarketStatus::Active),
-			ErrorCode::MarketStatusInvalidForNewLP,
-			"Market Status doesn't allow for new LP liquidity"
-		)?;
-
-		validate!(
-			!market.is_operation_paused(Operation::AmmFill),
-			ErrorCode::MarketStatusInvalidForNewLP,
-			"Market amm fills paused"
-		)?;
-
-		validate!(
-			n_shares >= market.amm.order_step_size,
-			ErrorCode::NewLPSizeTooSmall,
-			"minting {} shares is less than step size {}",
-			n_shares,
-			market.amm.order_step_size
-		)?;
-
-		// standardize n shares to mint
-		let n_shares = crate::math::orders
-			::standardize_base_asset_amount(
-				n_shares.cast()?,
-				market.amm.order_step_size
-			)?
-			.cast::<u64>()?;
-
-		controller::lp::mint_lp_shares(
-			user.force_get_position_mut(market_index)?,
-			&mut market,
-			n_shares
-		)?;
-
-		user.last_add_lp_shares_ts = now;
-	}
-
-	user.update_last_active_slot(clock.slot);
-
-	emit!(LPRecord {
-		ts: now,
-		action: LPAction::AddLiquidity,
-		user: user_key,
-		n_shares,
-		market_index,
-		..LPRecord::default()
-	});
-
-	Ok(())
-}
-
-pub fn handle_remove_lp_shares_in_expiring_market<'c: 'info, 'info>(
-	ctx: Context<'_, '_, 'c, 'info, RemoveLiquidityInExpiredMarket<'info>>,
-	shares_to_burn: u64,
-	market_index: u16
-) -> Result<()> {
-	let user_key = ctx.accounts.user.key();
-	let user = &mut load_mut!(ctx.accounts.user)?;
-
-	let state = &ctx.accounts.state;
-	let clock = Clock::get()?;
-	let now = clock.unix_timestamp;
-
-	let AccountMaps { market_map, mut oracle_map, .. } = load_maps(
-		&mut ctx.remaining_accounts.iter().peekable(),
-		&get_writable_market_set(market_index),
-		clock.slot,
-		Some(state.oracle_guard_rails)
-	)?;
-
-	// additional validate
-	{
-		let market = market_map.get_ref(&market_index)?;
-		validate!(
-			market.is_reduce_only()?,
-			ErrorCode::PerpMarketNotInReduceOnly,
-			"Can only permissionless burn when market is in reduce only"
-		)?;
-	}
-
-	controller::lp::remove_lp_shares(
-		market_map,
-		&mut oracle_map,
-		state,
-		user,
-		user_key,
-		shares_to_burn,
-		market_index,
-		now
-	)?;
-
-	user.update_last_active_slot(clock.slot);
-
-	Ok(())
-}
-
-#[access_control(amm_not_paused(&ctx.accounts.state))]
-pub fn handle_remove_lp_shares<'c: 'info, 'info>(
-	ctx: Context<'_, '_, 'c, 'info, AddRemoveLiquidity<'info>>,
-	shares_to_burn: u64,
-	market_index: u16
-) -> Result<()> {
-	let user_key = ctx.accounts.user.key();
-	let user = &mut load_mut!(ctx.accounts.user)?;
-
-	let state = &ctx.accounts.state;
-	let clock = Clock::get()?;
-	let now = clock.unix_timestamp;
-
-	let AccountMaps { market_map, mut oracle_map, .. } = load_maps(
-		&mut ctx.remaining_accounts.iter().peekable(),
-		&get_writable_market_set(market_index),
-		clock.slot,
-		Some(state.oracle_guard_rails)
-	)?;
-
-	controller::lp::remove_lp_shares(
-		market_map,
-		&mut oracle_map,
-		state,
-		user,
-		user_key,
-		shares_to_burn,
-		market_index,
-		now
-	)?;
-
-	user.update_last_active_slot(clock.slot);
-
-	Ok(())
-}
-
 pub fn handle_update_user_name(
 	ctx: Context<UpdateUser>,
 	_sub_account_id: u16,
@@ -1113,17 +954,6 @@ pub fn handle_update_user_reduce_only(
 	let mut user = load_mut!(ctx.accounts.user)?;
 
 	user.update_reduce_only_status(reduce_only)?;
-	Ok(())
-}
-
-pub fn handle_update_user_advanced_lp(
-	ctx: Context<UpdateUser>,
-	_sub_account_id: u16,
-	advanced_lp: bool
-) -> Result<()> {
-	let mut user = load_mut!(ctx.accounts.user)?;
-
-	user.update_advanced_lp_status(advanced_lp)?;
 	Ok(())
 }
 
@@ -1321,24 +1151,6 @@ pub struct PlaceAndMake<'info> {
     )]
 	pub taker_stats: AccountLoader<'info, UserStats>,
 	pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct AddRemoveLiquidity<'info> {
-	pub state: Box<Account<'info, State>>,
-	#[account(
-        mut,
-        constraint = can_sign_for_user(&user, &authority)?,
-    )]
-	pub user: AccountLoader<'info, User>,
-	pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct RemoveLiquidityInExpiredMarket<'info> {
-	pub state: Box<Account<'info, State>>,
-	#[account(mut)]
-	pub user: AccountLoader<'info, User>,
 }
 
 #[derive(Accounts)]

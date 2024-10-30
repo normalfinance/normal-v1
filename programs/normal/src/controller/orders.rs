@@ -7,7 +7,6 @@ use anchor_lang::prelude::*;
 use solana_program::msg;
 
 use crate::controller;
-use crate::controller::lp::burn_lp_shares;
 use crate::controller::position;
 use crate::controller::position::{
 	add_new_position,
@@ -61,7 +60,6 @@ use crate::state::order_params::{
 };
 
 use crate::math::amm::calculate_amm_available_liquidity;
-use crate::math::lp::calculate_lp_shares_to_burn_for_risk_reduction;
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::print_error;
 use crate::state::events::{
@@ -848,7 +846,7 @@ pub fn fill_order(
 	// TODO: investigate
 	// settle lp position so its tradeable
 	let mut market = market_map.get_ref_mut(&market_index)?;
-	controller::lp::settle_lp(user, &user_key, &mut market, now)?;
+	// controller::lp::settle_lp(user, &user_key, &mut market, now)?;
 
 	validate!(
 		matches!(market.status, MarketStatus::Active | MarketStatus::ReduceOnly),
@@ -1128,7 +1126,7 @@ pub fn fill_order(
 	{
 		let market = market_map.get_ref(&market_index)?;
 
-		let open_interest = market.get_open_interest();
+		let open_interest = market.get_open_interest(0, valid_oracle_price);
 		let max_open_interest = market.amm.max_open_interest;
 
 		validate!(
@@ -1925,7 +1923,7 @@ pub fn fulfill_order_with_amm(
 	)?;
 
 	if user_fee != 0 {
-		controller::position::update_quote_asset_and_break_even_amount(
+		controller::position::update_quote_asset_amount(
 			&mut user.positions[position_index],
 			market,
 			-user_fee.cast()?
@@ -1933,7 +1931,7 @@ pub fn fulfill_order_with_amm(
 	}
 
 	if maker_rebate != 0 {
-		controller::position::update_quote_asset_and_break_even_amount(
+		controller::position::update_quote_asset_amount(
 			&mut user.positions[position_index],
 			market,
 			maker_rebate.cast()?
@@ -2371,7 +2369,7 @@ pub fn fulfill_order_with_match(
 	market.amm.total_fee_minus_distributions =
 		market.amm.total_fee_minus_distributions.safe_add(fee_to_market.cast()?)?;
 
-	controller::position::update_quote_asset_and_break_even_amount(
+	controller::position::update_quote_asset_amount(
 		&mut taker.positions[taker_position_index],
 		market,
 		-taker_fee.cast()?
@@ -2380,7 +2378,7 @@ pub fn fulfill_order_with_match(
 	taker_stats.increment_total_fees(taker_fee)?;
 	taker_stats.increment_total_referee_discount(referee_discount)?;
 
-	controller::position::update_quote_asset_and_break_even_amount(
+	controller::position::update_quote_asset_amount(
 		&mut maker.positions[maker_position_index],
 		market,
 		maker_rebate.cast()?
@@ -2848,116 +2846,6 @@ pub fn can_reward_user_with_pnl(
 	}
 }
 
-pub fn attempt_burn_user_lp_shares_for_risk_reduction(
-	state: &State,
-	user: &mut User,
-	user_key: Pubkey,
-	market_map: &MarketMap,
-	oracle_map: &mut OracleMap,
-	clock: &Clock,
-	market_index: u16
-) -> NormalResult {
-	let now = clock.unix_timestamp;
-	let time_since_last_liquidity_change: i64 = now.safe_sub(
-		user.last_add_lp_shares_ts
-	)?;
-	// avoid spamming update if orders have already been set
-	if time_since_last_liquidity_change >= state.lp_cooldown_time.cast()? {
-		burn_user_lp_shares_for_risk_reduction(
-			state,
-			user,
-			user_key,
-			market_index,
-			market_map,
-			oracle_map,
-			clock
-		)?;
-		user.last_add_lp_shares_ts = now;
-	}
-
-	Ok(())
-}
-
-pub fn burn_user_lp_shares_for_risk_reduction(
-	state: &State,
-	user: &mut User,
-	user_key: Pubkey,
-	market_index: u16,
-	market_map: &MarketMap,
-	oracle_map: &mut OracleMap,
-	clock: &Clock
-) -> NormalResult {
-	let position_index = get_position_index(&user.positions, market_index)?;
-	let is_lp = user.positions[position_index].is_lp();
-	if !is_lp {
-		return Ok(());
-	}
-
-	let mut market = market_map.get_ref_mut(&market_index)?;
-
-	let quote_oracle = market.amm.oracle;
-	let quote_oracle_price = oracle_map.get_price_data(&quote_oracle)?.price;
-
-	let oracle_price_data = oracle_map.get_price_data(&market.amm.oracle)?;
-
-	let oracle_price = if market.status == MarketStatus::Settlement {
-		market.expiry_price
-	} else {
-		oracle_price_data.price
-	};
-
-	let (lp_shares_to_burn, base_asset_amount_to_close) =
-		calculate_lp_shares_to_burn_for_risk_reduction(
-			&user.positions[position_index],
-			&market,
-			oracle_price,
-			quote_oracle_price
-		)?;
-
-	let (position_delta, pnl) = burn_lp_shares(
-		&mut user.positions[position_index],
-		&mut market,
-		lp_shares_to_burn,
-		oracle_price
-	)?;
-
-	// emit LP record for shares removed
-	emit_stack::<_, { LPRecord::SIZE }>(LPRecord {
-		ts: clock.unix_timestamp,
-		action: LPAction::RemoveLiquidityDerisk,
-		user: user_key,
-		n_shares: lp_shares_to_burn,
-		market_index,
-		delta_base_asset_amount: position_delta.base_asset_amount,
-		delta_quote_asset_amount: position_delta.quote_asset_amount,
-		pnl,
-	})?;
-
-	let side_to_close = user.positions[position_index].get_side_to_close();
-
-	let params = OrderParams::get_close_params(
-		&market,
-		side_to_close,
-		base_asset_amount_to_close
-	)?;
-
-	drop(market);
-
-	if user.has_room_for_new_order() {
-		controller::orders::place_order(
-			state,
-			user,
-			user_key,
-			market_map,
-			oracle_map,
-			clock,
-			params,
-			PlaceOrderOptions::default().explanation(OrderActionExplanation::DeriskLp)
-		)?;
-	}
-
-	Ok(())
-}
 
 pub fn pay_keeper_flat_reward(
 	user: &mut User,
@@ -2968,7 +2856,7 @@ pub fn pay_keeper_flat_reward(
 ) -> NormalResult<u64> {
 	let filler_reward = if let Some(filler) = filler {
 		let user_position = user.get_position_mut(market.market_index)?;
-		controller::position::update_quote_asset_and_break_even_amount(
+		controller::position::update_quote_asset_amount(
 			user_position,
 			market,
 			-filler_reward.cast()?

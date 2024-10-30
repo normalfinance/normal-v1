@@ -11,13 +11,13 @@ pub fn validate_position_with_market(
 	position: &Position,
 	market: &Market
 ) -> NormalResult {
-	if position.lp_shares != 0 {
-		validate!(
-			position.per_lp_base == market.amm.per_lp_base,
-			ErrorCode::InvalidPositionDetected,
-			"position/market per_lp_base unequal"
-		)?;
-	}
+	// if position.lp_shares != 0 {
+	// 	validate!(
+	// 		position.per_lp_base == market.amm.per_lp_base,
+	// 		ErrorCode::InvalidPositionDetected,
+	// 		"position/market per_lp_base unequal"
+	// 	)?;
+	// }
 
 	validate!(
 		position.market_index == market.market_index,

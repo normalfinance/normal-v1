@@ -1,4 +1,3 @@
-use crate::controller::lp::apply_lp_rebase_to_position;
 use crate::controller::position::{
 	add_new_position,
 	get_position_index,
@@ -13,10 +12,6 @@ use crate::math::constants::{
 	QUOTE_PRECISION,
 	QUOTE_SPOT_MARKET_INDEX,
 	THIRTY_DAY,
-};
-use crate::math::lp::{
-	calculate_lp_open_bids_asks,
-	calculate_settle_lp_metrics,
 };
 use crate::math::orders::{ standardize_base_asset_amount, standardize_price };
 use crate::math::position::{ calculate_base_asset_value_with_oracle_price };
@@ -54,7 +49,7 @@ use crate::state::market_map::MarketMap;
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
 pub enum UserStatus {
 	Active = 0,
-	AdvancedLp = 0b00000010,
+	ReduceOnly = 0b00000001,
 }
 
 // implement SIZE const for User
@@ -104,10 +99,6 @@ pub struct User {
 impl User {
 	pub fn is_reduce_only(&self) -> bool {
 		self.status & (UserStatus::ReduceOnly as u8) > 0
-	}
-
-	pub fn is_advanced_lp(&self) -> bool {
-		self.status & (UserStatus::AdvancedLp as u8) > 0
 	}
 
 	pub fn add_user_status(&mut self, status: UserStatus) {
@@ -211,19 +202,6 @@ impl User {
 		Ok(())
 	}
 
-	pub fn update_advanced_lp_status(
-		&mut self,
-		advanced_lp: bool
-	) -> NormalResult {
-		if advanced_lp {
-			self.add_user_status(UserStatus::AdvancedLp);
-		} else {
-			self.remove_user_status(UserStatus::AdvancedLp);
-		}
-
-		Ok(())
-	}
-
 	pub fn has_room_for_new_order(&self) -> bool {
 		for order in self.orders.iter() {
 			if order.status == OrderStatus::Init {
@@ -268,18 +246,6 @@ pub struct Position {
 	/// The amount of open asks the user has in this market
 	/// precision: BASE_PRECISION
 	pub open_asks: i64,
-	/// The number of lp (liquidity provider) shares the user has in this market
-	/// LP shares allow users to provide liquidity via the AMM
-	/// precision: BASE_PRECISION
-	pub lp_shares: u64,
-	/// The last base asset amount per lp the amm had
-	/// Used to settle the users lp position
-	/// precision: BASE_PRECISION
-	pub last_base_asset_amount_per_lp: i64,
-	/// The last quote asset amount per lp the amm had
-	/// Used to settle the users lp position
-	/// precision: QUOTE_PRECISION
-	pub last_quote_asset_amount_per_lp: i64,
 	/// Settling LP position can lead to a small amount of base asset being left over smaller than step size
 	/// This records that remainder so it can be settled later on
 	/// precision: BASE_PRECISION
@@ -288,7 +254,7 @@ pub struct Position {
 	pub market_index: u16,
 	/// The number of open orders
 	pub open_orders: u8,
-	pub per_lp_base: i8,
+
 	pub padding: [u8; 4],
 }
 
@@ -313,73 +279,15 @@ impl Position {
 		self.open_orders != 0 || self.open_bids != 0 || self.open_asks != 0
 	}
 
-	pub fn is_lp(&self) -> bool {
-		self.lp_shares > 0
+	/// The number of lp (liquidity provider) shares the user has in this market
+	/// LP shares allow users to provide liquidity via the AMM
+	/// precision: BASE_PRECISION
+	pub fn lp_shares(&self) -> u64 {
+		0
 	}
 
-	pub fn simulate_settled_lp_position(
-		&self,
-		market: &Market,
-		valuation_price: i64
-	) -> NormalResult<Position> {
-		let mut settled_position = *self;
-
-		if !settled_position.is_lp() {
-			return Ok(settled_position);
-		}
-
-		apply_lp_rebase_to_position(market, &mut settled_position)?;
-
-		// compute lp metrics
-		let mut lp_metrics = calculate_settle_lp_metrics(
-			&market.amm,
-			&settled_position
-		)?;
-
-		// compute settled position
-		let base_asset_amount = settled_position
-			.base_asset_amount()
-			.safe_add(lp_metrics.base_asset_amount.cast()?)?;
-
-		let mut new_remainder_base_asset_amount =
-			settled_position.remainder_base_asset_amount
-				.cast::<i64>()?
-				.safe_add(lp_metrics.remainder_base_asset_amount.cast()?)?;
-
-		if
-			new_remainder_base_asset_amount.unsigned_abs() >=
-			market.amm.order_step_size
-		{
-			let (
-				standardized_remainder_base_asset_amount,
-				remainder_base_asset_amount,
-			) = crate::math::orders::standardize_base_asset_amount_with_remainder_i128(
-				new_remainder_base_asset_amount.cast()?,
-				market.amm.order_step_size.cast()?
-			)?;
-
-			lp_metrics.base_asset_amount = lp_metrics.base_asset_amount.safe_add(
-				standardized_remainder_base_asset_amount
-			)?;
-
-			new_remainder_base_asset_amount = remainder_base_asset_amount.cast()?;
-		} else {
-			new_remainder_base_asset_amount = new_remainder_base_asset_amount.cast()?;
-		}
-
-		let (lp_bids, lp_asks) = calculate_lp_open_bids_asks(
-			&settled_position,
-			market
-		)?;
-
-		let open_bids = settled_position.open_bids.safe_add(lp_bids)?;
-
-		let open_asks = settled_position.open_asks.safe_add(lp_asks)?;
-
-		settled_position.open_bids = open_bids;
-		settled_position.open_asks = open_asks;
-
-		Ok(settled_position)
+	pub fn is_lp(&self) -> bool {
+		self.lp_shares > 0
 	}
 
 	pub fn worst_case_base_asset_amount(
@@ -393,10 +301,12 @@ impl Position {
 		&self,
 		oracle_price: i64
 	) -> NormalResult<(i128, u128)> {
-		let base_asset_amount_all_bids_fill = self.base_asset_amount()
+		let base_asset_amount_all_bids_fill = self
+			.base_asset_amount()
 			.safe_add(self.open_bids)?
 			.cast::<i128>()?;
-		let base_asset_amount_all_asks_fill = self.base_asset_amount()
+		let base_asset_amount_all_asks_fill = self
+			.base_asset_amount()
 			.safe_add(self.open_asks)?
 			.cast::<i128>()?;
 
@@ -429,7 +339,8 @@ impl Position {
 
 	pub fn get_base_asset_amount_with_remainder(&self) -> NormalResult<i128> {
 		if self.remainder_base_asset_amount != 0 {
-			self.base_asset_amount()
+			self
+				.base_asset_amount()
 				.cast::<i128>()?
 				.safe_add(self.remainder_base_asset_amount.cast::<i128>()?)
 		} else {
