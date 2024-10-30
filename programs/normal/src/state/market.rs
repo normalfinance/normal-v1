@@ -61,7 +61,7 @@ pub enum MarketStatus {
 pub enum SyntheticType {
 	#[default]
 	Asset,
-	Index,
+	IndexFund,
 	Yield,
 }
 
@@ -159,7 +159,7 @@ pub struct Market {
 	///
 	/// Revenue the protocol has collected in the quote asset (i.e. SOL or USDC)
 	pub fee_pool: PoolBalance,
-	/// The total spot fees collected for this market
+	/// The total fees collected for this market
 	/// precision: QUOTE_PRECISION
 	pub total_fee: u128,
 	/// The percentage of fees the insurance fund receives
@@ -515,7 +515,15 @@ impl Market {
 	}
 
 	pub fn can_sanitize_market_order_auctions(&self) -> bool {
-		self.amm.oracle_source != OracleSource::Prelaunch
+		true
+	}
+
+	pub fn is_index_fund_market(&self) -> bool {
+		self.SyntheticType == SyntheticType::IndexFund
+	}
+
+	pub fn is_yield_market(&self) -> bool {
+		self.SyntheticType == SyntheticType::Yield
 	}
 }
 

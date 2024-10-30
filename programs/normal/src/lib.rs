@@ -657,6 +657,41 @@ pub mod normal {
 
 	/**
 	 *
+	 * INDEX FUND INSTUCTIONS
+	 *
+	 */
+
+	pub fn initialize_index_fund<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, InitializeIndexFund<'info>>,
+		name: [u8; 32],
+		public: bool
+	) -> Result<()> {
+		handle_initialize_index_fund(ctx, name, public)
+	}
+
+	pub fn update_index_fund_visibility<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, UpdateIndexFund<'info>>,
+		public: bool
+	) -> Result<()> {
+		handle_update_index_fund_visibility(ctx, public)
+	}
+
+	pub fn update_index_fund_assets<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, UpdateIndexFund<'info>>,
+		assets: IndexFundAssets
+	) -> Result<()> {
+		handle_update_index_fund_assets(ctx, assets)
+	}
+
+	pub fn rebalance_index_fund<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, RebalanceIndexFund<'info>>,
+		market_index: u16
+	) -> Result<()> {
+		handle_rebalance_index_fund(ctx, market_index)
+	}
+
+	/**
+	 *
 	 * ORACLE INSTUCTIONS (ADMIN)
 	 *
 	 */
