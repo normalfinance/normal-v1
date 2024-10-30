@@ -1,5 +1,5 @@
 use crate::error::NormalResult;
-use crate::math::constants::AMM_TIMES_PEG_TO_QUOTE_PRECISION_RATIO;
+use crate::constants::constants::AMM_TIMES_PEG_TO_QUOTE_PRECISION_RATIO;
 use crate::math::safe_math::SafeMath;
 
 use std::ops::Div;

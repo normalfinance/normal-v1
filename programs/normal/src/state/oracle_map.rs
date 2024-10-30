@@ -16,7 +16,7 @@ use crate::ids::{
     wen_oracle,
     wen_pull_oracle,
 };
-use crate::math::constants::PRICE_PRECISION_I64;
+use crate::constants::constants::PRICE_PRECISION_I64;
 use crate::math::oracle::{ oracle_validity, OracleValidity };
 use crate::state::oracle::{ get_oracle_price, OraclePriceData, OracleSource };
 use crate::state::state::OracleGuardRails;

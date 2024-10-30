@@ -7,7 +7,7 @@ use std::collections::{ BTreeMap, BTreeSet };
 use std::iter::Peekable;
 use std::slice::Iter;
 
-use crate::math::constants::QUOTE_SPOT_MARKET_INDEX;
+use crate::constants::constants::QUOTE_SPOT_MARKET_INDEX;
 use anchor_lang::Discriminator;
 use arrayref::array_ref;
 

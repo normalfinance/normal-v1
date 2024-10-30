@@ -16,6 +16,7 @@ use crate::state::state::FeeStructure;
 use crate::state::state::*;
 use crate::state::user::MarketType;
 
+pub mod constants;
 pub mod controller;
 pub mod error;
 pub mod ids;
@@ -23,9 +24,10 @@ pub mod instructions;
 pub mod macros;
 pub mod math;
 mod signer;
+pub mod security;
 pub mod state;
+pub mod util;
 #[cfg(test)]
-mod test_utils;
 mod validation;
 
 #[cfg(feature = "mainnet-beta")]
@@ -35,7 +37,24 @@ declare_id!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
 
 #[program]
 pub mod normal {
+	use instructions::{
+		handle_close_liquidity_position,
+		handle_collect_liquidity_position_reward,
+		handle_open_liquidity_position,
+		CollectLiquidityPositionFees,
+	};
+
 	use super::*;
+
+	/**
+	 *
+	 * ADMIN INSTRUCTIONS
+	 *
+	 */
+
+	pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+		handle_initialize(ctx)
+	}
 
 	/**
 	 *
@@ -264,18 +283,560 @@ pub mod normal {
 
 	/**
 	 *
-	 * ADMIN INSTRUCTIONS
+	 * AMM INSTRUCTIONS (admin)
 	 *
 	 */
+
+	/// Initializes a market's AMM account.
+	/// Fee rate is set to the default values on the config and supplied fee_tier.
+	///
+	/// ### Parameters
+	/// - `bumps` - The bump value when deriving the PDA of the AMM address.
+	/// - `tick_spacing` - The desired tick spacing for this pool.
+	/// - `initial_sqrt_price` - The desired initial sqrt-price for this pool
+	///
+	/// #### Special Errors
+	/// `InvalidTokenMintOrder` - The order of mints have to be ordered by
+	/// `SqrtPriceOutOfBounds` - provided initial_sqrt_price is not between 2^-64 to 2^64
+	///
+	pub fn initialize_amm(
+		ctx: Context<InitializeAMM>,
+		bumps: WhirlpoolBumps,
+		tick_spacing: u16,
+		initial_sqrt_price: u128
+	) -> Result<()> {
+		handle_initialize_amm(ctx, bumps, tick_spacing, initial_sqrt_price)
+	}
+
+	/// Initializes a tick_array account to represent a tick-range in an AMM.
+	///
+	/// ### Parameters
+	/// - `start_tick_index` - The starting tick index for this tick-array.
+	///                        Has to be a multiple of TickArray size & the tick spacing of this pool.
+	///
+	/// #### Special Errors
+	/// - `InvalidStartTick` - if the provided start tick is out of bounds or is not a multiple of
+	///                        TICK_ARRAY_SIZE * tick spacing.
+	pub fn initialize_amm_tick_array(
+		ctx: Context<InitializeAMMTickArray>,
+		start_tick_index: i32
+	) -> Result<()> {
+		handle_initialize_amm_tick_array(ctx, start_tick_index)
+	}
+
+	/// Initialize reward for an AMM. An AMM can only support up to a set number of rewards.
+	///
+	/// ### Authority
+	/// - "reward_authority" - assigned authority by the reward_super_authority for the specified
+	///                        reward-index in this AMM
+	///
+	/// ### Parameters
+	/// - `reward_index` - The reward index that we'd like to initialize. (0 <= index <= NUM_REWARDS)
+	///
+	/// #### Special Errors
+	/// - `InvalidRewardIndex` - If the provided reward index doesn't match the lowest uninitialized
+	///                          index in this pool, or exceeds NUM_REWARDS, or
+	///                          all reward slots for this pool has been initialized.
+	pub fn initialize_amm_reward(
+		ctx: Context<InitializeAMMReward>,
+		reward_index: u8
+	) -> Result<()> {
+		handle_initialize_amm_reward(ctx, reward_index)
+	}
+
+	/// Set the reward emissions for a reward in an AMM.
+	///
+	/// ### Authority
+	/// - "reward_authority" - assigned authority by the reward_super_authority for the specified
+	///                        reward-index in this AMM
+	///
+	/// ### Parameters
+	/// - `reward_index` - The reward index (0 <= index <= NUM_REWARDS) that we'd like to modify.
+	/// - `emissions_per_second_x64` - The amount of rewards emitted in this pool.
+	///
+	/// #### Special Errors
+	/// - `RewardVaultAmountInsufficient` - The amount of rewards in the reward vault cannot emit
+	///                                     more than a day of desired emissions.
+	/// - `InvalidTimestamp` - Provided timestamp is not in order with the previous timestamp.
+	/// - `InvalidRewardIndex` - If the provided reward index doesn't match the lowest uninitialized
+	///                          index in this pool, or exceeds NUM_REWARDS, or
+	///                          all reward slots for this pool has been initialized.
+	pub fn set_amm_reward_emissions(
+		ctx: Context<SetAMMRewardEmissions>,
+		reward_index: u8,
+		emissions_per_second_x64: u128
+	) -> Result<()> {
+		handle_set_amm_reward_emissions(ctx, reward_index, emissions_per_second_x64)
+	}
+
+	/// Sets the fee rate for an AMM.
+	/// Fee rate is represented as hundredths of a basis point.
+	/// Only the current fee authority has permission to invoke this instruction.
+	///
+	/// ### Authority
+	/// - "fee_authority" - Set authority that can modify pool fees in the AMMConfig
+	///
+	/// ### Parameters
+	/// - `fee_rate` - The rate that the pool will use to calculate fees going onwards.
+	///
+	/// #### Special Errors
+	/// - `FeeRateMaxExceeded` - If the provided fee_rate exceeds MAX_FEE_RATE.
+	pub fn set_amm_fee_rate(
+		ctx: Context<SetAMMFeeRate>,
+		fee_rate: u16
+	) -> Result<()> {
+		handle_set_amm_fee_rate(ctx, fee_rate)
+	}
+
+	/// Sets the protocol fee rate for an AMM.
+	/// Protocol fee rate is represented as a basis point.
+	/// Only the current fee authority has permission to invoke this instruction.
+	///
+	/// ### Authority
+	/// - "fee_authority" - Set authority that can modify pool fees in the AMMConfig
+	///
+	/// ### Parameters
+	/// - `protocol_fee_rate` - The rate that the pool will use to calculate protocol fees going onwards.
+	///
+	/// #### Special Errors
+	/// - `ProtocolFeeRateMaxExceeded` - If the provided default_protocol_fee_rate exceeds MAX_PROTOCOL_FEE_RATE.
+	pub fn set_amm_protocol_fee_rate(
+		ctx: Context<SetAMMProtocolFeeRate>,
+		protocol_fee_rate: u16
+	) -> Result<()> {
+		handle_set_amm_protocol_fee_rate(ctx, protocol_fee_rate)
+	}
+
+	/// Set the AMM reward authority at the provided `reward_index`.
+	/// Only the current reward authority for this reward index has permission to invoke this instruction.
+	///
+	/// ### Authority
+	/// - "reward_authority" - Set authority that can control reward emission for this particular reward.
+	///
+	/// #### Special Errors
+	/// - `InvalidRewardIndex` - If the provided reward index doesn't match the lowest uninitialized
+	///                          index in this pool, or exceeds NUM_REWARDS, or
+	///                          all reward slots for this pool has been initialized.
+	pub fn set_amm_reward_authority(
+		ctx: Context<SetAMMRewardAuthority>,
+		reward_index: u8
+	) -> Result<()> {
+		handle_set_amm_reward_authority(ctx, reward_index)
+	}
 
 	/**
 	 *
-	 * INITIALIZE
+	 *
+	 * AMM INSTRUCTIONS (user)
 	 *
 	 */
 
-	pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-		handle_initialize(ctx)
+	/// Open a position in an AMM. A unique token will be minted to represent the position
+	/// in the users wallet. The position will start off with 0 liquidity.
+	///
+	/// ### Parameters
+	/// - `tick_lower_index` - The tick specifying the lower end of the position range.
+	/// - `tick_upper_index` - The tick specifying the upper end of the position range.
+	///
+	/// #### Special Errors
+	/// - `InvalidTickIndex` - If a provided tick is out of bounds, out of order or not a multiple of
+	///                        the tick-spacing in this pool.
+	pub fn open_liquidity_position(
+		ctx: Context<OpenLiquidityPosition>,
+		bumps: OpenPositionBumps,
+		tick_lower_index: i32,
+		tick_upper_index: i32
+	) -> Result<()> {
+		handle_open_liquidity_position(
+			ctx,
+			bumps,
+			tick_lower_index,
+			tick_upper_index
+		)
+	}
+
+	/// Open a position in an AMM. A unique token will be minted to represent the position
+	/// in the users wallet. Additional Metaplex metadata is appended to identify the token.
+	/// The position will start off with 0 liquidity.
+	///
+	/// ### Parameters
+	/// - `tick_lower_index` - The tick specifying the lower end of the position range.
+	/// - `tick_upper_index` - The tick specifying the upper end of the position range.
+	///
+	/// #### Special Errors
+	/// - `InvalidTickIndex` - If a provided tick is out of bounds, out of order or not a multiple of
+	///                        the tick-spacing in this pool.
+	pub fn open_liquidity_position_with_metadata(
+		ctx: Context<OpenPositionWithMetadata>,
+		bumps: OpenPositionWithMetadataBumps,
+		tick_lower_index: i32,
+		tick_upper_index: i32
+	) -> Result<()> {
+		handle_open_liquidity_position_with_metadata(
+			ctx,
+			bumps,
+			tick_lower_index,
+			tick_upper_index
+		)
+	}
+
+	/// Add liquidity to a position in the AMM. This call also updates the position's accrued fees and rewards.
+	///
+	/// ### Authority
+	/// - `position_authority` - authority that owns the token corresponding to this desired position.
+	///
+	/// ### Parameters
+	/// - `liquidity_amount` - The total amount of Liquidity the user is willing to deposit.
+	/// - `token_max_a` - The maximum amount of tokenA the user is willing to deposit.
+	/// - `token_max_b` - The maximum amount of tokenB the user is willing to deposit.
+	///
+	/// #### Special Errors
+	/// - `LiquidityZero` - Provided liquidity amount is zero.
+	/// - `LiquidityTooHigh` - Provided liquidity exceeds u128::max.
+	/// - `TokenMaxExceeded` - The required token to perform this operation exceeds the user defined amount.
+	pub fn increase_liquidity(
+		ctx: Context<ModifyLiquidity>,
+		liquidity_amount: u128,
+		token_max_a: u64,
+		token_max_b: u64
+	) -> Result<()> {
+		handle_increase_liquidity(ctx, liquidity_amount, token_max_a, token_max_b)
+	}
+
+	/// Withdraw liquidity from a position in the AMM. This call also updates the position's accrued fees and rewards.
+	///
+	/// ### Authority
+	/// - `position_authority` - authority that owns the token corresponding to this desired position.
+	///
+	/// ### Parameters
+	/// - `liquidity_amount` - The total amount of Liquidity the user desires to withdraw.
+	/// - `token_min_a` - The minimum amount of tokenA the user is willing to withdraw.
+	/// - `token_min_b` - The minimum amount of tokenB the user is willing to withdraw.
+	///
+	/// #### Special Errors
+	/// - `LiquidityZero` - Provided liquidity amount is zero.
+	/// - `LiquidityTooHigh` - Provided liquidity exceeds u128::max.
+	/// - `TokenMinSubceeded` - The required token to perform this operation subceeds the user defined amount.
+	pub fn decrease_liquidity(
+		ctx: Context<ModifyLiquidity>,
+		liquidity_amount: u128,
+		token_min_a: u64,
+		token_min_b: u64
+	) -> Result<()> {
+		handle_decrease_liquidity(ctx, liquidity_amount, token_min_a, token_min_b)
+	}
+
+	/// Update the accrued fees and rewards for a position.
+	///
+	/// #### Special Errors
+	/// - `TickNotFound` - Provided tick array account does not contain the tick for this position.
+	/// - `LiquidityZero` - Position has zero liquidity and therefore already has the most updated fees and reward values.
+	pub fn update_fees_and_rewards(
+		ctx: Context<UpdateFeesAndRewards>
+	) -> Result<()> {
+		handle_update_f(ctx)
+	}
+
+	/// Collect fees accrued for this position.
+	///
+	/// ### Authority
+	/// - `position_authority` - authority that owns the token corresponding to this desired position.
+	pub fn collect_liquidity_position_fees(
+		ctx: Context<CollectLiquidityPositionFees>
+	) -> Result<()> {
+		handle_collect_liquidity_position_fees(ctx)
+	}
+
+	/// Collect rewards accrued for this position.
+	///
+	/// ### Authority
+	/// - `position_authority` - authority that owns the token corresponding to this desired position.
+	pub fn collect_liquidity_position_reward(
+		ctx: Context<CollectLiquidityPositionReward>,
+		reward_index: u8
+	) -> Result<()> {
+		handle_collect_liquidity_position_reward(ctx, reward_index)
+	}
+
+	/// Close a position in an AMM. Burns the position token in the owner's wallet.
+	///
+	/// ### Authority
+	/// - "position_authority" - The authority that owns the position token.
+	///
+	/// #### Special Errors
+	/// - `ClosePositionNotEmpty` - The provided position account is not empty.
+	pub fn close_liquidity_position(
+		ctx: Context<CloseLiquidityPosition>
+	) -> Result<()> {
+		handle_close_liquidity_position(ctx)
+	}
+
+	/// Initializes a LiquidityPositionBundle account that bundles several positions.
+	/// A unique token will be minted to represent the position bundle in the users wallet.
+	pub fn initialize_liquidity_position_bundle(
+		ctx: Context<InitializeLiquidityPositionBundle>
+	) -> Result<()> {
+		handle_initialize_liquidity_position_bundle(ctx)
+	}
+
+	/// Initializes a LiquidityPositionBundle account that bundles several positions.
+	/// A unique token will be minted to represent the position bundle in the users wallet.
+	/// Additional Metaplex metadata is appended to identify the token.
+	pub fn initialize_liquidity_position_bundle_with_metadata(
+		ctx: Context<InitializeLiquidityPositionBundleWithMetadata>
+	) -> Result<()> {
+		handle_initialize_liquidity_position_bundle_with_metadata(ctx)
+	}
+
+	/// Delete a LiquidityPositionBundle account. Burns the position bundle token in the owner's wallet.
+	///
+	/// ### Authority
+	/// - `position_bundle_owner` - The owner that owns the position bundle token.
+	///
+	/// ### Special Errors
+	/// - `PositionBundleNotDeletable` - The provided position bundle has open positions.
+	pub fn delete_liquidity_position_bundle(
+		ctx: Context<DeleteLiquidityPositionBundle>
+	) -> Result<()> {
+		handle_delete_liquidity_position_bundle(ctx)
+	}
+
+	/// Open a bundled position in an AMM. No new tokens are issued
+	/// because the owner of the position bundle becomes the owner of the position.
+	/// The position will start off with 0 liquidity.
+	///
+	/// ### Authority
+	/// - `position_bundle_authority` - authority that owns the token corresponding to this desired position bundle.
+	///
+	/// ### Parameters
+	/// - `bundle_index` - The bundle index that we'd like to open.
+	/// - `tick_lower_index` - The tick specifying the lower end of the position range.
+	/// - `tick_upper_index` - The tick specifying the upper end of the position range.
+	///
+	/// #### Special Errors
+	/// - `InvalidBundleIndex` - If the provided bundle index is out of bounds.
+	/// - `InvalidTickIndex` - If a provided tick is out of bounds, out of order or not a multiple of
+	///                        the tick-spacing in this pool.
+	pub fn open_bundled_liquidity_position(
+		ctx: Context<OpenBundledLiquidityPosition>,
+		bundle_index: u16,
+		tick_lower_index: i32,
+		tick_upper_index: i32
+	) -> Result<()> {
+		handle_open_bundled_liquidity_position(
+			ctx,
+			bundle_index,
+			tick_lower_index,
+			tick_upper_index
+		)
+	}
+
+	/// Close a bundled position in an AMM.
+	///
+	/// ### Authority
+	/// - `position_bundle_authority` - authority that owns the token corresponding to this desired position bundle.
+	///
+	/// ### Parameters
+	/// - `bundle_index` - The bundle index that we'd like to close.
+	///
+	/// #### Special Errors
+	/// - `InvalidBundleIndex` - If the provided bundle index is out of bounds.
+	/// - `ClosePositionNotEmpty` - The provided position account is not empty.
+	pub fn close_bundled_liquidity_position(
+		ctx: Context<CloseBundledLiquidityPosition>,
+		bundle_index: u16
+	) -> Result<()> {
+		handle_close_liquidity_bundled_position(ctx, bundle_index)
+	}
+
+	/// Open a position in an AMM. A unique token will be minted to represent the position
+	/// in the users wallet. Additional TokenMetadata extension is initialized to identify the token.
+	/// Mint and TokenAccount are based on Token-2022.
+	/// The position will start off with 0 liquidity.
+	///
+	/// ### Parameters
+	/// - `tick_lower_index` - The tick specifying the lower end of the position range.
+	/// - `tick_upper_index` - The tick specifying the upper end of the position range.
+	/// - `with_token_metadata_extension` - If true, the token metadata extension will be initialized.
+	///
+	/// #### Special Errors
+	/// - `InvalidTickIndex` - If a provided tick is out of bounds, out of order or not a multiple of
+	///                        the tick-spacing in this pool.
+	pub fn open_liquidity_position_with_token_extensions(
+		ctx: Context<OpenLiquidityPositionWithTokenExtensions>,
+		tick_lower_index: i32,
+		tick_upper_index: i32,
+		with_token_metadata_extension: bool
+	) -> Result<()> {
+		handle_open_liquidity_position_with_token_extensions(
+			ctx,
+			tick_lower_index,
+			tick_upper_index,
+			with_token_metadata_extension
+		)
+	}
+
+	/// Close a position in an AMM. Burns the position token in the owner's wallet.
+	/// Mint and TokenAccount are based on Token-2022. And Mint accout will be also closed.
+	///
+	/// ### Authority
+	/// - "position_authority" - The authority that owns the position token.
+	///
+	/// #### Special Errors
+	/// - `ClosePositionNotEmpty` - The provided position account is not empty.
+	pub fn close_liquidity_position_with_token_extensions(
+		ctx: Context<CloseLiquidityPositionWithTokenExtensions>
+	) -> Result<()> {
+		handle_close_liquidity_position_with_token_extensions(ctx)
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	// V2 instructions (TokenExtensions)
+	////////////////////////////////////////////////////////////////////////////////
+
+	// TODO: update comments
+
+	/// Collect fees accrued for this position.
+	///
+	/// ### Authority
+	/// - `position_authority` - authority that owns the token corresponding to this desired position.
+	pub fn collect_amm_fees_v2<'info>(
+		ctx: Context<'_, '_, '_, 'info, CollectAMMFeesV2<'info>>,
+		remaining_accounts_info: Option<RemainingAccountsInfo>
+	) -> Result<()> {
+		handle_collect_amm_fees_v2(ctx, remaining_accounts_info)
+	}
+
+	/// Collect the protocol fees accrued in this AMM
+	///
+	/// ### Authority
+	/// - `collect_protocol_fees_authority` - assigned authority in the AMMConfig that can collect protocol fees
+	pub fn collect_amm_protocol_fees_v2<'info>(
+		ctx: Context<'_, '_, '_, 'info, CollectAMMProtocolFeesV2<'info>>,
+		remaining_accounts_info: Option<RemainingAccountsInfo>
+	) -> Result<()> {
+		handle_collect_amm_protocol_fees_v2(ctx, remaining_accounts_info)
+	}
+
+	/// Collect rewards accrued for this position.
+	///
+	/// ### Authority
+	/// - `position_authority` - authority that owns the token corresponding to this desired position.
+	pub fn collect_amm_reward_v2<'info>(
+		ctx: Context<'_, '_, '_, 'info, CollectAMMRewardV2<'info>>,
+		reward_index: u8,
+		remaining_accounts_info: Option<RemainingAccountsInfo>
+	) -> Result<()> {
+		handle_collect_amm_reward_v2(ctx, reward_index, remaining_accounts_info)
+	}
+
+	/// Withdraw liquidity from a position in the AMM. This call also updates the position's accrued fees and rewards.
+	///
+	/// ### Authority
+	/// - `position_authority` - authority that owns the token corresponding to this desired position.
+	///
+	/// ### Parameters
+	/// - `liquidity_amount` - The total amount of Liquidity the user desires to withdraw.
+	/// - `token_min_a` - The minimum amount of tokenA the user is willing to withdraw.
+	/// - `token_min_b` - The minimum amount of tokenB the user is willing to withdraw.
+	///
+	/// #### Special Errors
+	/// - `LiquidityZero` - Provided liquidity amount is zero.
+	/// - `LiquidityTooHigh` - Provided liquidity exceeds u128::max.
+	/// - `TokenMinSubceeded` - The required token to perform this operation subceeds the user defined amount.
+	pub fn decrease_liquidity_v2<'info>(
+		ctx: Context<'_, '_, '_, 'info, ModifyLiquidityV2<'info>>,
+		liquidity_amount: u128,
+		token_min_a: u64,
+		token_min_b: u64,
+		remaining_accounts_info: Option<RemainingAccountsInfo>
+	) -> Result<()> {
+		handle_decrease_liquidity_v2(
+			ctx,
+			liquidity_amount,
+			token_min_a,
+			token_min_b,
+			remaining_accounts_info
+		)
+	}
+
+	/// Add liquidity to a position in the AMM. This call also updates the position's accrued fees and rewards.
+	///
+	/// ### Authority
+	/// - `position_authority` - authority that owns the token corresponding to this desired position.
+	///
+	/// ### Parameters
+	/// - `liquidity_amount` - The total amount of Liquidity the user is willing to deposit.
+	/// - `token_max_a` - The maximum amount of tokenA the user is willing to deposit.
+	/// - `token_max_b` - The maximum amount of tokenB the user is willing to deposit.
+	///
+	/// #### Special Errors
+	/// - `LiquidityZero` - Provided liquidity amount is zero.
+	/// - `LiquidityTooHigh` - Provided liquidity exceeds u128::max.
+	/// - `TokenMaxExceeded` - The required token to perform this operation exceeds the user defined amount.
+	pub fn increase_liquidity_v2<'info>(
+		ctx: Context<'_, '_, '_, 'info, ModifyLiquidityV2<'info>>,
+		liquidity_amount: u128,
+		token_max_a: u64,
+		token_max_b: u64,
+		remaining_accounts_info: Option<RemainingAccountsInfo>
+	) -> Result<()> {
+		handle_increase_liquidity_v2(
+			ctx,
+			liquidity_amount,
+			token_max_a,
+			token_max_b,
+			remaining_accounts_info
+		)
+	}
+
+	/// Initialize reward for an AMM. A pool can only support up to a set number of rewards.
+	///
+	/// ### Authority
+	/// - "reward_authority" - assigned authority by the reward_super_authority for the specified
+	///                        reward-index in this AMM
+	///
+	/// ### Parameters
+	/// - `reward_index` - The reward index that we'd like to initialize. (0 <= index <= NUM_REWARDS)
+	///
+	/// #### Special Errors
+	/// - `InvalidRewardIndex` - If the provided reward index doesn't match the lowest uninitialized
+	///                          index in this pool, or exceeds NUM_REWARDS, or
+	///                          all reward slots for this pool has been initialized.
+	pub fn initialize_amm_reward_v2(
+		ctx: Context<InitializeAMMRewardV2>,
+		reward_index: u8
+	) -> Result<()> {
+		handle_initialize_amm_reward_v2(ctx, reward_index)
+	}
+
+	/// Set the reward emissions for a reward in an AMM.
+	///
+	/// ### Authority
+	/// - "reward_authority" - assigned authority by the reward_super_authority for the specified
+	///                        reward-index in this AMM
+	///
+	/// ### Parameters
+	/// - `reward_index` - The reward index (0 <= index <= NUM_REWARDS) that we'd like to modify.
+	/// - `emissions_per_second_x64` - The amount of rewards emitted in this pool.
+	///
+	/// #### Special Errors
+	/// - `RewardVaultAmountInsufficient` - The amount of rewards in the reward vault cannot emit
+	///                                     more than a day of desired emissions.
+	/// - `InvalidTimestamp` - Provided timestamp is not in order with the previous timestamp.
+	/// - `InvalidRewardIndex` - If the provided reward index doesn't match the lowest uninitialized
+	///                          index in this pool, or exceeds NUM_REWARDS, or
+	///                          all reward slots for this pool has been initialized.
+	pub fn set_reward_emissions_v2(
+		ctx: Context<SetAMMRewardEmissionsV2>,
+		reward_index: u8,
+		emissions_per_second_x64: u128
+	) -> Result<()> {
+		handle_set_amm_reward_emissions_v2(
+			ctx,
+			reward_index,
+			emissions_per_second_x64
+		)
 	}
 
 	/**
@@ -399,16 +960,6 @@ pub mod normal {
 		curve_update_intensity: u8
 	) -> Result<()> {
 		handle_update_market_curve_update_intensity(ctx, curve_update_intensity)
-	}
-
-	pub fn update_market_target_base_asset_amount_per_lp(
-		ctx: Context<AdminUpdateMarket>,
-		target_base_asset_amount_per_lp: i32
-	) -> Result<()> {
-		handle_update_market_target_base_asset_amount_per_lp(
-			ctx,
-			target_base_asset_amount_per_lp
-		)
 	}
 
 	/// Send leftover profit from closed market to revenue pool
@@ -593,13 +1144,6 @@ pub mod normal {
 		fee_structure: FeeStructure
 	) -> Result<()> {
 		handle_update_fee_structure(ctx, fee_structure)
-	}
-
-	pub fn update_lp_cooldown_time(
-		ctx: Context<AdminUpdateState>,
-		lp_cooldown_time: u64
-	) -> Result<()> {
-		handle_update_lp_cooldown_time(ctx, lp_cooldown_time)
 	}
 
 	pub fn update_whitelist_mint(
@@ -825,16 +1369,4 @@ pub mod normal {
 	) -> Result<()> {
 		handle_transfer_protocol_insurance_fund_shares(ctx, shares)
 	}
-}
-
-#[cfg(not(feature = "no-entrypoint"))]
-use solana_security_txt::security_txt;
-#[cfg(not(feature = "no-entrypoint"))]
-security_txt! {
-    name: "Normal v1",
-    project_url: "https://normalfinance.io",
-    contacts: "link:https://docs.normalfinance.io/security/bug-bounty",
-    policy: "https://github.com/normalfinance/normal-v1/blob/main/SECURITY.md",
-    preferred_languages: "en",
-    source_code: "https://github.com/normalfinance/normal-v1"
 }

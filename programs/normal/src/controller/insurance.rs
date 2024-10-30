@@ -8,7 +8,7 @@ use crate::error::NormalResult;
 use crate::error::ErrorCode;
 use crate::math::amm::calculate_net_user_pnl;
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
 	ONE_YEAR,
 	PERCENTAGE_PRECISION,
 	SHARE_OF_REVENUE_ALLOCATED_TO_INSURANCE_FUND_VAULT_DENOMINATOR,

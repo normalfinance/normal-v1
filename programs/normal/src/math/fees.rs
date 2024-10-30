@@ -5,7 +5,7 @@ use num_integer::Roots;
 use crate::error::NormalResult;
 use crate::math::casting::Cast;
 
-use crate::math::constants::{
+use crate::constants::constants::{
 	FIFTY_MILLION_QUOTE,
 	FIVE_MILLION_QUOTE,
 	ONE_HUNDRED_MILLION_QUOTE,

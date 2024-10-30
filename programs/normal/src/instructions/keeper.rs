@@ -15,7 +15,7 @@ use crate::ids::swift_server;
 use crate::instructions::constraints::*;
 use crate::instructions::optional_accounts::{ load_maps, AccountMaps };
 use crate::math::casting::Cast;
-use crate::math::constants::QUOTE_SPOT_MARKET_INDEX;
+use crate::constants::constants::QUOTE_SPOT_MARKET_INDEX;
 use crate::math::orders::{
 	estimate_price_from_side,
 	find_bids_and_asks_from_users,

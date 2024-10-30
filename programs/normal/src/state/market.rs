@@ -6,9 +6,9 @@ use borsh::{ BorshDeserialize, BorshSerialize };
 
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::math::constants::{ AMM_RESERVE_PRECISION, FIVE_MINUTE, ONE_HOUR };
+use crate::constants::constants::{ AMM_RESERVE_PRECISION, FIVE_MINUTE, ONE_HOUR };
 #[cfg(test)]
-use crate::math::constants::PRICE_PRECISION_I64;
+use crate::constants::constants::PRICE_PRECISION_I64;
 use crate::math::safe_math::SafeMath;
 
 use crate::math::stats::calculate_new_twap;
@@ -111,6 +111,9 @@ pub struct Market {
 	/// The address of the market. It is a pda of the market index
 	pub pubkey: Pubkey,
 
+	/// The automated market maker
+	pub amm: Pubkey,
+
 	/// Meta
 	///
 	pub market_index: u16,
@@ -126,10 +129,7 @@ pub struct Market {
 	/// When users settle positive pnl, the balance decreases. Can not go negative.
 	pub pnl_pool: PoolBalance,
 
-	/// AMM
-	///
-	/// The automated market maker
-	pub amm: AMM,
+
 
 	/// Token
 	///
@@ -208,7 +208,7 @@ impl Default for Market {
 		Market {
 			pubkey: Pubkey::default(),
 
-			amm: AMM::default(),
+			amm: Pubkey::default(),
 			mint: Pubkey::default(),
 			vault: Pubkey::default(),
 			name: [0; 32],

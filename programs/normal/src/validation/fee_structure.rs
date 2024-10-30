@@ -1,7 +1,7 @@
 use solana_program::msg;
 
 use crate::error::{ NormalResult, ErrorCode };
-use crate::math::constants::{ FEE_DENOMINATOR, FEE_PERCENTAGE_DENOMINATOR };
+use crate::constants::constants::{ FEE_DENOMINATOR, FEE_PERCENTAGE_DENOMINATOR };
 use crate::state::state::{ FeeStructure, FeeTier };
 use crate::validate;
 

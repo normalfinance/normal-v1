@@ -6,7 +6,7 @@ use crate::error::{ NormalResult, ErrorCode };
 use crate::math::amm;
 use crate::math::amm::calculate_quote_asset_amount_swapped;
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
 	AMM_RESERVE_PRECISION_I128,
 	PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO,
 	PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO_I128,

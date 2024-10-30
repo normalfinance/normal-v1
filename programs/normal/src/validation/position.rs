@@ -1,6 +1,6 @@
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::math::constants::MAX_OPEN_ORDERS;
+use crate::constants::constants::MAX_OPEN_ORDERS;
 use crate::math::orders::is_multiple_of_step_size;
 use crate::state::market::Market;
 use crate::state::user::Position;

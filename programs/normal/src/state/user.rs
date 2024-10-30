@@ -6,7 +6,7 @@ use crate::controller::position::{
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::auction::{ calculate_auction_price, is_auction_complete };
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
 	EPOCH_DURATION,
 	PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO,
 	QUOTE_PRECISION,
@@ -109,21 +109,21 @@ impl User {
 		self.status &= !(status as u8);
 	}
 
-	pub fn get_position(&self, market_index: u16) -> NormalResult<&Position> {
+	pub fn get_position(&self, market_index: u16) -> NormalResult<&LiquidityPosition> {
 		Ok(&self.positions[get_position_index(&self.positions, market_index)?])
 	}
 
 	pub fn get_position_mut(
 		&mut self,
 		market_index: u16
-	) -> NormalResult<&mut Position> {
+	) -> NormalResult<&mut LiquidityPosition> {
 		Ok(&mut self.positions[get_position_index(&self.positions, market_index)?])
 	}
 
 	pub fn force_get_position_mut(
 		&mut self,
 		market_index: u16
-	) -> NormalResult<&mut Position> {
+	) -> NormalResult<&mut LiquidityPosition> {
 		let position_index = get_position_index(
 			&self.positions,
 			market_index
@@ -356,7 +356,7 @@ impl Position {
 pub(crate) type Positions = [Position; 8];
 
 #[cfg(test)]
-use crate::math::constants::{
+use crate::constants::constants::{
 	AMM_TO_QUOTE_PRECISION_RATIO_I128,
 	PRICE_PRECISION_I128,
 };

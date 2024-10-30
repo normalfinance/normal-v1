@@ -7,7 +7,7 @@ use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::bn::U192;
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
 	BID_ASK_SPREAD_PRECISION_I128,
 	CONCENTRATION_PRECISION,
 	DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR,

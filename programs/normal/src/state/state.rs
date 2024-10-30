@@ -2,11 +2,12 @@ use anchor_lang::prelude::*;
 use enumflags2::BitFlags;
 
 use crate::error::NormalResult;
-use crate::math::constants::{
+use crate::constants::constants::{
 	FEE_DENOMINATOR,
 	FEE_PERCENTAGE_DENOMINATOR,
 	MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND,
 };
+use crate::math::orca::MAX_PROTOCOL_FEE_RATE;
 use crate::math::safe_math::SafeMath;
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
@@ -27,7 +28,6 @@ pub struct State {
 	pub oracle_guard_rails: OracleGuardRails,
 	pub number_of_authorities: u64,
 	pub number_of_sub_accounts: u64,
-	pub lp_cooldown_time: u64,
 	/// extra duration after market expiry to allow settlement
 	pub settlement_duration: u16,
 	pub number_of_markets: u16,

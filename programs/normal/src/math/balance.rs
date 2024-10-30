@@ -1,6 +1,6 @@
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::math::constants::{ ONE_YEAR, PERCENTAGE_PRECISION };
+use crate::constants::constants::{ ONE_YEAR, PERCENTAGE_PRECISION };
 use crate::math::safe_math::{ SafeDivFloor, SafeMath };
 use crate::state::oracle::{ OraclePriceData, StrictOraclePrice };
 use crate::state::market::{ BalanceType, Market };

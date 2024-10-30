@@ -3,7 +3,7 @@ use std::cmp::min;
 use crate::controller::position::OrderSide;
 use crate::error::NormalResult;
 use crate::math::casting::Cast;
-use crate::math::constants::{BID_ASK_SPREAD_PRECISION_I128, TEN_BPS_I64};
+use crate::constants::constants::{BID_ASK_SPREAD_PRECISION_I128, TEN_BPS_I64};
 use crate::math::orders::calculate_quote_asset_amount_for_maker_order;
 use crate::math::safe_math::SafeMath;
 

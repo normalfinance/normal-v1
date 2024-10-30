@@ -16,7 +16,7 @@ use crate::ids::admin_hot_wallet;
 use crate::instructions::constraints::*;
 use crate::instructions::optional_accounts::{ load_maps, AccountMaps };
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
 	MAX_SQRT_K,
 	MAX_UPDATE_K_PRICE_CHANGE,
 	PERCENTAGE_PRECISION,
@@ -93,11 +93,14 @@ pub fn handle_initialize(ctx: Context<Initialize>) -> Result<()> {
 		signer: normal_signer,
 		signer_nonce: normal_signer_nonce,
 		fee_structure: FeeStructure::default(),
-		lp_cooldown_time: 0,
 		max_number_of_sub_accounts: 0,
 		max_initialize_user_fee: 0,
 		padding: [0; 10],
 	};
+
+	let state = &mut ctx.accounts.state;
+
+	state.update_default_protocol_fee_rate(default_protocol_fee_rate);
 
 	Ok(())
 }
@@ -225,52 +228,6 @@ pub fn handle_initialize_market(
 		return Err(ErrorCode::DefaultError.into());
 	};
 
-	/// Raydium Pool
-	if
-		!(
-			util::is_supported_mint(&ctx.accounts.token_mint_0).unwrap() &&
-			util::is_supported_mint(&ctx.accounts.token_mint_1).unwrap()
-		)
-	{
-		return err!(ErrorCode::NotSupportMint);
-	}
-	let pool_id = ctx.accounts.pool_state.key();
-	let mut pool_state = ctx.accounts.pool_state.load_init()?;
-
-	let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64)?;
-	#[cfg(feature = "enable-log")]
-	msg!("create pool, init_price: {}, init_tick:{}", sqrt_price_x64, tick);
-	// init observation
-	ctx.accounts.observation_state.load_init()?.initialize(pool_id)?;
-
-	let bump = ctx.bumps.pool_state;
-	pool_state.initialize(
-		bump,
-		sqrt_price_x64,
-		open_time,
-		tick,
-		ctx.accounts.pool_creator.key(),
-		ctx.accounts.token_vault_0.key(),
-		ctx.accounts.token_vault_1.key(),
-		ctx.accounts.amm_config.as_ref(),
-		ctx.accounts.token_mint_0.as_ref(),
-		ctx.accounts.token_mint_1.as_ref(),
-		ctx.accounts.observation_state.key()
-	)?;
-
-	ctx.accounts.tick_array_bitmap.load_init()?.initialize(pool_id);
-
-	emit!(PoolCreatedEvent {
-		token_mint_0: ctx.accounts.token_mint_0.key(),
-		token_mint_1: ctx.accounts.token_mint_1.key(),
-		tick_spacing: ctx.accounts.amm_config.tick_spacing,
-		pool_state: ctx.accounts.pool_state.key(),
-		sqrt_price_x64,
-		tick,
-		token_vault_0: ctx.accounts.token_vault_0.key(),
-		token_vault_1: ctx.accounts.token_vault_1.key(),
-	});
-
 	**market = Market {
 		market_index: market_index,
 		pubkey: market_pubkey,
@@ -311,97 +268,7 @@ pub fn handle_initialize_market(
 			quote_max_insurance,
 			..InsuranceClaim::default()
 		},
-
-		amm: AMM {
-			// TODO: are these inits correct?
-
-			base_asset_mint: ctx.accounts.token_mint_0.as_ref(),
-			quote_asset_mint: ctx.accounts.token_mint_1.as_ref(),
-
-			/// Token pair vault
-			base_asset_vault: ctx.accounts.token_vault_0.key(),
-			quote_asset_vault: ctx.accounts.token_vault_1.key(),
-
-			observation: ctx.accounts.observation_state.key(),
-
-
-			/// End Raydum
-
-			oracle: *ctx.accounts.oracle.key,
-			oracle_source,
-			base_asset_reserve: amm_base_asset_reserve,
-			quote_asset_reserve: amm_quote_asset_reserve,
-			terminal_quote_asset_reserve: amm_quote_asset_reserve,
-			ask_base_asset_reserve: amm_base_asset_reserve,
-			ask_quote_asset_reserve: amm_quote_asset_reserve,
-			bid_base_asset_reserve: amm_base_asset_reserve,
-			bid_quote_asset_reserve: amm_quote_asset_reserve,
-			last_mark_price_twap: init_reserve_price,
-			last_mark_price_twap_ts: now,
-			sqrt_k: amm_base_asset_reserve,
-			concentration_coef,
-			min_base_asset_reserve,
-			max_base_asset_reserve,
-			peg_multiplier: amm_peg_multiplier,
-			total_fee: 0,
-			total_fee_withdrawn: 0,
-			total_fee_minus_distributions: 0,
-			total_mm_fee: 0,
-			total_exchange_fee: 0,
-			historical_oracle_data: HistoricalOracleData {
-				last_oracle_price: oracle_price,
-				last_oracle_delay: oracle_delay,
-				// last_oracle_price_twap,
-				last_oracle_price_twap_5min: oracle_price,
-				last_oracle_price_twap_ts: now,
-				..HistoricalOracleData::default()
-			},
-			last_oracle_normalised_price: oracle_price,
-			last_oracle_conf_pct: 0,
-			last_oracle_reserve_price_spread_pct: 0, // todo
-			order_step_size,
-			order_tick_size,
-			min_order_size,
-			max_position_size: 0,
-			max_slippage_ratio: 50, // ~2%
-			max_fill_reserve_fraction: 100, // moves price ~2%
-			base_spread,
-			buy_spread: 0,
-			sell_spread: 0,
-			max_spread,
-			last_bid_price_twap: init_reserve_price,
-			last_ask_price_twap: init_reserve_price,
-			base_asset_amount_with_amm: 0,
-			base_asset_amount_long: 0,
-			quote_asset_amount: 0,
-			quote_entry_amount_long: 0,
-			max_open_interest,
-			mark_std: 0,
-			oracle_std: 0,
-			volume_24h: 0,
-			buy_intensity_count: 0,
-			buy_intensity_volume: 0,
-			sell_intensity_count: 0,
-			sell_intensity_volume: 0,
-			last_trade_ts: now,
-			curve_update_intensity,
-			fee_pool: PoolBalance::default(),
-			base_asset_amount_per_lp: 0,
-			quote_asset_amount_per_lp: 0,
-			last_update_slot: clock_slot,
-
-			amm_jit_intensity,
-
-			last_oracle_valid: false,
-
-			padding1: 0,
-			padding2: 0,
-			reference_price_offset: 0,
-			padding: [0; 12],
-		},
 	};
-
-	// controller::amm::initialize_synthetic_token(market);
 
 	Ok(())
 }
@@ -1387,38 +1254,6 @@ pub fn handle_update_market_curve_update_intensity(
 	Ok(())
 }
 
-#[access_control(market_valid(&ctx.accounts.market))]
-pub fn handle_update_market_target_base_asset_amount_per_lp(
-	ctx: Context<AdminUpdateMarket>,
-	target_base_asset_amount_per_lp: i32
-) -> Result<()> {
-	let market = &mut load_mut!(ctx.accounts.market)?;
-	msg!("market {}", market.market_index);
-
-	msg!(
-		"market.amm.target_base_asset_amount_per_lp: {} -> {}",
-		market.amm.target_base_asset_amount_per_lp,
-		target_base_asset_amount_per_lp
-	);
-
-	market.amm.target_base_asset_amount_per_lp = target_base_asset_amount_per_lp;
-	Ok(())
-}
-
-pub fn handle_update_lp_cooldown_time(
-	ctx: Context<AdminUpdateState>,
-	lp_cooldown_time: u64
-) -> Result<()> {
-	msg!(
-		"lp_cooldown_time: {} -> {}",
-		ctx.accounts.state.lp_cooldown_time,
-		lp_cooldown_time
-	);
-
-	ctx.accounts.state.lp_cooldown_time = lp_cooldown_time;
-	Ok(())
-}
-
 pub fn handle_update_fee_structure(
 	ctx: Context<AdminUpdateState>,
 	fee_structure: FeeStructure
@@ -2227,7 +2062,6 @@ pub struct Initialize<'info> {
 		payer = admin
 	)]
 	pub state: Box<Account<'info, State>>,
-	pub quote_asset_mint: Box<InterfaceAccount<'info, Mint>>,
 	/// CHECK: checked in `initialize`
 	pub normal_signer: AccountInfo<'info>,
 	pub rent: Sysvar<'info, Rent>,

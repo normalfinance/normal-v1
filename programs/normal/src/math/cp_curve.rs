@@ -5,7 +5,7 @@ use crate::math::amm;
 use crate::math::bn;
 use crate::math::bn::U192;
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
     AMM_RESERVE_PRECISION, AMM_TO_QUOTE_PRECISION_RATIO_I128, K_BPS_UPDATE_SCALE,
     MAX_K_BPS_DECREASE, MAX_SQRT_K, PEG_PRECISION, PERCENTAGE_PRECISION_I128, QUOTE_PRECISION,
 };

@@ -2,6 +2,7 @@ pub mod amm;
 pub mod balance;
 pub mod index_fund;
 pub mod insurance;
+pub mod lp;
 pub mod orders;
 pub mod pda;
 pub mod position;

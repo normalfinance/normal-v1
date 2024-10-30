@@ -10,7 +10,7 @@ use crate::get_then_update_id;
 use crate::math::amm::calculate_quote_asset_amount_swapped;
 use crate::math::amm_spread::{ calculate_spread_reserves, get_spread_reserves };
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
 	CONCENTRATION_PRECISION,
 	FEE_POOL_TO_REVENUE_POOL_THRESHOLD,
 	K_BPS_UPDATE_SCALE,

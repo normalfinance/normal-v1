@@ -11,6 +11,9 @@ pub mod order_params;
 pub mod paused_operations;
 pub mod market;
 pub mod market_map;
+pub mod liquidity_position_bundle;
+pub mod liquidity_position;
+pub mod tick;
 #[allow(clippy::module_inception)]
 pub mod state;
 pub mod traits;

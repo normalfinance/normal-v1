@@ -8,7 +8,7 @@ use solana_program::msg;
 use crate::error::{NormalResult, ErrorCode};
 use crate::math::amm::sanitize_new_price;
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
     FIVE_MINUTE, IF_FACTOR_PRECISION, ONE_HOUR, QUOTE_SPOT_MARKET_INDEX,
     SPOT_MARKET_TOKEN_TWAP_WINDOW,
 };

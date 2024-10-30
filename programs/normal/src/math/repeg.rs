@@ -7,7 +7,7 @@ use crate::error::*;
 use crate::math::amm;
 use crate::math::bn;
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
     AMM_RESERVE_PRECISION_I128,
     BID_ASK_SPREAD_PRECISION_U128,
     PEG_PRECISION_I128,

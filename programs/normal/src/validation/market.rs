@@ -1,7 +1,7 @@
 use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::math::constants::MAX_BASE_ASSET_AMOUNT_WITH_AMM;
+use crate::constants::constants::MAX_BASE_ASSET_AMOUNT_WITH_AMM;
 use crate::math::safe_math::SafeMath;
 
 use crate::state::market::{ MarketStatus, Market };

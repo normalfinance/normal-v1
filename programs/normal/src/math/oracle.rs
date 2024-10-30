@@ -6,7 +6,7 @@ use solana_program::msg;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::amm;
 use crate::math::casting::Cast;
-use crate::math::constants::BID_ASK_SPREAD_PRECISION;
+use crate::constants::constants::BID_ASK_SPREAD_PRECISION;
 use crate::math::safe_math::SafeMath;
 
 use crate::state::oracle::OraclePriceData;

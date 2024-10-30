@@ -6,7 +6,7 @@ use crate::controller;
 use crate::controller::amm::SwapDirection;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::math::constants::{ MAX_BASE_ASSET_AMOUNT_WITH_AMM, PERP_DECIMALS };
+use crate::constants::constants::{ MAX_BASE_ASSET_AMOUNT_WITH_AMM, PERP_DECIMALS };
 use crate::math::orders::{
 	calculate_quote_asset_amount_for_maker_order,
 	get_position_delta_for_fill,

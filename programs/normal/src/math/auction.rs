@@ -1,7 +1,7 @@
 use crate::controller::position::OrderSide;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::math::constants::AUCTION_DERIVE_PRICE_FRACTION;
+use crate::constants::constants::AUCTION_DERIVE_PRICE_FRACTION;
 use crate::math::orders::standardize_price;
 use crate::math::safe_math::SafeMath;
 use crate::state::oracle::OraclePriceData;

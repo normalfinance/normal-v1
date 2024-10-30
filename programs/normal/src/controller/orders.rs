@@ -29,7 +29,7 @@ use crate::math::auction::{
 	calculate_auction_prices,
 };
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
 	BASE_PRECISION_U64,
 	PERP_DECIMALS,
 	QUOTE_SPOT_MARKET_INDEX,

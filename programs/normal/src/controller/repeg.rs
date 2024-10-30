@@ -12,7 +12,7 @@ use crate::load_mut;
 use crate::math::amm;
 use crate::math::bn;
 use crate::math::casting::Cast;
-use crate::math::constants::{
+use crate::constants::constants::{
     K_BPS_UPDATE_SCALE,
     MAX_SQRT_K,
     QUOTE_PRECISION,
