@@ -408,10 +408,25 @@ impl Market {
 		})
 	}
 
-	pub fn get_open_interest(&self) -> u128 {
-		self.amm.base_asset_amount_long
+	pub fn get_open_interest(
+		&self,
+		base_oracle_price: i64,
+		quote_oracle_price: i64
+	) -> u128 {
+		// open interest = value of quote - value of base
+
+		// self.amm.
+
+		let base_value = self.amm.base_asset_amount_long
 			.abs()
 			.unsigned_abs()
+			.safe_mul(base_oracle_price)?;
+		let quote_value = self.amm.quote_asset_amount
+			.abs()
+			.unsigned_abs()
+			.safe_mul(quote_oracle_price)?;
+
+		base_value.safe_sub(base_value)
 	}
 
 	pub fn get_market_depth(&self) -> NormalResult<u64> {
