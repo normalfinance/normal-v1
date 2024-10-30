@@ -4,7 +4,6 @@
 
 use anchor_lang::prelude::*;
 
-use instructions::*;
 #[cfg(test)]
 use math::amm;
 use math::{ bn, constants::* };
