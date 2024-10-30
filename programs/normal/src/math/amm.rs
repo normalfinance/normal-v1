@@ -269,10 +269,9 @@ pub fn update_mark_twap(
 			amm.last_mark_price_twap_ts
 		)?;
 
-	// if an delayed more than ONE_MINUTE or 60th of funding period, shrink toward oracle_twap
+	// if an delayed more than ONE_MINUTE, shrink toward oracle_twap
 	let (last_bid_price_twap, last_ask_price_twap) = if
-		last_valid_trade_since_oracle_twap_update >
-		amm.funding_period.safe_div(60)?.max(ONE_MINUTE.cast()?)
+		last_valid_trade_since_oracle_twap_update > ONE_MINUTE.cast()?
 	{
 		msg!(
 			"correcting mark twap update (oracle previously invalid for {:?} seconds)",
@@ -281,7 +280,8 @@ pub fn update_mark_twap(
 
 		let from_start_valid = max(
 			0,
-			amm.funding_period.safe_sub(last_valid_trade_since_oracle_twap_update)?
+			last_valid_trade_since_oracle_twap_update
+			// amm.funding_period.safe_sub(last_valid_trade_since_oracle_twap_update)?
 		);
 		(
 			calculate_weighted_average(
@@ -307,7 +307,7 @@ pub fn update_mark_twap(
 		now,
 		last_bid_price_twap,
 		amm.last_mark_price_twap_ts,
-		amm.funding_period
+		FIVE_MINUTE as i64
 	)?;
 	amm.last_bid_price_twap = bid_twap.cast()?;
 
@@ -316,7 +316,7 @@ pub fn update_mark_twap(
 		now,
 		last_ask_price_twap,
 		amm.last_mark_price_twap_ts,
-		amm.funding_period
+		FIVE_MINUTE as i64
 	)?;
 
 	amm.last_ask_price_twap = ask_twap.cast()?;
@@ -331,16 +331,6 @@ pub fn update_mark_twap(
 	update_amm_mark_std(amm, now, trade_price, amm.last_mark_price_twap)?;
 
 	amm.last_mark_price_twap = mid_twap.cast()?;
-	amm.last_mark_price_twap_5min = calculate_new_twap(
-		bid_price_capped_update
-			.safe_add(ask_price_capped_update)?
-			.safe_div(2)?
-			.cast()?,
-		now,
-		amm.last_mark_price_twap_5min.cast()?,
-		amm.last_mark_price_twap_ts,
-		FIVE_MINUTE as i64
-	)?.cast()?;
 
 	amm.last_mark_price_twap_ts = now;
 
@@ -502,7 +492,7 @@ pub fn calculate_new_oracle_price_twap(
 	now: i64,
 	oracle_price: i64
 ) -> NormalResult<i64> {
-	let last_mark_twap = amm.last_mark_price_twap_5min;
+	let last_mark_twap = amm.last_mark_price_twap;
 	let last_oracle_twap = amm.historical_oracle_data.last_oracle_price_twap_5min;
 
 	let period: i64 = FIVE_MINUTE as i64;
@@ -595,9 +585,7 @@ pub fn update_amm_buy_sell_intensity(
 	side: OrderSide
 ) -> NormalResult<bool> {
 	let since_last = max(1, now.safe_sub(amm.last_trade_ts)?);
-	let (buy_quote_amount, sell_quote_amount) = if
-		side == OrderSide::Buy
-	{
+	let (buy_quote_amount, sell_quote_amount) = if side == OrderSide::Buy {
 		(quote_asset_amount, 0_u64)
 	} else {
 		(0_u64, quote_asset_amount)
