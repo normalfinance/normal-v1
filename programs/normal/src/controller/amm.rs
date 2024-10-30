@@ -197,9 +197,9 @@ pub fn update_spreads(
 			signed_liquidity_ratio,
 			market.amm.min_order_size,
 			market.amm.historical_oracle_data.last_oracle_price_twap_5min,
-			market.amm.last_mark_price_twap_5min,
-			market.amm.historical_oracle_data.last_oracle_price_twap,
 			market.amm.last_mark_price_twap,
+			// market.amm.historical_oracle_data.last_oracle_price_twap,
+			// market.amm.last_mark_price_twap,
 			max_ref_offset
 		)?
 	} else {

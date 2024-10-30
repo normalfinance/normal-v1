@@ -477,8 +477,8 @@ pub fn calculate_reference_price_offset(
     _min_order_size: u64,
     oracle_twap_fast: i64,
     mark_twap_fast: u64,
-    oracle_twap_slow: i64,
-    mark_twap_slow: u64,
+    // oracle_twap_slow: i64,
+    // mark_twap_slow: u64,
     max_offset_pct: i64,
 ) -> NormalResult<i32> {
     let max_offset_in_price = max_offset_pct
@@ -490,14 +490,14 @@ pub fn calculate_reference_price_offset(
         .cast::<i64>()?
         .safe_sub(oracle_twap_fast)?
         .clamp(-max_offset_in_price, max_offset_in_price);
-    let mark_premium_hour: i64 = mark_twap_slow
-        .cast::<i64>()?
-        .safe_sub(oracle_twap_slow)?
-        .clamp(-max_offset_in_price, max_offset_in_price);
+    // let mark_premium_hour: i64 = mark_twap_slow
+    //     .cast::<i64>()?
+    //     .safe_sub(oracle_twap_slow)?
+    //     .clamp(-max_offset_in_price, max_offset_in_price);
 
     // take average clamped premium as the price-based offset
     let mark_premium_avg = mark_premium_minute
-        .safe_add(mark_premium_hour)?
+        // .safe_add(mark_premium_hour)?
         .safe_div(3_i64)?;
 
     let mark_premium_avg_pct: i64 = mark_premium_avg

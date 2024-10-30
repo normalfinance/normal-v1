@@ -185,17 +185,15 @@ pub struct AMM {
 	pub last_oracle_normalised_price: i64,
 	/// the gap between the oracle price and the reserve price = y * peg_multiplier / x
 	pub last_oracle_reserve_price_spread_pct: i64,
-	/// average estimate of bid price over funding_period
+	/// average estimate of bid price over FIVE_MINUTES
 	/// precision: PRICE_PRECISION
 	pub last_bid_price_twap: u64,
-	/// average estimate of ask price over funding_period
+	/// average estimate of ask price over FIVE_MINUTES
 	/// precision: PRICE_PRECISION
 	pub last_ask_price_twap: u64,
-	/// average estimate of (bid+ask)/2 price over funding_period
+	/// average estimate of (bid+ask)/2 price over FIVE_MINUTES
 	/// precision: PRICE_PRECISION
 	pub last_mark_price_twap: u64,
-	/// average estimate of (bid+ask)/2 price over FIVE_MINUTES
-	pub last_mark_price_twap_5min: u64,
 	/// the last blockchain slot the amm was updated
 	pub last_update_slot: u64,
 
@@ -263,6 +261,8 @@ pub struct AMM {
 	pub reference_price_offset: i32,
 	pub padding: [u8; 12],
 }
+
+impl Default for AMM {
 	fn default() -> Self {
 		AMM {
 			token: 0,
@@ -298,7 +298,6 @@ pub struct AMM {
 			last_bid_price_twap: 0,
 			last_ask_price_twap: 0,
 			last_mark_price_twap: 0,
-			last_mark_price_twap_5min: 0,
 			last_update_slot: 0,
 			last_oracle_conf_pct: 0,
 			order_step_size: 0,
