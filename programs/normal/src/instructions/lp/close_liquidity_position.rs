@@ -44,7 +44,7 @@ pub fn handle_close_liquidity_position(
 		&ctx.accounts.position_authority
 	)?;
 
-	if !Position::is_position_empty(&ctx.accounts.position) {
+	if !LiquidityPosition::is_position_empty(&ctx.accounts.position) {
 		return Err(ErrorCode::ClosePositionNotEmpty.into());
 	}
 

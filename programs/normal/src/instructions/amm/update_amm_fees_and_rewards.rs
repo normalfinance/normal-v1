@@ -10,7 +10,7 @@ pub struct UpdateAMMFeesAndRewards<'info> {
 	pub amm: Account<'info, AMM>,
 
 	#[account(mut, has_one = amm)]
-	pub position: Account<'info, LiquidityLiquidityPosition>,
+	pub position: Account<'info, LiquidityPosition>,
 
 	#[account(has_one = amm)]
 	pub tick_array_lower: AccountLoader<'info, TickArray>,

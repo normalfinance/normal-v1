@@ -17,11 +17,11 @@ pub struct OpenLiquidityPosition<'info> {
 	#[account(
 		init,
 		payer = funder,
-		space = Position::LEN,
+		space = LiquidityPosition::LEN,
 		seeds = [b"liquidity_position".as_ref(), position_mint.key().as_ref()],
 		bump
 	)]
-	pub position: Box<Account<'info, LiquidityLiquidityPosition>>,
+	pub position: Box<Account<'info, LiquidityPosition>>,
 
 	#[account(init, payer = funder, mint::authority = amm, mint::decimals = 0)]
 	pub position_mint: Account<'info, Mint>,

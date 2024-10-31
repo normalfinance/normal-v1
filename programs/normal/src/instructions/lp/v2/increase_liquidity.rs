@@ -7,6 +7,7 @@ use crate::errors::ErrorCode;
 use crate::state::amm::AMM;
 use crate::math::{ self, convert_to_liquidity_delta };
 use crate::controller;
+use crate::state::liquidity_position::LiquidityPosition;
 use crate::util::{
 	calculate_transfer_fee_included_amount,
 	mint_synthetic_to_vault_v2,

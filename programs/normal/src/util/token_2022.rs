@@ -12,6 +12,7 @@ use anchor_spl::token_2022::spl_token_2022::{
 };
 use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_interface::{ Mint, TokenAccount };
+use liquidity_position::LiquidityPosition;
 use solana_program::program::{ invoke, invoke_signed };
 use solana_program::system_instruction::{ create_account, transfer };
 

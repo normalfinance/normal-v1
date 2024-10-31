@@ -2,6 +2,7 @@ use amm::AMM;
 use anchor_lang::prelude::*;
 use anchor_spl::memo::Memo;
 use anchor_spl::token_interface::{ Mint, TokenAccount, TokenInterface };
+use liquidity_position::LiquidityPosition;
 
 use crate::util::{
 	parse_remaining_accounts,

@@ -109,21 +109,21 @@ impl User {
 		self.status &= !(status as u8);
 	}
 
-	pub fn get_position(&self, market_index: u16) -> NormalResult<&LiquidityPosition> {
+	pub fn get_position(&self, market_index: u16) -> NormalResult<Position> {
 		Ok(&self.positions[get_position_index(&self.positions, market_index)?])
 	}
 
 	pub fn get_position_mut(
 		&mut self,
 		market_index: u16
-	) -> NormalResult<&mut LiquidityPosition> {
+	) -> NormalResult<&mut Position> {
 		Ok(&mut self.positions[get_position_index(&self.positions, market_index)?])
 	}
 
 	pub fn force_get_position_mut(
 		&mut self,
 		market_index: u16
-	) -> NormalResult<&mut LiquidityPosition> {
+	) -> NormalResult<&mut Position> {
 		let position_index = get_position_index(
 			&self.positions,
 			market_index

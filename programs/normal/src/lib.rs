@@ -527,10 +527,10 @@ pub mod normal {
 	/// #### Special Errors
 	/// - `TickNotFound` - Provided tick array account does not contain the tick for this position.
 	/// - `LiquidityZero` - Position has zero liquidity and therefore already has the most updated fees and reward values.
-	pub fn update_fees_and_rewards(
+	pub fn update_amm_fees_and_rewards(
 		ctx: Context<UpdateFeesAndRewards>
 	) -> Result<()> {
-		handle_update_f(ctx)
+		handle_update_amm_fees_and_rewards(ctx)
 	}
 
 	/// Collect fees accrued for this position.

@@ -2,6 +2,7 @@ use amm::AMM;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
+use liquidity_position::LiquidityPosition;
 
 use crate::{
 	state::*,

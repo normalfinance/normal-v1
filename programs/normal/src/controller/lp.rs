@@ -13,14 +13,16 @@ use crate::{
 	state::{ Position, PositionUpdate, NUM_REWARDS, * },
 };
 use crate::math::lp::{
-		get_amount_delta_a,
-		get_amount_delta_b,
-		sqrt_price_from_tick_index,
-		add_liquidity_delta,
-		checked_mul_shift_right,
+	get_amount_delta_a,
+	get_amount_delta_b,
+	sqrt_price_from_tick_index,
+	add_liquidity_delta,
+	checked_mul_shift_right,
 };
-use amm::AMM;
+use amm::{ AMMRewardInfo, AMM };
 use anchor_lang::prelude::{ AccountLoader, * };
+use liquidity_position::LiquidityPosition;
+use tick::{ Tick, TickUpdate };
 
 // From amm_manager.rs
 
@@ -51,7 +53,8 @@ pub fn next_amm_reward_infos(
 		// Calculate the new reward growth delta.
 		// If the calculation overflows, set the delta value to zero.
 		// This will halt reward distributions for this reward.
-		let reward_growth_delta = checked_mul_div(
+		let reward_growth_delta = math::lp::ch;
+		checked_mul_div(
 			time_delta,
 			reward_info.emissions_per_second_x64,
 			amm.liquidity
@@ -66,7 +69,7 @@ pub fn next_amm_reward_infos(
 	Ok(next_reward_infos)
 }
 
-// Calculates the next global liquidity for a amm depending on its position relative
+// Calculates the next global liquidity for an AMM depending on its position relative
 // to the lower and upper tick indexes and the liquidity_delta.
 pub fn next_amm_liquidity(
 	amm: &AMM,
@@ -100,7 +103,7 @@ pub struct ModifyLiquidityUpdate {
 // To trigger only calculation of fee and reward growths, use calculate_fee_and_reward_growths.
 pub fn calculate_modify_liquidity<'info>(
 	amm: &AMM,
-	position: &Position,
+	position: &LiquidityPosition,
 	tick_array_lower: &AccountLoader<'info, TickArray>,
 	tick_array_upper: &AccountLoader<'info, TickArray>,
 	liquidity_delta: i128,
@@ -132,7 +135,7 @@ pub fn calculate_modify_liquidity<'info>(
 
 pub fn calculate_fee_and_reward_growths<'info>(
 	amm: &AMM,
-	position: &Position,
+	position: &LiquidityPosition,
 	tick_array_lower: &AccountLoader<'info, TickArray>,
 	tick_array_upper: &AccountLoader<'info, TickArray>,
 	timestamp: u64
@@ -164,11 +167,11 @@ pub fn calculate_fee_and_reward_growths<'info>(
 	Ok((update.position_update, update.reward_infos))
 }
 
-// Calculates the state changes after modifying liquidity of a amm position.
+// Calculates the state changes after modifying liquidity of an AMM position.
 #[allow(clippy::too_many_arguments)]
 fn _calculate_modify_liquidity(
 	amm: &AMM,
-	position: &Position,
+	position: &LiquidityPosition,
 	tick_lower: &Tick,
 	tick_upper: &Tick,
 	tick_lower_index: i32,
@@ -251,7 +254,7 @@ fn _calculate_modify_liquidity(
 pub fn calculate_liquidity_token_deltas(
 	current_tick_index: i32,
 	sqrt_price: u128,
-	position: &Position,
+	position: &LiquidityPosition,
 	liquidity_delta: i128
 ) -> Result<(u64, u64)> {
 	if liquidity_delta == 0 {
@@ -294,7 +297,7 @@ pub fn calculate_liquidity_token_deltas(
 
 pub fn sync_modify_liquidity_values<'info>(
 	amm: &mut AMM,
-	position: &mut Position,
+	position: &mut LiquidityPosition,
 	tick_array_lower: &AccountLoader<'info, TickArray>,
 	tick_array_upper: &AccountLoader<'info, TickArray>,
 	modify_liquidity_update: ModifyLiquidityUpdate,
@@ -328,7 +331,7 @@ pub fn sync_modify_liquidity_values<'info>(
 }
 
 pub fn next_position_modify_liquidity_update(
-	position: &Position,
+	position: &LiquidityPosition,
 	liquidity_delta: i128,
 	fee_growth_inside_a: u128,
 	fee_growth_inside_b: u128,
