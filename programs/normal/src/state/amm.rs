@@ -87,6 +87,8 @@ pub struct AMM {
 	/// Orca
 	///
 
+	pub amm_bump: [u8; 1],   // 1
+
 	pub token_mint_a: Pubkey, // 32
 	pub token_vault_a: Pubkey, // 32
 
@@ -381,7 +383,7 @@ impl AMM {
 			self.token_mint_a.as_ref(),
 			self.token_mint_b.as_ref(),
 			self.tick_spacing_seed.as_ref(),
-			self.whirlpool_bump.as_ref(),
+			self.amm_bump.as_ref(),
 		]
 	}
 
@@ -421,7 +423,7 @@ impl AMM {
 			return Err(ErrorCode::SqrtPriceOutOfBounds.into());
 		}
 
-		self.whirlpool_bump = [bump];
+		self.amm_bump = [bump];
 
 		self.tick_spacing = tick_spacing;
 		self.tick_spacing_seed = self.tick_spacing.to_le_bytes();
@@ -1081,6 +1083,6 @@ impl AMMRewardInfo {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Copy)]
-pub struct WhirlpoolBumps {
-	pub whirlpool_bump: u8,
+pub struct AMMBumps {
+	pub amm_bump: u8,
 }
