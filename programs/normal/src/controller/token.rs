@@ -14,67 +14,11 @@ use anchor_spl::token_interface::{
 	CloseAccount,
 	InitializeMint,
 	Mint,
-	MintTo,
-	Burn,
 	TokenAccount,
 	TokenInterface,
 	Transfer,
 	TransferChecked,
 };
-
-pub fn create_synthetic_token<'info>(
-	mint: &InterfaceAccount<'info, Mint>,
-	rent,
-	token_program: &Interface<'info, TokenInterface>,
-	signer,
-	decimals: u8
-) -> Result<()> {
-	let cpi_accounts = token::InitializeMint {
-		mint: mint.to_account_info(),
-		rent: rent.to_account_info(),
-	};
-	let cpi_program = token_program.to_account_info();
-	let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-	token::initialize_mint(cpi_ctx, decimals, payer.key, Some(payer.key))?;
-
-	Ok(())
-}
-
-pub fn mint_synthetic_tokens<'info>(
-	token_program: &Interface<'info, TokenInterface>,
-	to: &InterfaceAccount<'info, TokenAccount>,
-	authority: &AccountInfo<'info>,
-	amount: u64,
-	mint: &InterfaceAccount<'info, Mint>
-) -> Result<()> {
-	let cpi_accounts = token::MintTo {
-		mint: mint.to_account_info(),
-		to: to.to_account_info(),
-		authority: authority.to_account_info(),
-	};
-	let cpi_ctx = CpiContext::new(token_program.to_account_info(), cpi_accounts);
-	token::mint_to(cpi_ctx, amount)?;
-
-	Ok(())
-}
-
-pub fn burn_synthetic_tokens<'info>(
-	token_program: &Interface<'info, TokenInterface>,
-	from: &InterfaceAccount<'info, TokenAccount>,
-	authority: &AccountInfo<'info>,
-	amount: u64,
-	mint: &InterfaceAccount<'info, Mint>
-) -> Result<()> {
-	let cpi_accounts = token::Burn {
-		mint: mint.to_account_info(),
-		from: from.to_account_info(),
-		authority: authority.to_account_info(),
-	};
-	let cpi_ctx = CpiContext::new(token_program.to_account_info(), cpi_accounts);
-	token::burn(cpi_ctx, amount)?;
-
-	Ok(())
-}
 
 pub fn send_from_program_vault<'info>(
 	token_program: &Interface<'info, TokenInterface>,

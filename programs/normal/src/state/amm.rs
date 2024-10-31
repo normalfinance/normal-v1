@@ -38,6 +38,7 @@ use crate::math::margin::{
 use crate::math::safe_math::SafeMath;
 use crate::math::stats;
 use crate::state::events::OrderActionExplanation;
+use crate::util::initialize_synthetic_token;
 use num_integer::Roots;
 
 use crate::state::oracle::{ HistoricalOracleData, OracleSource };
@@ -437,6 +438,8 @@ impl AMM {
 
 		self.protocol_fee_owed_a = 0;
 		self.protocol_fee_owed_b = 0;
+
+		initialize_synthetic_token();
 
 		self.token_mint_a = token_mint_a;
 		self.token_vault_a = token_vault_a;

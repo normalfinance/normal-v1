@@ -24,6 +24,40 @@ use crate::constants::nft::{
 	WP_METADATA_URI,
 };
 
+pub fn initialize_synthetic_token<'info>(
+	// mint: &InterfaceAccount<'info, Mint>,
+	// rent,
+	// token_program: &Interface<'info, TokenInterface>,
+	// signer,
+	// decimals: u8
+) -> Result<()> {
+	let cpi_accounts = token::InitializeMint {
+		mint: ctx.accounts.mint.to_account_info(),
+		rent: ctx.accounts.rent.to_account_info(),
+	};
+	let cpi_program = ctx.accounts.token_program.to_account_info();
+	let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+	token::initialize_mint(
+		cpi_ctx,
+		decimals,
+		ctx.accounts.payer.key,
+		Some(ctx.accounts.payer.key)
+	)?;
+
+	let cpi_accounts = token::MintTo {
+		mint: ctx.accounts.mint.to_account_info(),
+		to: ctx.accounts.token_account.to_account_info(),
+		authority: ctx.accounts.payer.to_account_info(),
+	};
+	let cpi_ctx = CpiContext::new(
+		ctx.accounts.token_program.to_account_info(),
+		cpi_accounts
+	);
+	token::mint_to(cpi_ctx, initial_supply)?;
+
+	Ok(())
+}
+
 pub fn mint_synthetic_to_vault<'info>(
 	authority: &Signer<'info>,
 	token_owner_account: &Account<'info, TokenAccount>,
