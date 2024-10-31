@@ -9,6 +9,7 @@ use crate::math::{ self, convert_to_liquidity_delta };
 use crate::controller;
 use crate::util::{
 	calculate_transfer_fee_included_amount,
+	mint_synthetic_to_vault_v2,
 	parse_remaining_accounts,
 	AccountsType,
 	RemainingAccountsInfo,
@@ -65,10 +66,9 @@ pub struct ModifyLiquidityV2<'info> {
 	// - accounts for transfer hook program of token_mint_b
 }
 
-pub fn handle_increase_liquidity<'info>(
+pub fn handle_increase_liquidity_v2<'info>(
 	ctx: Context<'_, '_, '_, 'info, ModifyLiquidityV2<'info>>,
 	liquidity_amount: u128,
-	token_max_a: u64,
 	token_max_b: u64,
 	remaining_accounts_info: Option<RemainingAccountsInfo>
 ) -> Result<()> {
@@ -90,7 +90,7 @@ pub fn handle_increase_liquidity<'info>(
 		&[AccountsType::TransferHookA, AccountsType::TransferHookB]
 	)?;
 
-	let liquidity_delta = math::orca::convert_to_liquidity_delta(
+	let liquidity_delta = math::lp::convert_to_liquidity_delta(
 		liquidity_amount,
 		true
 	)?;
@@ -121,33 +121,33 @@ pub fn handle_increase_liquidity<'info>(
 		liquidity_delta
 	)?;
 
-	let transfer_fee_included_delta_a = calculate_transfer_fee_included_amount(
-		&ctx.accounts.token_mint_a,
-		delta_a
-	)?;
 	let transfer_fee_included_delta_b = calculate_transfer_fee_included_amount(
 		&ctx.accounts.token_mint_b,
 		delta_b
 	)?;
 
-	// token_max_a and token_max_b should be applied to the transfer fee included amount
-	if transfer_fee_included_delta_a.amount > token_max_a {
-		return Err(ErrorCode::TokenMaxExceeded.into());
-	}
+	// token_max_b should be applied to the transfer fee included amount
 	if transfer_fee_included_delta_b.amount > token_max_b {
 		return Err(ErrorCode::TokenMaxExceeded.into());
 	}
 
-	transfer_from_owner_to_vault_v2(
+	// Mint a delta_a amount of the AMM's synthetic token to match the user's liquidity
+	mint_synthetic_to_vault_v2(
 		&ctx.accounts.position_authority,
-		&ctx.accounts.token_mint_a,
-		&ctx.accounts.token_owner_account_a,
 		&ctx.accounts.token_vault_a,
-		&ctx.accounts.token_program_a,
-		&ctx.accounts.memo_program,
-		&remaining_accounts.transfer_hook_a,
-		transfer_fee_included_delta_a.amount
+		&ctx.accounts.token_program,
+		delta_a
 	)?;
+	// transfer_from_owner_to_vault_v2(
+	// 	&ctx.accounts.position_authority,
+	// 	&ctx.accounts.token_mint_a,
+	// 	&ctx.accounts.token_owner_account_a,
+	// 	&ctx.accounts.token_vault_a,
+	// 	&ctx.accounts.token_program_a,
+	// 	&ctx.accounts.memo_program,
+	// 	&remaining_accounts.transfer_hook_a,
+	// 	transfer_fee_included_delta_a.amount
+	// )?;
 
 	transfer_from_owner_to_vault_v2(
 		&ctx.accounts.position_authority,

@@ -17,6 +17,82 @@ use anchor_spl::token_2022::spl_token_2022::{
 use anchor_spl::token_interface::{ Mint, TokenAccount, TokenInterface };
 use spl_transfer_hook_interface;
 
+pub fn mint_synthetic_to_vault_v2<'info>(
+	position_authority: &Signer<'info>,
+	token_owner_account: &Account<'info, TokenAccount>,
+	token_vault: &Account<'info, TokenAccount>,
+	token_program: &Program<'info, Token>,
+	amount: u64
+) -> Result<()> {
+	mint_synthetic_token_v2(amm, mint, token_vault, token_program)?;
+	Ok(())
+}
+
+fn mint_synthetic_token_v2<'info>(
+	amm: &Account<'info, AMM>,
+	mint: &Account<'info, Mint>,
+	token_account: &Account<'info, TokenAccount>,
+	token_program: &Program<'info, Token>
+) -> Result<()> {
+	invoke_signed(
+		&mint_to(
+			token_program.key,
+			mint.to_account_info().key,
+			token_account.to_account_info().key,
+			amm.to_account_info().key,
+			&[amm.to_account_info().key],
+			1
+		)?,
+		&[
+			mint.to_account_info(),
+			token_account.to_account_info(),
+			amm.to_account_info(),
+			token_program.to_account_info(),
+		],
+		&[&amm.seeds()]
+	)?;
+	Ok(())
+}
+
+pub fn burn_synthetic_from_vault_v2<'info>(
+	authority: &Signer<'info>,
+	token_owner_account: &Account<'info, TokenAccount>,
+	token_vault: &Account<'info, TokenAccount>,
+	token_program: &Program<'info, Token>,
+	amount: u64
+) -> Result<()> {
+	burn_synthetic_token(amm, mint, token_vault, token_program)?;
+	Ok(())
+}
+
+fn burn_synthetic_token<'info>(
+	token_authority: &Signer<'info>,
+	receiver: &UncheckedAccount<'info>,
+	mint: &Account<'info, Mint>,
+	token_account: &Account<'info, TokenAccount>,
+	token_program: &Program<'info, Token>
+) -> Result<()> {
+	invoke_signed(
+		&burn_checked(
+			token_program.key,
+			token_account.to_account_info().key,
+			mint.to_account_info().key,
+			token_authority.key,
+			&[],
+			1,
+			mint.decimals
+		)?,
+		&[
+			token_program.to_account_info(),
+			token_account.to_account_info(),
+			mint.to_account_info(),
+			token_authority.to_account_info(),
+		],
+		&[]
+	)?;
+	Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn transfer_from_owner_to_vault_v2<'info>(
 	authority: &Signer<'info>,

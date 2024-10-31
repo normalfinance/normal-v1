@@ -11,10 +11,11 @@ use crate::manager::liquidity_manager::{
 	calculate_modify_liquidity,
 	sync_modify_liquidity_values,
 };
-use crate::math::convert_to_liquidity_delta;
+use crate::math::{ self, convert_to_liquidity_delta };
 use crate::{ controller, state::* };
 use crate::util::{
 	to_timestamp_u64,
+	mint_synthetic_to_vault,
 	transfer_from_owner_to_vault,
 	verify_position_authority_interface,
 };
@@ -30,7 +31,7 @@ pub struct ModifyLiquidity<'info> {
 	pub position_authority: Signer<'info>,
 
 	#[account(mut, has_one = amm)]
-	pub position: Account<'info, LiquidityLiquidityPosition>,
+	pub position: Account<'info, LiquidityPosition>,
 	#[account(
 		constraint = position_token_account.mint == position.position_mint,
 		constraint = position_token_account.amount == 1
@@ -58,7 +59,6 @@ pub struct ModifyLiquidity<'info> {
 pub fn handle_increase_liquidity(
 	ctx: Context<ModifyLiquidity>,
 	liquidity_amount: u128,
-	token_max_a: u64,
 	token_max_b: u64
 ) -> Result<()> {
 	verify_position_authority_interface(
@@ -71,7 +71,11 @@ pub fn handle_increase_liquidity(
 	if liquidity_amount == 0 {
 		return Err(ErrorCode::LiquidityZero.into());
 	}
-	let liquidity_delta = convert_to_liquidity_delta(liquidity_amount, true)?;
+
+	let liquidity_delta = math::lp::convert_to_liquidity_delta(
+		liquidity_amount,
+		true
+	)?;
 	let timestamp = to_timestamp_u64(clock.unix_timestamp)?;
 
 	let update = controller::lp::calculate_modify_liquidity(
@@ -83,7 +87,7 @@ pub fn handle_increase_liquidity(
 		timestamp
 	)?;
 
-	sync_modify_liquidity_values(
+	controller::lp::sync_modify_liquidity_values(
 		&mut ctx.accounts.amm,
 		&mut ctx.accounts.position,
 		&ctx.accounts.tick_array_lower,
@@ -99,17 +103,24 @@ pub fn handle_increase_liquidity(
 		liquidity_delta
 	)?;
 
-	if delta_a > token_max_a || delta_b > token_max_b {
+	if delta_b > token_max_b {
 		return Err(ErrorCode::TokenMaxExceeded.into());
 	}
 
-	transfer_from_owner_to_vault(
+	// Mint a delta_a amount of the AMM's synthetic token to match the user's liquidity
+	mint_synthetic_to_vault(
 		&ctx.accounts.position_authority,
-		&ctx.accounts.token_owner_account_a,
 		&ctx.accounts.token_vault_a,
 		&ctx.accounts.token_program,
 		delta_a
 	)?;
+	// transfer_from_owner_to_vault(
+	// 	&ctx.accounts.position_authority,
+	// 	&ctx.accounts.token_owner_account_a,
+	// 	&ctx.accounts.token_vault_a,
+	// 	&ctx.accounts.token_program,
+	// 	delta_a
+	// )?;
 
 	transfer_from_owner_to_vault(
 		&ctx.accounts.position_authority,
