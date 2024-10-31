@@ -13,12 +13,12 @@ pub mod amm_nft_update_auth {
 pub const WP_METADATA_NAME: &str = "Normal AMM Position";
 pub const WP_METADATA_SYMBOL: &str = "NAP";
 pub const WP_METADATA_URI: &str =
-	"https://arweave.net/E19ZNY2sqMqddm1Wx7mrXPUZ0ZZ5ISizhebb0UsVEws";
+	"https://arweave.net/P_OoP15YyiZZu6LlxRFEWdbFTOjPsT23oHbbUZNXIJM";
 
 pub const WPB_METADATA_NAME_PREFIX: &str = "Normal Position Bundle";
 pub const WPB_METADATA_SYMBOL: &str = "NPB";
 pub const WPB_METADATA_URI: &str =
-	"https://arweave.net/A_Wo8dx2_3lSUwMIi7bdT_sqxi8soghRNAWXXiqXpgE";
+	"https://arweave.net/xr5KNNixLPjO2AGu-6dBNxV4EgwNMHW-rLwkC240toE";
 
 // Based on Token-2022 TokenMetadata extension
 //
@@ -29,4 +29,5 @@ pub const WPB_METADATA_URI: &str =
 // https://github.com/solana-labs/solana-program-library/blob/cd6ce4b7709d2420bca60b4656bbd3d15d2e1485/token-metadata/interface/src/state.rs#L25
 pub const WP_2022_METADATA_NAME_PREFIX: &str = "NAP";
 pub const WP_2022_METADATA_SYMBOL: &str = "NAP";
-pub const WP_2022_METADATA_URI_BASE: &str = "https://position-nft.normalfinance.io/meta";
+pub const WP_2022_METADATA_URI_BASE: &str =
+	"https://position-nft.normalfinance.io/meta";
