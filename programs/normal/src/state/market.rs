@@ -12,11 +12,7 @@ use crate::constants::constants::PRICE_PRECISION_I64;
 use crate::math::safe_math::SafeMath;
 
 use crate::math::stats::calculate_new_twap;
-use crate::state::oracle::{
-	HistoricalIndexData,
-	HistoricalOracleData,
-	OracleSource,
-};
+use crate::state::oracle::{ HistoricalIndexData, HistoricalOracleData };
 use crate::state::insurance::InsuranceClaim;
 use crate::state::paused_operations::{ Operation, InsuranceFundOperation };
 use crate::state::traits::{ MarketIndexOffset, Size };
@@ -141,9 +137,6 @@ pub struct Market {
 
 	/// Oracle
 	///
-	/// The oracle used to price the markets deposits/borrows
-	pub oracle: Pubkey,
-	pub oracle_source: OracleSource,
 	pub historical_oracle_data: HistoricalOracleData,
 	pub historical_index_data: HistoricalIndexData,
 
@@ -218,8 +211,6 @@ impl Default for Market {
 			pnl_pool: PoolBalance::default(),
 
 			// Oracle
-			oracle: Pubkey::default(),
-			oracle_source: OracleSource::default(),
 
 			// Insurance
 			insurance_fund: InsuranceFund::default(),

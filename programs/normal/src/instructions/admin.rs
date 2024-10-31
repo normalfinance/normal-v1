@@ -338,46 +338,6 @@ pub fn handle_delete_initialized_market(
 }
 
 #[access_control(market_valid(&ctx.accounts.market))]
-pub fn handle_update_market_oracle(
-	ctx: Context<AdminUpdateMarketOracle>,
-	oracle: Pubkey,
-	oracle_source: OracleSource
-) -> Result<()> {
-	let market = &mut load_mut!(ctx.accounts.market)?;
-	msg!("updating market {} oracle", market.market_index);
-	let clock = Clock::get()?;
-
-	OracleMap::validate_oracle_account_info(&ctx.accounts.oracle)?;
-
-	validate!(
-		ctx.accounts.oracle.key == &oracle,
-		ErrorCode::DefaultError,
-		"oracle account info ({:?}) and ix data ({:?}) must match",
-		ctx.accounts.oracle.key,
-		oracle
-	)?;
-
-	// Verify oracle is readable
-	let OraclePriceData {
-		price: _oracle_price,
-		delay: _oracle_delay,
-		..
-	} = get_oracle_price(&oracle_source, &ctx.accounts.oracle, clock.slot)?;
-
-	msg!("market.oracle {:?} -> {:?}", market.oracle, oracle);
-
-	msg!(
-		"market.oracle_source {:?} -> {:?}",
-		market.oracle_source,
-		oracle_source
-	);
-
-	market.oracle = oracle;
-	market.oracle_source = oracle_source;
-	Ok(())
-}
-
-#[access_control(market_valid(&ctx.accounts.market))]
 pub fn handle_update_market_expiry(
 	ctx: Context<AdminUpdateMarket>,
 	expiry_ts: i64
@@ -2203,17 +2163,6 @@ pub struct AdminUpdateMarket<'info> {
 	pub state: Box<Account<'info, State>>,
 	#[account(mut)]
 	pub market: AccountLoader<'info, Market>,
-}
-
-#[derive(Accounts)]
-pub struct AdminUpdateMarketOracle<'info> {
-	pub admin: Signer<'info>,
-	#[account(has_one = admin)]
-	pub state: Box<Account<'info, State>>,
-	#[account(mut)]
-	pub market: AccountLoader<'info, Market>,
-	/// CHECK: checked in `initialize_spot_market`
-	pub oracle: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]

@@ -904,14 +904,6 @@ pub mod normal {
 		handle_update_market_synthetic_tier(ctx, synthetic_tier)
 	}
 
-	pub fn update_market_oracle(
-		ctx: Context<AdminUpdateMarketOracle>,
-		oracle: Pubkey,
-		oracle_source: OracleSource
-	) -> Result<()> {
-		handle_update_market_oracle(ctx, oracle, oracle_source)
-	}
-
 	pub fn update_market_status(
 		ctx: Context<AdminUpdateMarket>,
 		status: MarketStatus
