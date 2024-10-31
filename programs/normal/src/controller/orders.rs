@@ -54,6 +54,7 @@ use crate::state::order_params::{
 	ModifyOrderParams,
 	ModifyOrderPolicy,
 	OrderParams,
+	OrderSide,
 	PlaceOrderOptions,
 	PostOnlyParam,
 };
@@ -91,6 +92,7 @@ use crate::state::user::{
 };
 use crate::state::user::{ MarketType, User };
 use crate::state::user_map::{ UserMap, UserStatsMap };
+use crate::util::update_and_swap_amm;
 use crate::validate;
 use crate::validation;
 use crate::validation::order::{
@@ -160,14 +162,16 @@ pub fn place_order(
 		market_index
 	).or_else(|_| add_new_position(&mut user.positions, market_index))?;
 
+	let mut amm = load_mut!(&market.amm)?;
+
 	// Increment open orders for existing position
 	let order_base_asset_amount = {
 		validate!(
-			params.base_asset_amount >= market.amm.order_step_size,
+			params.base_asset_amount >= amm.order_step_size,
 			ErrorCode::OrderAmountTooSmall,
-			"params.base_asset_amount={} cannot be below market.amm.order_step_size={}",
+			"params.base_asset_amount={} cannot be below amm.order_step_size={}",
 			params.base_asset_amount,
-			market.amm.order_step_size
+			amm.order_step_size
 		)?;
 
 		let base_asset_amount = if params.base_asset_amount == u64::MAX {
@@ -182,14 +186,14 @@ pub fn place_order(
 		} else {
 			standardize_base_asset_amount(
 				params.base_asset_amount,
-				market.amm.order_step_size
+				amm.order_step_size
 			)?
 		};
 
 		base_asset_amount
 	};
 
-	let oracle_price_data = oracle_map.get_price_data(&market.amm.oracle)?;
+	let oracle_price_data = oracle_map.get_price_data(&amm.oracle)?;
 
 	// updates auction params for crossing limit orders w/out auction duration
 	params.update_auction_params(market, oracle_price_data.price)?;
@@ -198,7 +202,7 @@ pub fn place_order(
 		get_auction_params(
 			&params,
 			oracle_price_data,
-			market.amm.order_tick_size,
+			amm.order_tick_size,
 			state.min_auction_duration
 		)?;
 
@@ -239,7 +243,7 @@ pub fn place_order(
 			params.price,
 			params.side,
 			params.post_only,
-			&market.amm
+			&amm
 		)?,
 		base_asset_amount: order_base_asset_amount,
 		base_asset_amount_filled: 0,
@@ -248,7 +252,7 @@ pub fn place_order(
 		reduce_only: params.reduce_only || force_reduce_only,
 		trigger_price: standardize_price(
 			params.trigger_price.unwrap_or(0),
-			market.amm.order_tick_size,
+			amm.order_tick_size,
 			params.side
 		)?,
 		trigger_condition: params.trigger_condition,
@@ -261,9 +265,7 @@ pub fn place_order(
 		padding: [0; 3],
 	};
 
-	let valid_oracle_price = Some(
-		oracle_map.get_price_data(&market.amm.oracle)?.price
-	);
+	let valid_oracle_price = Some(oracle_map.get_price_data(&amm.oracle)?.price);
 	match validate_order(&new_order, market, valid_oracle_price, slot) {
 		Ok(()) => {}
 		Err(ErrorCode::PlacePostOnlyLimitFailure) if
@@ -304,15 +306,15 @@ pub fn place_order(
 		)?;
 	}
 
-	let max_oi = market.amm.max_open_interest;
+	let max_oi = amm.max_open_interest;
 	if max_oi != 0 && risk_increasing {
 		let oi_plus_order = match params.side {
 			OrderSide::Buy =>
-				market.amm.base_asset_amount_long
+				amm.base_asset_amount_long
 					.safe_add(order_base_asset_amount.cast()?)?
 					.unsigned_abs(),
 			OrderSide::Sell =>
-				market.amm.base_asset_amount_long
+				amm.base_asset_amount_long
 					.safe_sub(order_base_asset_amount.cast()?)?
 					.unsigned_abs(),
 		};
@@ -348,7 +350,7 @@ pub fn place_order(
 		taker_order,
 		maker,
 		maker_order,
-		oracle_map.get_price_data(&market.amm.oracle)?.price
+		oracle_map.get_price_data(&amm.oracle)?.price
 	)?;
 	emit_stack::<_, { OrderActionRecord::SIZE }>(order_action_record)?;
 
@@ -842,10 +844,9 @@ pub fn fill_order(
 		"must be synthetic order"
 	)?;
 
-	// TODO: investigate
-	// settle lp position so its tradeable
 	let mut market = market_map.get_ref_mut(&market_index)?;
-	// controller::lp::settle_lp(user, &user_key, &mut market, now)?;
+
+	let amm = &mut load_mut!(&market.amm)?;
 
 	validate!(
 		matches!(market.status, MarketStatus::Active | MarketStatus::ReduceOnly),
@@ -894,8 +895,8 @@ pub fn fill_order(
 			oracle_map.get_price_data_and_validity(
 				MarketType::Synthetic,
 				market.market_index,
-				&market.amm.oracle,
-				market.amm.historical_oracle_data.last_oracle_price_twap,
+				&amm.oracle,
+				amm.historical_oracle_data.last_oracle_price_twap,
 				market.get_max_confidence_interval_multiplier()?
 			)?;
 
@@ -905,10 +906,9 @@ pub fn fill_order(
 		)?;
 		amm_is_available &= !market.is_operation_paused(Operation::AmmFill);
 
-		reserve_price_before = market.amm.reserve_price()?;
+		reserve_price_before = amm.reserve_price()?;
 		oracle_price = oracle_price_data.price;
-		oracle_twap_5min =
-			market.amm.historical_oracle_data.last_oracle_price_twap_5min;
+		oracle_twap_5min = amm.historical_oracle_data.last_oracle_price_twap_5min;
 		oracle_validity = _oracle_validity;
 		market_index = market.market_index;
 	}
@@ -1126,7 +1126,7 @@ pub fn fill_order(
 		let market = market_map.get_ref(&market_index)?;
 
 		let open_interest = market.get_open_interest(0, valid_oracle_price);
-		let max_open_interest = market.amm.max_open_interest;
+		let max_open_interest = amm.max_open_interest;
 
 		validate!(
 			max_open_interest == 0 || max_open_interest > open_interest,
@@ -1441,22 +1441,23 @@ fn fulfill_order(
 		)?;
 
 	let market = market_map.get_ref(&market_index)?;
+	let amm = &mut load_mut!(&market.amm)?;
 	let limit_price = fill_mode.get_limit_price(
 		&user.orders[user_order_index],
 		valid_oracle_price,
 		slot,
-		market.amm.order_tick_size
+		amm.order_tick_size
 	)?;
 	drop(market);
 
 	let fulfillment_methods = {
 		let market = market_map.get_ref(&market_index)?;
-		let oracle_price = oracle_map.get_price_data(&market.amm.oracle)?.price;
+		let oracle_price = oracle_map.get_price_data(&amm.oracle)?.price;
 
 		determine_fulfillment_methods(
 			&user.orders[user_order_index],
 			maker_orders_info,
-			&market.amm,
+			&amm,
 			reserve_price_before,
 			Some(oracle_price),
 			limit_price,
@@ -1597,11 +1598,7 @@ fn fulfill_order(
 
 		base_asset_amount = base_asset_amount.safe_add(fill_base_asset_amount)?;
 		quote_asset_amount = quote_asset_amount.safe_add(fill_quote_asset_amount)?;
-		market.amm.update_volume_24h(
-			fill_quote_asset_amount,
-			user_order_side,
-			now
-		)?;
+		amm.update_volume_24h(fill_quote_asset_amount, user_order_side, now)?;
 	}
 
 	validate!(
@@ -1692,7 +1689,6 @@ fn determine_if_user_order_is_position_decreasing(
 	)
 }
 
-/// TODO: update to exchange tokens directly b/t AMM and taker and mint tokens if reserve is empty
 pub fn fulfill_order_with_amm(
 	user: &mut User,
 	user_stats: &mut UserStats,
@@ -1716,12 +1712,14 @@ pub fn fulfill_order_with_amm(
 	override_fill_price: Option<u64>,
 	liquidity_split: AMMLiquiditySplit
 ) -> NormalResult<(u64, u64)> {
+	let amm = &mut load_mut!(&market.amm)?;
+
 	let position_index = get_position_index(
 		&user.positions,
 		market.market_index
 	)?;
-	let existing_base_asset_amount = user.positions
-		[position_index].base_asset_amount;
+	let existing_base_asset_amount =
+		user.positions[position_index].base_asset_amount();
 
 	// Determine the base asset amount the market can fill
 	let (base_asset_amount, limit_price, fill_price) = match
@@ -1736,6 +1734,7 @@ pub fn fulfill_order_with_amm(
 				fee_structure,
 				&MarketType::Synthetic
 			)?;
+			// TODO: at what price are AMM orders filled? the oracle mark price, or with these buffers?
 			let (base_asset_amount, limit_price) =
 				calculate_base_asset_amount_for_amm_to_fulfill(
 					&user.orders[order_index],
@@ -1758,21 +1757,21 @@ pub fn fulfill_order_with_amm(
 
 	// if user position is less than min order size, step size is the threshold
 	let amm_size_threshold = if
-		existing_base_asset_amount.unsigned_abs() > market.amm.min_order_size
+		existing_base_asset_amount.unsigned_abs() > amm.min_order_size
 	{
-		market.amm.min_order_size
+		amm.min_order_size
 	} else {
-		market.amm.order_step_size
+		amm.order_step_size
 	};
 
 	if base_asset_amount < amm_size_threshold {
 		// if is an actual swap (and not amm jit order) then msg!
 		if override_base_asset_amount.is_none() {
 			msg!(
-				"Amm cant fulfill order. market index {} base asset amount {} market.amm.min_order_size {}",
+				"Amm cant fulfill order. market index {} base asset amount {} amm.min_order_size {}",
 				market.market_index,
 				base_asset_amount,
-				market.amm.min_order_size
+				amm.min_order_size
 			);
 		}
 		return Ok((0, 0));
@@ -1785,16 +1784,78 @@ pub fn fulfill_order_with_amm(
 		side
 	);
 
-	validation::market::validate_amm_account_for_fill(&market.amm, order_side)?;
+	validation::market::validate_amm_account_for_fill(&amm, order_side)?;
 
 	let market_side_price = match order_side {
-		OrderSide::Buy => market.amm.ask_price(reserve_price_before)?,
-		OrderSide::Sell => market.amm.bid_price(reserve_price_before)?,
+		OrderSide::Buy => amm.ask_price(reserve_price_before)?,
+		OrderSide::Sell => amm.bid_price(reserve_price_before)?,
 	};
+
+	// TODO: Whirlpool
+
+	let clock = Clock::get()?;
+	// Update the global reward growth which increases as a function of time.
+	let timestamp = to_timestamp_u64(clock.unix_timestamp)?;
+
+	let a_to_b = match &user.orders[order_index].side {
+		OrderSide::Buy => false,
+		OrderSide::Sell => true,
+	};
+
+	let builder = SparseSwapTickSequenceBuilder::try_from(
+		amm,
+		a_to_b,
+		vec![
+			ctx.accounts.tick_array_0.to_account_info(),
+			ctx.accounts.tick_array_1.to_account_info(),
+			ctx.accounts.tick_array_2.to_account_info()
+		],
+		None
+	)?;
+	let mut swap_tick_sequence = builder.build()?;
+
+	let swap_update = swap(
+		amm,
+		&mut swap_tick_sequence,
+		amount,
+		sqrt_price_limit,
+		amount_specified_is_input,
+		a_to_b,
+		timestamp
+	)?;
+
+	if amount_specified_is_input {
+		if
+			(a_to_b && other_amount_threshold > swap_update.amount_b) ||
+			(!a_to_b && other_amount_threshold > swap_update.amount_a)
+		{
+			return Err(ErrorCode::AmountOutBelowMinimum.into());
+		}
+	} else if
+		(a_to_b && other_amount_threshold < swap_update.amount_a) ||
+		(!a_to_b && other_amount_threshold < swap_update.amount_b)
+	{
+		return Err(ErrorCode::AmountInAboveMaximum.into());
+	}
+
+	update_and_swap_amm(
+		amm,
+		&ctx.accounts.token_authority,
+		&ctx.accounts.token_owner_account_a,
+		&ctx.accounts.token_owner_account_b,
+		&ctx.accounts.token_vault_a,
+		&ctx.accounts.token_vault_b,
+		&ctx.accounts.token_program,
+		swap_update,
+		a_to_b,
+		timestamp
+	);
+
+	// TODO: End Whirlpool
 
 	let sanitize_clamp_denominator = market.get_sanitize_clamp_denominator()?;
 	amm::update_mark_twap_from_estimates(
-		&mut market.amm,
+		&mut amm,
 		now,
 		Some(market_side_price),
 		Some(order_side),
@@ -1862,28 +1923,26 @@ pub fn fulfill_order_with_amm(
 	// TODO: do we need this logic if user_lp_shares has been removed?
 	if amm.user_lp_shares > 0 {
 		let (new_terminal_quote_reserve, new_terminal_base_reserve) =
-			crate::math::amm::calculate_terminal_reserves(&market.amm)?;
-		market.amm.terminal_quote_asset_reserve = new_terminal_quote_reserve;
+			crate::math::amm::calculate_terminal_reserves(&amm)?;
+		amm.terminal_quote_asset_reserve = new_terminal_quote_reserve;
 
 		let (min_base_asset_reserve, max_base_asset_reserve) =
 			crate::math::amm::calculate_bid_ask_bounds(
-				market.amm.concentration_coef,
+				amm.concentration_coef,
 				new_terminal_base_reserve
 			)?;
-		market.amm.min_base_asset_reserve = min_base_asset_reserve;
-		market.amm.max_base_asset_reserve = max_base_asset_reserve;
+		amm.min_base_asset_reserve = min_base_asset_reserve;
+		amm.max_base_asset_reserve = max_base_asset_reserve;
 	}
 
 	// Increment the protocol's total fee variables
-	market.amm.total_fee = market.amm.total_fee.safe_add(fee_to_market.cast()?)?;
-	market.amm.total_exchange_fee = market.amm.total_exchange_fee.safe_add(
-		user_fee.cast()?
-	)?;
-	market.amm.total_mm_fee = market.amm.total_mm_fee.safe_add(
+	amm.total_fee = amm.total_fee.safe_add(fee_to_market.cast()?)?;
+	amm.total_exchange_fee = amm.total_exchange_fee.safe_add(user_fee.cast()?)?;
+	amm.total_mm_fee = amm.total_mm_fee.safe_add(
 		quote_asset_amount_surplus.cast()?
 	)?;
-	market.amm.total_fee_minus_distributions =
-		market.amm.total_fee_minus_distributions.safe_add(fee_to_market.cast()?)?;
+	amm.total_fee_minus_distributions =
+		amm.total_fee_minus_distributions.safe_add(fee_to_market.cast()?)?;
 
 	// Increment the user's total fee variables
 	user_stats.increment_total_fees(user_fee)?;
@@ -2006,7 +2065,7 @@ pub fn fulfill_order_with_amm(
 		taker_order,
 		maker,
 		maker_order,
-		oracle_map.get_price_data(&market.amm.oracle)?.price
+		oracle_map.get_price_data(&amm.oracle)?.price
 	)?;
 	emit_stack::<_, { OrderActionRecord::SIZE }>(order_action_record)?;
 
@@ -2016,39 +2075,6 @@ pub fn fulfill_order_with_amm(
 		user.orders[order_index] = Order::default();
 		let market_position = &mut user.positions[position_index];
 		market_position.open_orders -= 1;
-	}
-
-	// TODO: custom token exchange - not sure where to place yet
-	// 1. Send tokens from user to AMM
-	controller::token::receive(
-		token_program,
-		user_key,
-		market.amm.key,
-		authority,
-		amount,
-		mint
-	);
-
-	if market.amm.base_asset_reserve == 0 {
-		// 2a. If AMM has no tokens, mint them
-		controller::token::mint_synthetic_tokens(
-			&market.amm.token,
-			user_key,
-			&ctx.accounts.normal_signer,
-			amount,
-			&market.amm.token_mint
-		);
-	} else {
-		// 2. Send tokens from AMM to user
-		controller::token::send_from_program_vault(
-			&market.amm.token,
-			market.amm.key,
-			user_key,
-			&ctx.accounts.normal_signer,
-			nonce,
-			amount,
-			&market.amm.token_mint
-		);
 	}
 
 	Ok((base_asset_amount, quote_asset_amount))
@@ -2088,7 +2114,6 @@ pub fn credit_filler_pnl(
 	Ok(())
 }
 
-/// TODO: update to exchange tokens directly b/t maker and taker
 pub fn fulfill_order_with_match(
 	market: &mut Market,
 	taker: &mut User,
@@ -2121,17 +2146,19 @@ pub fn fulfill_order_with_match(
 		return Ok((0_u64, 0_u64, 0_u64));
 	}
 
-	let oracle_price = oracle_map.get_price_data(&market.amm.oracle)?.price;
+	let amm = &mut load_mut!(&market.amm)?;
+
+	let oracle_price = oracle_map.get_price_data(&amm.oracle)?.price;
 	let taker_side: OrderSide = taker.orders[taker_order_index].side;
 
 	let taker_price = if let Some(taker_limit_price) = taker_limit_price {
 		taker_limit_price
 	} else {
 		let amm_available_liquidity = calculate_amm_available_liquidity(
-			&market.amm,
+			&amm,
 			&taker_side
 		)?;
-		market.amm.get_fallback_price(
+		amm.get_fallback_price(
 			&taker_side,
 			amm_available_liquidity,
 			oracle_price,
@@ -2150,7 +2177,7 @@ pub fn fulfill_order_with_match(
 		Some(oracle_price),
 		None,
 		slot,
-		market.amm.order_tick_size
+		amm.order_tick_size
 	)?;
 	let maker_side = maker.orders[maker_order_index].side;
 	let maker_existing_position = maker.get_position(
@@ -2185,7 +2212,7 @@ pub fn fulfill_order_with_match(
 
 	let sanitize_clamp_denominator = market.get_sanitize_clamp_denominator()?;
 	amm::update_mark_twap_from_estimates(
-		&mut market.amm,
+		&mut amm,
 		now,
 		Some(maker_price),
 		Some(taker_side),
@@ -2357,12 +2384,12 @@ pub fn fulfill_order_with_match(
 	)?;
 
 	// Increment the markets house's total fee variables
-	market.amm.total_fee = market.amm.total_fee.safe_add(fee_to_market.cast()?)?;
-	market.amm.total_exchange_fee = market.amm.total_exchange_fee.safe_add(
+	amm.total_fee = amm.total_fee.safe_add(fee_to_market.cast()?)?;
+	amm.total_exchange_fee = amm.total_exchange_fee.safe_add(
 		fee_to_market.cast()?
 	)?;
-	market.amm.total_fee_minus_distributions =
-		market.amm.total_fee_minus_distributions.safe_add(fee_to_market.cast()?)?;
+	amm.total_fee_minus_distributions =
+		amm.total_fee_minus_distributions.safe_add(fee_to_market.cast()?)?;
 
 	controller::position::update_quote_asset_amount(
 		&mut taker.positions[taker_position_index],
@@ -2481,7 +2508,7 @@ pub fn fulfill_order_with_match(
 		Some(taker.orders[taker_order_index]),
 		Some(*maker_key),
 		Some(maker.orders[maker_order_index]),
-		oracle_map.get_price_data(&market.amm.oracle)?.price
+		oracle_map.get_price_data(&amm.oracle)?.price
 	)?;
 	emit_stack::<_, { OrderActionRecord::SIZE }>(order_action_record)?;
 
@@ -2498,29 +2525,6 @@ pub fn fulfill_order_with_match(
 		let market_position = &mut maker.positions[maker_position_index];
 		market_position.open_orders -= 1;
 	}
-
-	// TODO: custom token exchange - not sure where to place yet
-	// 1. Send tokens from maker to taker
-	controller::token::send_from_program_vault(
-		&market.amm.token,
-		maker_key,
-		taker_key,
-		&ctx.accounts.normal_signer,
-		nonce,
-		amount,
-		&market.amm.token_mint
-	);
-
-	// 2. Send tokens from taker to maker
-	controller::token::send_from_program_vault(
-		&market.amm.token,
-		taker_key,
-		maker_key,
-		&ctx.accounts.normal_signer,
-		nonce,
-		amount,
-		&market.amm.token_mint
-	);
 
 	Ok((
 		total_base_asset_amount,
@@ -2616,8 +2620,8 @@ pub fn trigger_order(
 		oracle_map.get_price_data_and_validity(
 			MarketType::Synthetic,
 			market.market_index,
-			&market.amm.oracle,
-			market.amm.historical_oracle_data.last_oracle_price_twap,
+			&amm.oracle,
+			amm.historical_oracle_data.last_oracle_price_twap,
 			market.get_max_confidence_interval_multiplier()?
 		)?;
 
@@ -2633,7 +2637,7 @@ pub fn trigger_order(
 	let oracle_too_divergent_with_twap_5min =
 		is_oracle_too_divergent_with_twap_5min(
 			oracle_price_data.price,
-			market.amm.historical_oracle_data.last_oracle_price_twap_5min,
+			amm.historical_oracle_data.last_oracle_price_twap_5min,
 			state.oracle_guard_rails.max_oracle_twap_5min_percent_divergence().cast()?
 		)?;
 
@@ -2840,7 +2844,6 @@ pub fn can_reward_user_with_pnl(
 		None => false,
 	}
 }
-
 
 pub fn pay_keeper_flat_reward(
 	user: &mut User,

@@ -52,7 +52,7 @@ pub fn calculate_base_asset_amount_for_amm_to_fulfill(
     market: &Market,
     limit_price: Option<u64>,
     override_fill_price: Option<u64>,
-    existing_base_asset_amount: i64,
+    existing_base_asset_amount: u64,
     fee_tier: &FeeTier
 ) -> NormalResult<(u64, Option<u64>)> {
     let limit_price = if let Some(override_fill_price) = override_fill_price {
@@ -134,7 +134,7 @@ pub fn calculate_base_asset_amount_to_fill_up_to_limit_price(
     order: &Order,
     market: &Market,
     limit_price: Option<u64>,
-    existing_base_asset_amount: Option<i64>
+    existing_base_asset_amount: Option<u64>
 ) -> NormalResult<u64> {
     let base_asset_amount_unfilled = order.get_base_asset_amount_unfilled(
         existing_base_asset_amount
