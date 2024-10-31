@@ -6,7 +6,11 @@ use borsh::{ BorshDeserialize, BorshSerialize };
 
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::constants::constants::{ AMM_RESERVE_PRECISION, FIVE_MINUTE, ONE_HOUR };
+use crate::constants::constants::{
+	AMM_RESERVE_PRECISION,
+	FIVE_MINUTE,
+	ONE_HOUR,
+};
 #[cfg(test)]
 use crate::constants::constants::PRICE_PRECISION_I64;
 use crate::math::safe_math::SafeMath;
@@ -124,8 +128,6 @@ pub struct Market {
 	/// The market's pnl pool. When users settle negative pnl, the balance increases.
 	/// When users settle positive pnl, the balance decreases. Can not go negative.
 	pub pnl_pool: PoolBalance,
-
-
 
 	/// Token
 	///

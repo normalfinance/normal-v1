@@ -238,8 +238,6 @@ pub struct UserFees {
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]
 pub struct Position {
-	/// User Synthetic Token account
-	pub token_account: Pubkey,
 	/// The amount of open bids the user has in this market
 	/// precision: BASE_PRECISION
 	pub open_bids: i64,
@@ -267,7 +265,8 @@ impl Position {
 		!self.is_open_position() && !self.has_open_order() && !self.is_lp()
 	}
 
-	pub fn base_asset_amount(&self) -> u64 {
+	pub fn base_asset_amount(&self, market_map: MarketMap) -> u64 {
+		
 		self.token_account.amount
 	}
 
@@ -529,10 +528,10 @@ pub struct Order {
 	/// At what price the order will be triggered. Only relevant for trigger orders
 	/// precision: PRICE_PRECISION
 	pub trigger_price: u64,
-	/// The start price for the auction. Only relevant for market/oracle orders
+	/// The start price for the auction. Only relevant for market orders
 	/// precision: PRICE_PRECISION
 	pub auction_start_price: i64,
-	/// The end price for the auction. Only relevant for market/oracle orders
+	/// The end price for the auction. Only relevant for market orders
 	/// precision: PRICE_PRECISION
 	pub auction_end_price: i64,
 	/// The time when the order will expire
@@ -658,7 +657,7 @@ impl Order {
 	/// Passing in an existing_position forces the function to consider the order's reduce only status
 	pub fn get_base_asset_amount_unfilled(
 		&self,
-		existing_position: Option<i64>
+		existing_position: Option<u64>
 	) -> NormalResult<u64> {
 		let base_asset_amount_unfilled = self.base_asset_amount.safe_sub(
 			self.base_asset_amount_filled

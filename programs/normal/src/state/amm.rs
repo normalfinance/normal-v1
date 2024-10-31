@@ -129,15 +129,24 @@ pub struct AMM {
 	///
 	/// oracle price data public key
 	pub oracle: Pubkey,
-	/// stores historically witnessed oracle data
-	pub historical_oracle_data: HistoricalOracleData,
 	/// the oracle provider information. used to decode/scale the oracle public key
 	pub oracle_source: OracleSource,
+
+	/// stores historically witnessed oracle data
+	pub historical_oracle_data: HistoricalOracleData,
 	/// the pct size of the oracle confidence interval
 	/// precision: PERCENTAGE_PRECISION
 	pub last_oracle_conf_pct: u64,
 	/// tracks whether the oracle was considered valid at the last AMM update
 	pub last_oracle_valid: bool,
+	/// the last seen oracle price partially shrunk toward the amm reserve price
+	/// precision: PRICE_PRECISION
+	pub last_oracle_normalised_price: i64,
+	/// the gap between the oracle price and the reserve price = y * peg_multiplier / x
+	pub last_oracle_reserve_price_spread_pct: i64,
+	/// estimate of standard deviation of the oracle price at each update
+	/// precision: PRICE_PRECISION
+	pub oracle_std: u64,
 
 	/// Base Reserve (Synthetic)
 	///
@@ -224,11 +233,6 @@ pub struct AMM {
 	/// precision: QUOTE_PRECISION
 	pub total_fee_withdrawn: u128,
 
-	/// the last seen oracle price partially shrunk toward the amm reserve price
-	/// precision: PRICE_PRECISION
-	pub last_oracle_normalised_price: i64,
-	/// the gap between the oracle price and the reserve price = y * peg_multiplier / x
-	pub last_oracle_reserve_price_spread_pct: i64,
 	/// average estimate of bid price over FIVE_MINUTES
 	/// precision: PRICE_PRECISION
 	pub last_bid_price_twap: u64,
@@ -273,9 +277,6 @@ pub struct AMM {
 	/// estimate of standard deviation of the fill (mark) prices
 	/// precision: PRICE_PRECISION
 	pub mark_std: u64,
-	/// estimate of standard deviation of the oracle price at each update
-	/// precision: PRICE_PRECISION
-	pub oracle_std: u64,
 	/// the last unix_timestamp the mark twap was updated
 	pub last_mark_price_twap_ts: i64,
 
