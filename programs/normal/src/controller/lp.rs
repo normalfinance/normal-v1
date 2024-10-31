@@ -9,15 +9,15 @@ use super::{
 };
 use crate::{
 	errors::ErrorCode,
-	math::{
+	math,
+	state::{ Position, PositionUpdate, NUM_REWARDS, * },
+};
+use crate::math::lp::{
 		get_amount_delta_a,
 		get_amount_delta_b,
 		sqrt_price_from_tick_index,
 		add_liquidity_delta,
 		checked_mul_shift_right,
-	},
-	state::*,
-	state::{ Position, PositionUpdate, NUM_REWARDS },
 };
 use amm::AMM;
 use anchor_lang::prelude::{ AccountLoader, * };

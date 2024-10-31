@@ -7,7 +7,7 @@ use crate::constants::constants::{
 	FEE_PERCENTAGE_DENOMINATOR,
 	MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND,
 };
-use crate::math::orca::MAX_PROTOCOL_FEE_RATE;
+use crate::math::lp::MAX_PROTOCOL_FEE_RATE;
 use crate::math::safe_math::SafeMath;
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;

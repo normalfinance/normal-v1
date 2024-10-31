@@ -5,7 +5,6 @@ pub mod auction;
 pub mod bn;
 pub mod casting;
 pub mod ceil_div;
-pub mod constants;
 pub mod cp_curve;
 pub mod fees;
 mod floor_div;
@@ -22,7 +21,7 @@ pub mod quote_asset;
 pub mod repeg;
 pub mod safe_math;
 pub mod safe_unwrap;
-pub mod orca;
+pub mod lp;
 
 pub mod balance;
 pub mod stats;
