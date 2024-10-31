@@ -487,7 +487,6 @@ pub mod normal {
 	///
 	/// ### Parameters
 	/// - `liquidity_amount` - The total amount of Liquidity the user is willing to deposit.
-	/// - `token_max_a` - The maximum amount of tokenA the user is willing to deposit.
 	/// - `token_max_b` - The maximum amount of tokenB the user is willing to deposit.
 	///
 	/// #### Special Errors
@@ -497,10 +496,9 @@ pub mod normal {
 	pub fn increase_liquidity(
 		ctx: Context<ModifyLiquidity>,
 		liquidity_amount: u128,
-		token_max_a: u64,
 		token_max_b: u64
 	) -> Result<()> {
-		handle_increase_liquidity(ctx, liquidity_amount, token_max_a, token_max_b)
+		handle_increase_liquidity(ctx, liquidity_amount, token_max_b)
 	}
 
 	/// Withdraw liquidity from a position in the AMM. This call also updates the position's accrued fees and rewards.
