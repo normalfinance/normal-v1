@@ -13,7 +13,6 @@ use crate::controller::position::{
 	decrease_open_bids_and_asks,
 	get_position_index,
 	increase_open_bids_and_asks,
-	update_lp_market_position,
 	update_position_and_market,
 	update_quote_asset_amount,
 	OrderSide,
@@ -1857,15 +1856,11 @@ pub fn fulfill_order_with_amm(
 	)?;
 
 	if liquidity_split != AMMLiquiditySplit::ProtocolOwned {
-		update_lp_market_position(
-			market,
-			&user_position_delta,
-			fee_to_market_for_lp.cast()?,
-			liquidity_split
-		)?;
+		// TODO: anything to update here?
 	}
 
-	if market.amm.user_lp_shares > 0 {
+	// TODO: do we need this logic if user_lp_shares has been removed?
+	if amm.user_lp_shares > 0 {
 		let (new_terminal_quote_reserve, new_terminal_base_reserve) =
 			crate::math::amm::calculate_terminal_reserves(&market.amm)?;
 		market.amm.terminal_quote_asset_reserve = new_terminal_quote_reserve;

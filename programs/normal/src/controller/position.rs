@@ -6,7 +6,10 @@ use crate::controller;
 use crate::controller::amm::SwapDirection;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::constants::constants::{ MAX_BASE_ASSET_AMOUNT_WITH_AMM, PERP_DECIMALS };
+use crate::constants::constants::{
+	MAX_BASE_ASSET_AMOUNT_WITH_AMM,
+	PERP_DECIMALS,
+};
 use crate::math::orders::{
 	calculate_quote_asset_amount_for_maker_order,
 	get_position_delta_for_fill,
@@ -168,66 +171,6 @@ pub fn update_position_and_market(
 		new_remainder_base_asset_amount.cast::<i32>()?;
 
 	Ok(pnl)
-}
-
-pub fn update_lp_market_position(
-	market: &mut Market,
-	delta: &PositionDelta,
-	fee_to_market: i128,
-	liquidity_split: AMMLiquiditySplit
-) -> NormalResult<i128> {
-	if
-		market.amm.user_lp_shares == 0 ||
-		liquidity_split == AMMLiquiditySplit::ProtocolOwned
-	{
-		return Ok(0); // no need to split with LP
-	}
-
-	let base_unit: i128 = market.amm.get_per_lp_base_unit()?;
-
-	let (per_lp_delta_base, per_lp_delta_quote, per_lp_fee) =
-		market.amm.calculate_per_lp_delta(
-			delta,
-			fee_to_market,
-			liquidity_split,
-			base_unit
-		)?;
-
-	market.amm.base_asset_amount_per_lp =
-		market.amm.base_asset_amount_per_lp.safe_add(-per_lp_delta_base)?;
-
-	market.amm.quote_asset_amount_per_lp =
-		market.amm.quote_asset_amount_per_lp.safe_add(-per_lp_delta_quote)?;
-
-	// track total fee earned by lps (to attribute breakdown of IL)
-	market.amm.total_fee_earned_per_lp =
-		market.amm.total_fee_earned_per_lp.saturating_add(per_lp_fee.cast()?);
-
-	// update per lp position
-	market.amm.quote_asset_amount_per_lp =
-		market.amm.quote_asset_amount_per_lp.safe_add(per_lp_fee)?;
-
-	let lp_delta_base = market.amm.calculate_lp_base_delta(
-		per_lp_delta_base,
-		base_unit
-	)?;
-	let lp_delta_quote = market.amm.calculate_lp_base_delta(
-		per_lp_delta_quote,
-		base_unit
-	)?;
-
-	market.amm.base_asset_amount_with_amm =
-		market.amm.base_asset_amount_with_amm.safe_sub(lp_delta_base)?;
-
-	market.amm.base_asset_amount_with_unsettled_lp =
-		market.amm.base_asset_amount_with_unsettled_lp.safe_add(lp_delta_base)?;
-
-	market.amm.quote_asset_amount_with_unsettled_lp =
-		market.amm.quote_asset_amount_with_unsettled_lp.safe_add(
-			lp_delta_quote.cast()?
-		)?;
-
-	Ok(lp_delta_base)
 }
 
 pub fn update_position_with_base_asset_amount(
