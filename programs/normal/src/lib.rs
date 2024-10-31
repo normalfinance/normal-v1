@@ -301,7 +301,7 @@ pub mod normal {
 	///
 	pub fn initialize_amm(
 		ctx: Context<InitializeAMM>,
-		bumps: WhirlpoolBumps,
+		bumps: AMMBumps,
 		tick_spacing: u16,
 		initial_sqrt_price: u128
 	) -> Result<()> {

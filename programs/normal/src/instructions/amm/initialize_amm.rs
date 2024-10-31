@@ -5,7 +5,7 @@ use crate::state::amm::AMM;
 
 #[derive(Accounts)]
 // now we don't use bumps, but we must list args in the same order to use tick_spacing arg.
-#[instruction(bumps: WhirlpoolBumps, tick_spacing: u16)]
+#[instruction(bumps: AMMBumps, tick_spacing: u16)]
 pub struct InitializeAMM<'info> {
 	pub token_mint_a: Account<'info, Mint>,
 	pub token_mint_b: Account<'info, Mint>,
@@ -51,7 +51,7 @@ pub struct InitializeAMM<'info> {
 
 pub fn handle_initialize_amm(
 	ctx: Context<InitializeAMM>,
-	_bumps: WhirlpoolBumps,
+	_bumps: AMMBumps,
 	tick_spacing: u16,
 	initial_sqrt_price: u128
 ) -> Result<()> {
@@ -64,7 +64,6 @@ pub fn handle_initialize_amm(
 	let bump = ctx.bumps.amm;
 
 	amm.initialize(
-		amms_config,
 		bump,
 		tick_spacing,
 		initial_sqrt_price,
