@@ -1,10 +1,8 @@
 pub mod amm;
-pub mod balance;
-pub mod index_fund;
-pub mod insurance;
-pub mod lp;
-pub mod orders;
+pub mod fund;
+pub mod liquidity;
 pub mod pda;
 pub mod position;
-pub mod repeg;
+pub mod swap;
+pub mod tick;
 pub mod token;

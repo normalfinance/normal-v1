@@ -38,22 +38,6 @@ pub fn can_sign_for_user(
 		})
 }
 
-pub fn is_stats_for_user(
-	user: &AccountLoader<User>,
-	user_stats: &AccountLoader<UserStats>
-) -> anchor_lang::Result<bool> {
-	let user = user.load()?;
-	let user_stats = user_stats.load()?;
-	Ok(user_stats.authority.eq(&user.authority))
-}
-
-pub fn market_valid(market: &AccountLoader<Market>) -> anchor_lang::Result<()> {
-	if market.load()?.status == MarketStatus::Delisted {
-		return Err(ErrorCode::MarketDelisted.into());
-	}
-	Ok(())
-}
-
 pub fn valid_oracle_for_market(
 	oracle: &AccountInfo,
 	market: &AccountLoader<Market>
@@ -68,13 +52,6 @@ pub fn valid_oracle_for_market(
 
 pub fn amm_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
 	if state.amm_paused()? {
-		return Err(ErrorCode::ExchangePaused.into());
-	}
-	Ok(())
-}
-
-pub fn fill_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
-	if state.get_exchange_status()?.contains(ExchangeStatus::FillPaused) {
 		return Err(ErrorCode::ExchangePaused.into());
 	}
 	Ok(())

@@ -295,8 +295,7 @@ fn is_transfer_memo_required(
 }
 
 pub fn is_supported_token_mint(
-	token_mint: &InterfaceAccount<'_, Mint>,
-	is_token_badge_initialized: bool
+	token_mint: &InterfaceAccount<'_, Mint>
 ) -> Result<bool> {
 	let token_mint_info = token_mint.to_account_info();
 
@@ -313,7 +312,7 @@ pub fn is_supported_token_mint(
 	}
 
 	// reject if mint has freeze_authority
-	if token_mint.freeze_authority.is_some() && !is_token_badge_initialized {
+	if token_mint.freeze_authority.is_some() {
 		return Ok(false);
 	}
 
@@ -347,26 +346,10 @@ pub fn is_supported_token_mint(
 				// ConfidentialTransferFeeConfig is also initialized to store encrypted transfer fee amount.
 			}
 			// supported if token badge is initialized
-			extension::ExtensionType::PermanentDelegate => {
-				if !is_token_badge_initialized {
-					return Ok(false);
-				}
-			}
-			extension::ExtensionType::TransferHook => {
-				if !is_token_badge_initialized {
-					return Ok(false);
-				}
-			}
-			extension::ExtensionType::MintCloseAuthority => {
-				if !is_token_badge_initialized {
-					return Ok(false);
-				}
-			}
+			extension::ExtensionType::PermanentDelegate => {}
+			extension::ExtensionType::TransferHook => {}
+			extension::ExtensionType::MintCloseAuthority => {}
 			extension::ExtensionType::DefaultAccountState => {
-				if !is_token_badge_initialized {
-					return Ok(false);
-				}
-
 				// reject if default state is not Initialized even if it has token badge
 				let default_state =
 					token_mint_unpacked.get_extension::<extension::default_account_state::DefaultAccountState>()?;

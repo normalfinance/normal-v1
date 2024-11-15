@@ -11,19 +11,19 @@ use super::{ transfer_from_owner_to_vault_v2, transfer_from_vault_to_owner_v2 };
 pub fn update_and_swap_amm_v2<'info>(
 	amm: &mut Account<'info, AMM>,
 	token_authority: &Signer<'info>,
-	token_mint_a: &InterfaceAccount<'info, Mint>,
-	token_mint_b: &InterfaceAccount<'info, Mint>,
-	token_owner_account_a: &InterfaceAccount<'info, TokenAccount>,
-	token_owner_account_b: &InterfaceAccount<'info, TokenAccount>,
-	token_vault_a: &InterfaceAccount<'info, TokenAccount>,
-	token_vault_b: &InterfaceAccount<'info, TokenAccount>,
+	token_mint_synthetic: &InterfaceAccount<'info, Mint>,
+	token_mint_quote: &InterfaceAccount<'info, Mint>,
+	token_owner_account_synthetic: &InterfaceAccount<'info, TokenAccount>,
+	token_owner_account_quote: &InterfaceAccount<'info, TokenAccount>,
+	token_vault_synthetic: &InterfaceAccount<'info, TokenAccount>,
+	token_vault_quote: &InterfaceAccount<'info, TokenAccount>,
 	transfer_hook_accounts_a: &Option<Vec<AccountInfo<'info>>>,
 	transfer_hook_accounts_b: &Option<Vec<AccountInfo<'info>>>,
-	token_program_a: &Interface<'info, TokenInterface>,
-	token_program_b: &Interface<'info, TokenInterface>,
+	token_program_synthetic: &Interface<'info, TokenInterface>,
+	token_program_quote: &Interface<'info, TokenInterface>,
 	memo_program: &Program<'info, Memo>,
 	swap_update: PostSwapUpdate,
-	is_token_fee_in_a: bool,
+	is_token_fee_in_synthetic: bool,
 	reward_last_updated_timestamp: u64,
 	memo: &[u8]
 ) -> Result<()> {
@@ -34,27 +34,27 @@ pub fn update_and_swap_amm_v2<'info>(
 		swap_update.next_fee_growth_global,
 		swap_update.next_reward_infos,
 		swap_update.next_protocol_fee,
-		is_token_fee_in_a,
+		is_token_fee_in_synthetic,
 		reward_last_updated_timestamp
 	);
 
 	perform_swap_v2(
 		amm,
 		token_authority,
-		token_mint_a,
-		token_mint_b,
-		token_owner_account_a,
-		token_owner_account_b,
-		token_vault_a,
-		token_vault_b,
+		token_mint_synthetic,
+		token_mint_quote,
+		token_owner_account_synthetic,
+		token_owner_account_quote,
+		token_vault_synthetic,
+		token_vault_quote,
 		transfer_hook_accounts_a,
 		transfer_hook_accounts_b,
-		token_program_a,
-		token_program_b,
+		token_program_synthetic,
+		token_program_quote,
 		memo_program,
-		swap_update.amount_a,
-		swap_update.amount_b,
-		is_token_fee_in_a,
+		swap_update.amount_synthetic,
+		swap_update.amount_quote,
+		is_token_fee_in_synthetic,
 		memo
 	)
 }
@@ -63,20 +63,20 @@ pub fn update_and_swap_amm_v2<'info>(
 fn perform_swap_v2<'info>(
 	amm: &Account<'info, AMM>,
 	token_authority: &Signer<'info>,
-	token_mint_a: &InterfaceAccount<'info, Mint>,
-	token_mint_b: &InterfaceAccount<'info, Mint>,
-	token_owner_account_a: &InterfaceAccount<'info, TokenAccount>,
-	token_owner_account_b: &InterfaceAccount<'info, TokenAccount>,
-	token_vault_a: &InterfaceAccount<'info, TokenAccount>,
-	token_vault_b: &InterfaceAccount<'info, TokenAccount>,
+	token_mint_synthetic: &InterfaceAccount<'info, Mint>,
+	token_mint_quote: &InterfaceAccount<'info, Mint>,
+	token_owner_account_synthetic: &InterfaceAccount<'info, TokenAccount>,
+	token_owner_account_quote: &InterfaceAccount<'info, TokenAccount>,
+	token_vault_synthetic: &InterfaceAccount<'info, TokenAccount>,
+	token_vault_quote: &InterfaceAccount<'info, TokenAccount>,
 	transfer_hook_accounts_a: &Option<Vec<AccountInfo<'info>>>,
 	transfer_hook_accounts_b: &Option<Vec<AccountInfo<'info>>>,
-	token_program_a: &Interface<'info, TokenInterface>,
-	token_program_b: &Interface<'info, TokenInterface>,
+	token_program_synthetic: &Interface<'info, TokenInterface>,
+	token_program_quote: &Interface<'info, TokenInterface>,
 	memo_program: &Program<'info, Memo>,
-	amount_a: u64,
-	amount_b: u64,
-	a_to_b: bool,
+	amount_synthetic: u64,
+	amount_quote: u64,
+	synthetic_to_quote: bool,
 	memo: &[u8]
 ) -> Result<()> {
 	// Transfer from user to pool
@@ -95,34 +95,34 @@ fn perform_swap_v2<'info>(
 	let withdrawal_transfer_hook_accounts;
 	let withdrawal_amount;
 
-	if a_to_b {
-		deposit_token_program = token_program_a;
-		deposit_mint = token_mint_a;
-		deposit_account_user = token_owner_account_a;
-		deposit_account_pool = token_vault_a;
+	if synthetic_to_quote {
+		deposit_token_program = token_program_synthetic;
+		deposit_mint = token_mint_synthetic;
+		deposit_account_user = token_owner_account_synthetic;
+		deposit_account_pool = token_vault_synthetic;
 		deposit_transfer_hook_accounts = transfer_hook_accounts_a;
-		deposit_amount = amount_a;
+		deposit_amount = amount_synthetic;
 
-		withdrawal_token_program = token_program_b;
-		withdrawal_mint = token_mint_b;
-		withdrawal_account_user = token_owner_account_b;
-		withdrawal_account_pool = token_vault_b;
+		withdrawal_token_program = token_program_quote;
+		withdrawal_mint = token_mint_quote;
+		withdrawal_account_user = token_owner_account_quote;
+		withdrawal_account_pool = token_vault_quote;
 		withdrawal_transfer_hook_accounts = transfer_hook_accounts_b;
-		withdrawal_amount = amount_b;
+		withdrawal_amount = amount_quote;
 	} else {
-		deposit_token_program = token_program_b;
-		deposit_mint = token_mint_b;
-		deposit_account_user = token_owner_account_b;
-		deposit_account_pool = token_vault_b;
+		deposit_token_program = token_program_quote;
+		deposit_mint = token_mint_quote;
+		deposit_account_user = token_owner_account_quote;
+		deposit_account_pool = token_vault_quote;
 		deposit_transfer_hook_accounts = transfer_hook_accounts_b;
-		deposit_amount = amount_b;
+		deposit_amount = amount_quote;
 
-		withdrawal_token_program = token_program_a;
-		withdrawal_mint = token_mint_a;
-		withdrawal_account_user = token_owner_account_a;
-		withdrawal_account_pool = token_vault_a;
+		withdrawal_token_program = token_program_synthetic;
+		withdrawal_mint = token_mint_synthetic;
+		withdrawal_account_user = token_owner_account_synthetic;
+		withdrawal_account_pool = token_vault_synthetic;
 		withdrawal_transfer_hook_accounts = transfer_hook_accounts_a;
-		withdrawal_amount = amount_a;
+		withdrawal_amount = amount_synthetic;
 	}
 
 	transfer_from_owner_to_vault_v2(
@@ -211,14 +211,14 @@ pub fn update_and_two_hop_swap_amm_v2<'info>(
 
 	// amount
 	let (input_amount, intermediate_amount) = if is_token_fee_in_one_a {
-		(swap_update_one.amount_a, swap_update_one.amount_b)
+		(swap_update_one.amount_synthetic, swap_update_one.amount_quote)
 	} else {
-		(swap_update_one.amount_b, swap_update_one.amount_a)
+		(swap_update_one.amount_quote, swap_update_one.amount_synthetic)
 	};
 	let output_amount = if is_token_fee_in_two_a {
-		swap_update_two.amount_b
+		swap_update_two.amount_quote
 	} else {
-		swap_update_two.amount_a
+		swap_update_two.amount_synthetic
 	};
 
 	transfer_from_owner_to_vault_v2(

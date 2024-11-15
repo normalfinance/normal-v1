@@ -1,22 +1,29 @@
+use std::ptr::null;
+
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ Token, TokenAccount };
 
 use crate::{ manager::swap_manager::PostSwapUpdate, state::amm::AMM };
 
-use super::{ transfer_from_owner_to_vault, transfer_from_vault_to_owner };
+use super::{
+	mint_synthetic_to_vault,
+	transfer_from_owner_to_vault,
+	transfer_from_vault_to_owner,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn update_and_swap_amm<'info>(
 	amm: &mut Account<'info, AMM>,
 	token_authority: &Signer<'info>,
-	token_owner_account_a: &Account<'info, TokenAccount>,
-	token_owner_account_b: &Account<'info, TokenAccount>,
-	token_vault_a: &Account<'info, TokenAccount>,
-	token_vault_b: &Account<'info, TokenAccount>,
+	token_owner_account_synthetic: &Account<'info, TokenAccount>,
+	token_owner_account_quote: &Account<'info, TokenAccount>,
+	token_vault_synthetic: &Account<'info, TokenAccount>,
+	token_vault_quote: &Account<'info, TokenAccount>,
 	token_program: &Program<'info, Token>,
 	swap_update: PostSwapUpdate,
-	is_token_fee_in_a: bool,
-	reward_last_updated_timestamp: u64
+	is_token_fee_in_synthetic: bool,
+	reward_last_updated_timestamp: u64,
+	inside_range: bool
 ) -> Result<()> {
 	amm.update_after_swap(
 		swap_update.next_liquidity,
@@ -25,21 +32,22 @@ pub fn update_and_swap_amm<'info>(
 		swap_update.next_fee_growth_global,
 		swap_update.next_reward_infos,
 		swap_update.next_protocol_fee,
-		is_token_fee_in_a,
+		is_token_fee_in_synthetic,
 		reward_last_updated_timestamp
 	);
 
 	perform_swap(
 		amm,
 		token_authority,
-		token_owner_account_a,
-		token_owner_account_b,
-		token_vault_a,
-		token_vault_b,
+		token_owner_account_synthetic,
+		token_owner_account_quote,
+		token_vault_synthetic,
+		token_vault_quote,
 		token_program,
-		swap_update.amount_a,
-		swap_update.amount_b,
-		is_token_fee_in_a
+		swap_update.amount_synthetic,
+		swap_update.amount_quote,
+		is_token_fee_in_synthetic,
+		inside_range
 	)
 }
 
@@ -47,14 +55,15 @@ pub fn update_and_swap_amm<'info>(
 fn perform_swap<'info>(
 	amm: &Account<'info, AMM>,
 	token_authority: &Signer<'info>,
-	token_owner_account_a: &Account<'info, TokenAccount>,
-	token_owner_account_b: &Account<'info, TokenAccount>,
-	token_vault_a: &Account<'info, TokenAccount>,
-	token_vault_b: &Account<'info, TokenAccount>,
+	token_owner_account_synthetic: &Account<'info, TokenAccount>,
+	token_owner_account_quote: &Account<'info, TokenAccount>,
+	token_vault_synthetic: &Account<'info, TokenAccount>,
+	token_vault_quote: &Account<'info, TokenAccount>,
 	token_program: &Program<'info, Token>,
-	amount_a: u64,
-	amount_b: u64,
-	a_to_b: bool
+	amount_synthetic: u64,
+	amount_quote: u64,
+	synthetic_to_quote: bool,
+	inside_range: bool
 ) -> Result<()> {
 	// Transfer from user to pool
 	let deposit_account_user;
@@ -66,23 +75,39 @@ fn perform_swap<'info>(
 	let withdrawal_account_pool;
 	let withdrawal_amount;
 
-	if a_to_b {
-		deposit_account_user = token_owner_account_a;
-		deposit_account_pool = token_vault_a;
-		deposit_amount = amount_a;
+	if synthetic_to_quote {
+		deposit_account_user = token_owner_account_synthetic;
+		deposit_account_pool = token_vault_synthetic;
+		deposit_amount = amount_synthetic;
 
-		withdrawal_account_user = token_owner_account_b;
-		withdrawal_account_pool = token_vault_b;
-		withdrawal_amount = amount_b;
+		withdrawal_account_user = token_owner_account_quote;
+		withdrawal_account_pool = token_vault_quote;
+		withdrawal_amount = amount_quote;
 	} else {
-		deposit_account_user = token_owner_account_b;
-		deposit_account_pool = token_vault_b;
-		deposit_amount = amount_b;
+		deposit_account_user = token_owner_account_quote;
+		deposit_account_pool = token_vault_quote;
+		deposit_amount = amount_quote;
 
-		withdrawal_account_user = token_owner_account_a;
-		withdrawal_account_pool = token_vault_a;
-		withdrawal_amount = amount_a;
+		// Only send synthetic tokens from the vault if inside the range,
+		// otherwise we mint new synthetic tokens to the user
+		if inside_range {
+			withdrawal_account_pool = token_vault_synthetic;
+		}
+
+		withdrawal_account_user = token_owner_account_synthetic;
+		withdrawal_amount = amount_synthetic;
 	}
+
+	// Mint synthetic tokens instead of using LP if outside range
+	if withdrawal_account_pool == null() {
+		mint_synthetic_to_owner(
+			authority,
+			token_owner_account,
+			token_vault,
+			token_program,
+			amount
+		);
+	} 
 
 	transfer_from_owner_to_vault(
 		token_authority,
@@ -99,6 +124,9 @@ fn perform_swap<'info>(
 		token_program,
 		withdrawal_amount
 	)?;
+
+	ctx.output_vault.reload()?;
+    ctx.input_vault.reload()?;
 
 	Ok(())
 }

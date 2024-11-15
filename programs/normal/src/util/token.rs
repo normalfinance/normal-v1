@@ -69,6 +69,17 @@ pub fn mint_synthetic_to_vault<'info>(
 	Ok(())
 }
 
+pub fn mint_synthetic_to_owner<'info>(
+	authority: &Signer<'info>,
+	token_owner_account: &Account<'info, TokenAccount>,
+	token_vault: &Account<'info, TokenAccount>,
+	token_program: &Program<'info, Token>,
+	amount: u64
+) -> Result<()> {
+	mint_synthetic_token(amm, mint, token_vault, token_program)?;
+	Ok(())
+}
+
 fn mint_synthetic_token<'info>(
 	amm: &Account<'info, AMM>,
 	mint: &Account<'info, Mint>,
@@ -285,7 +296,7 @@ pub fn mint_position_token_with_metadata_and_remove_authority<'info>(
 		None
 	)?;
 
-	remove_position_token_mint_authority(amm, position_mint, token_program)
+	remove_position_token_mint_syntheticuthority(amm, position_mint, token_program)
 }
 
 fn mint_position_token<'info>(
@@ -352,7 +363,7 @@ pub fn mint_position_bundle_token_and_remove_authority<'info>(
 		token_program,
 		position_bundle_seeds
 	)?;
-	remove_position_bundle_token_mint_authority(
+	remove_position_bundle_token_mint_syntheticuthority(
 		position_bundle,
 		position_bundle_mint,
 		token_program,
@@ -420,7 +431,7 @@ pub fn mint_position_bundle_token_with_metadata_and_remove_authority<'info>(
 		None
 	)?;
 
-	remove_position_bundle_token_mint_authority(
+	remove_position_bundle_token_mint_syntheticuthority(
 		position_bundle,
 		position_bundle_mint,
 		token_program,
@@ -456,7 +467,7 @@ fn mint_position_bundle_token<'info>(
 	Ok(())
 }
 
-fn remove_position_bundle_token_mint_authority<'info>(
+fn remove_position_bundle_token_mint_syntheticuthority<'info>(
 	position_bundle: &Account<'info, LiquidityPositionBundle>,
 	position_bundle_mint: &Account<'info, Mint>,
 	token_program: &Program<'info, Token>,
