@@ -17,6 +17,12 @@ use super::oracle::{ HistoricalOracleData, OracleSource };
 pub struct AMM {
 	pub amm_bump: [u8; 1],
 
+	/// the pubkey of the collateral Vault backing the value of the pool’s synthetic asset
+	pub vault: Pubkey,
+	/// the authority that can push or pull quote asset tokens to/from the Vault when price exceed the max_price_deviance
+	pub vault_balance_authority: Pubkey,
+	
+
 	/// Tokens
 	///
 	/// Mint for the synthetic token
@@ -55,6 +61,14 @@ pub struct AMM {
 	/// precision: PRICE_PRECISION
 	pub oracle_std: u64,
 
+	/// Peg
+	/// 
+	/// the maximum percent the pool price can deviate above or below the oracle twap
+	pub max_price_deviance: u16,
+	/// volume divided by synthetic token market cap (how much volume is created per $1 of liquidity)
+	pub liquidity_to_volume_multiplier: u64,
+
+
 	/// Liquidity
 	///
 	pub tick_spacing: u16,
@@ -73,17 +87,14 @@ pub struct AMM {
 	pub fee_rate: u16,
 	// Portion of fee rate taken stored as basis points
 	pub protocol_fee_rate: u16,
+	/// portion of the fee rate sent to the Insurance Fund as basis points
+	pub insurance_fund_fee_rate: u16,
 
 	pub fee_growth_global_synthetic: u128,
 	pub fee_growth_global_quote: u128,
 
 	pub protocol_fee_owed_synthetic: u64,
 	pub protocol_fee_owed_quote: u64,
-
-	/// The percentage of fees the insurance fund receives
-	pub insurance_fund_fee_pct: u32,
-	/// The percentage of fees used to burn gov tokens
-	pub gov_token_burn_fee_pct: u32,
 
 	/// Rewards
 	///

@@ -73,7 +73,7 @@ use crate::{ math_error, SPOT_BALANCE_PRECISION };
 
 #[access_control(
     market_valid(&ctx.accounts.market)
-    valid_oracle_for_market(&ctx.accounts.oracle, &ctx.accounts.market)
+    valid_oracle_for_amm(&ctx.accounts.oracle, &ctx.accounts.market)
 )]
 pub fn handle_update_amm_oracle_twap(ctx: Context<RepegCurve>) -> Result<()> {
 	// allow update to amm's oracle twap iff price gap is reduced and thus more tame funding
@@ -141,7 +141,7 @@ pub fn handle_update_amm_oracle_twap(ctx: Context<RepegCurve>) -> Result<()> {
 
 #[access_control(
     market_valid(&ctx.accounts.market)
-    valid_oracle_for_market(&ctx.accounts.oracle, &ctx.accounts.market)
+    valid_oracle_for_amm(&ctx.accounts.oracle, &ctx.accounts.market)
 )]
 pub fn handle_reset_amm_oracle_twap(ctx: Context<RepegCurve>) -> Result<()> {
 	// admin failsafe to reset amm oracle_twap to the mark_twap

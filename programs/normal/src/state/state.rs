@@ -21,33 +21,32 @@ use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
 #[repr(C)]
 pub struct State {
 	pub admin: Pubkey,
-
 	pub signer: Pubkey,
 	// rules for validating oracle price data
 	pub oracle_guard_rails: OracleGuardRails,
 	// prevents transaction from being reused or replayed
 	pub signer_nonce: u8,
-	// the current status of all pools
+	pub min_collateral_auction_duration: u8,
+	pub default_auction_duration: u8,
 	pub exchange_status: u8,
-
 	// account able to update and collect protocol fees
-	pub fee_authority: Pubkey,
-	// account with permissions to collect protocol pool fees
-	pub collect_protocol_fees_authority: Pubkey,
-	// account permissioned to manage pool rewards and emissions
-	pub reward_emissions_super_authority: Pubkey,
-	// the fallback protocol fee for pool swaps
-	pub default_protocol_fee_rate: u16,
-
+	// pub fee_authority: Pubkey,
+	// // account with permissions to collect protocol pool fees
+	// pub collect_protocol_fees_authority: Pubkey,
+	// // account permissioned to manage pool rewards and emissions
+	// pub reward_emissions_super_authority: Pubkey,
+	// // the fallback protocol fee for pool swaps
+	// pub default_protocol_fee_rate: u16,
 	pub padding: [u8; 10],
 }
 
 #[derive(BitFlags, Clone, Copy, PartialEq, Debug, Eq)]
 pub enum ExchangeStatus {
-	Active = 0b00000000,
-	AmmPaused = 0b00000001,
-	FillPaused = 0b00000010,
-	Paused = 0b11111111,
+	// Active = 0b00000000
+	DepositPaused = 0b00000001,
+	WithdrawPaused = 0b00000010,
+	LiqPaused = 0b00000100,
+	// Paused = 0b11111111
 }
 
 impl ExchangeStatus {
@@ -57,13 +56,13 @@ impl ExchangeStatus {
 }
 
 impl State {
-	pub fn get_exchange_status(&self) -> NormalResult<BitFlags<ExchangeStatus>> {
+	pub fn get_exchange_status(&self) -> DriftResult<BitFlags<ExchangeStatus>> {
 		BitFlags::<ExchangeStatus>
 			::from_bits(usize::from(self.exchange_status))
 			.safe_unwrap()
 	}
 
-	pub fn amm_paused(&self) -> NormalResult<bool> {
+	pub fn amm_paused(&self) -> DriftResult<bool> {
 		Ok(self.get_exchange_status()?.contains(ExchangeStatus::AmmPaused))
 	}
 
@@ -76,21 +75,6 @@ impl State {
 		collect_protocol_fees_authority: Pubkey
 	) {
 		self.collect_protocol_fees_authority = collect_protocol_fees_authority;
-	}
-
-	pub fn initialize(
-		&mut self,
-		fee_authority: Pubkey,
-		collect_protocol_fees_authority: Pubkey,
-		reward_emissions_super_authority: Pubkey,
-		default_protocol_fee_rate: u16
-	) -> Result<()> {
-		self.fee_authority = fee_authority;
-		self.collect_protocol_fees_authority = collect_protocol_fees_authority;
-		self.reward_emissions_super_authority = reward_emissions_super_authority;
-		self.update_default_protocol_fee_rate(default_protocol_fee_rate)?;
-
-		Ok(())
 	}
 
 	pub fn update_reward_emissions_super_authority(

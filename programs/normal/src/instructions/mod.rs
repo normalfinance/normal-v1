@@ -4,6 +4,9 @@ pub use amm::*;
 pub use oracle::*;
 pub use fund::*;
 pub use initialize;
+pub use vault_config::*;
+pub use vault::*;
+pub use keeper::*;
 
 mod admin;
 mod constraints;
@@ -12,3 +15,6 @@ mod amm;
 mod oracle;
 mod fund;
 mod initialize;
+mod vault_config;
+mod vault;
+mod keeper;

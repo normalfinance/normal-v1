@@ -46,50 +46,51 @@ pub enum WeightingMethod {
 	SquareRootMarketCap,
 }
 
+#[derive(
+	Clone,
+	Copy,
+	BorshSerialize,
+	BorshDeserialize,
+	PartialEq,
+	Debug,
+	Eq,
+	Default
+)]
+pub enum IndexFundVisibility {
+	#[default]
+	Private, // mutable
+	Public, // immutable
+}
+
 #[derive(Default, PartialEq, Debug)]
-pub struct FundAsset {
-	/// The index of the market for this asset
-	pub market_index: u16,
-	/// The asset's allocation in basis points (i.e 10% = 1000)
+pub struct IndexFundAsset {
+	pub asset: [u8; 6],
+	pub oracle: Pubkey,
+	/// The asset's allocation in basis points
 	pub weight: u16,
 }
 
-pub(crate) type FundAssets = BTreeMap<Pubkey, FundAsset>;
+pub(crate) type IndexFundAssets = BTreeMap<Pubkey, IndexFundAsset>;
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct Fund {
-	/// The address of the market. It is a pda of the market index
+	/// The address of the fund. It is a pda of the market index
 	pub pubkey: Pubkey,
-
 	pub admin: Pubkey,
-
+	pub vault: Pubkey,
+	pub amm: Pubkey,
 	/// The encoded display name for the index fund e.g. Top 10 Index
 	pub name: [u8; 32],
-
-	/// Oracle
-	///
-	/// The oracle used to price the markets deposits/borrows
-	pub oracle: Pubkey,
-	pub oracle_source: OracleSource,
-
 	pub weighting_method: WeightingMethod,
-
-	pub assets: FundAssets,
-
-	/// The visibility of the index fund; public = immutable, global; private = mutable, local
-	pub public: bool,
-
-	/// Fees
-	///
-	/// Total taker fee paid (in BPS)
+	pub assets: IndexFundAssets,
+	/// The visibility of the index fund
+	pub visbility: IndexFundVisibility,
+	/// Total taker fee paid in basis points
 	/// precision: QUOTE_PRECISION
 	pub manager_fee: u64,
 	/// Total manager fee paid
 	/// precision: QUOTE_PRECISION
 	pub total_manager_fees: u64,
-
-	/// Timestamps
-
 	pub min_rebalance_ts: i64,
 	pub rebalanced_ts: i64,
 	pub updated_ts: i64,
@@ -120,15 +121,18 @@ impl Fund {
 			.sum::<u8>()
 	}
 
-	pub fn update_visibility(&mut self, is_public: bool) -> bool {
+	pub fn update_visibility(
+		&mut self,
+		new_visibility: IndexFundVisibility
+	) -> bool {
 		// TODO:
 		let third_party_investors = true;
 
-		if self.public && third_party_investors {
+		if self.visbility && third_party_investors {
 			msg!("Publc index funds cannot be updated");
 			return Ok(false);
 		}
-		self.public = is_public;
+		self.visbility = new_visibility;
 	}
 
 	pub fn update_asset_weight(
