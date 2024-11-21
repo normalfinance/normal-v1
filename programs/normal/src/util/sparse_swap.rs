@@ -39,9 +39,9 @@ impl<'a> ProxiedTickArray<'a> {
 		&self,
 		tick_index: i32,
 		tick_spacing: u16,
-		a_to_b: bool
+		synthetic_to_quote: bool
 	) -> Result<Option<i32>> {
-		self.as_ref().get_next_init_tick_index(tick_index, tick_spacing, a_to_b)
+		self.as_ref().get_next_init_tick_index(tick_index, tick_spacing, synthetic_to_quote)
 	}
 
 	pub fn get_tick(&self, tick_index: i32, tick_spacing: u16) -> Result<&Tick> {
@@ -121,7 +121,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 	///
 	/// # Parameters
 	/// - `amm` - AMM account
-	/// - `a_to_b` - Direction of the swap
+	/// - `synthetic_to_quote` - Direction of the swap
 	/// - `static_tick_array_account_infos` - TickArray accounts provided through required accounts
 	/// - `supplemental_tick_array_account_infos` - TickArray accounts provided through remaining accounts
 	///
@@ -134,7 +134,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 	/// - `AccountDiscriminatorMismatch` - If the provided TickArray account has a mismatched discriminator
 	pub fn try_from(
 		amm: &Account<'info, AMM>,
-		a_to_b: bool,
+		synthetic_to_quote: bool,
 		static_tick_array_account_infos: Vec<AccountInfo<'info>>,
 		supplemental_tick_array_account_infos: Option<Vec<AccountInfo<'info>>>
 	) -> Result<Self> {
@@ -186,7 +186,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 			}
 		}
 
-		let start_tick_indexes = get_start_tick_indexes(amm, a_to_b);
+		let start_tick_indexes = get_start_tick_indexes(amm, synthetic_to_quote);
 
 		let mut tick_array_accounts: Vec<TickArrayAccount> = vec![];
 		for start_tick_index in start_tick_indexes.iter() {
@@ -332,7 +332,7 @@ fn peek_tick_array(
 	})
 }
 
-fn get_start_tick_indexes(amm: &Account<AMM>, a_to_b: bool) -> Vec<i32> {
+fn get_start_tick_indexes(amm: &Account<AMM>, synthetic_to_quote: bool) -> Vec<i32> {
 	let tick_current_index = amm.tick_current_index;
 	let tick_spacing_u16 = amm.tick_spacing;
 	let tick_spacing_i32 = amm.tick_spacing as i32;
@@ -340,7 +340,7 @@ fn get_start_tick_indexes(amm: &Account<AMM>, a_to_b: bool) -> Vec<i32> {
 
 	let start_tick_index_base =
 		floor_division(tick_current_index, ticks_in_array) * ticks_in_array;
-	let offset = if a_to_b {
+	let offset = if synthetic_to_quote {
 		[0, -1, -2]
 	} else {
 		let shifted =

@@ -1,129 +1,42 @@
+use crate::{
+	errors::ErrorCode,
+	math::{
+		tick_index_from_sqrt_price,
+		MAX_FEE_RATE,
+		MAX_PROTOCOL_FEE_RATE,
+		MAX_SQRT_PRICE_X64,
+		MIN_SQRT_PRICE_X64,
+	},
+};
 use anchor_lang::prelude::*;
 
-use anchor_lang::prelude::*;
+use super::oracle::{ HistoricalOracleData, OracleSource };
 
-use std::cmp::max;
-
-use crate::controller::position::{ PositionDelta, OrderSide };
-use crate::error::{ NormalResult, ErrorCode };
-use crate::math::amm;
-use crate::math::casting::Cast;
-#[cfg(test)]
-use crate::constants::constants::{
-	AMM_RESERVE_PRECISION,
-	MAX_CONCENTRATION_COEFFICIENT,
-	PRICE_PRECISION_I64,
-};
-use crate::constants::constants::{
-	AMM_RESERVE_PRECISION_I128,
-	AMM_TO_QUOTE_PRECISION_RATIO,
-	BID_ASK_SPREAD_PRECISION,
-	BID_ASK_SPREAD_PRECISION_U128,
-	LP_FEE_SLICE_DENOMINATOR,
-	LP_FEE_SLICE_NUMERATOR,
-	PEG_PRECISION,
-	PERCENTAGE_PRECISION,
-	PERCENTAGE_PRECISION_I128,
-	PERCENTAGE_PRECISION_I64,
-	PERCENTAGE_PRECISION_U64,
-	PRICE_PRECISION,
-	TWENTY_FOUR_HOUR,
-};
-use crate::math::helpers::get_proportion_i128;
-use crate::math::margin::{
-	calculate_size_discount_asset_weight,
-	calculate_size_premium_liability_weight,
-	MarginRequirementType,
-};
-use crate::math::safe_math::SafeMath;
-use crate::math::stats;
-use crate::state::events::OrderActionExplanation;
-use crate::util::initialize_synthetic_token;
-use num_integer::Roots;
-
-use crate::state::oracle::{ HistoricalOracleData, OracleSource };
-use crate::state::market::PoolBalance;
-use crate::controller::position::{ OrderSide, PositionDelta };
-
-// use normal_macros::assert_no_slop;
-
-#[derive(
-	Clone,
-	Copy,
-	BorshSerialize,
-	BorshDeserialize,
-	PartialEq,
-	Debug,
-	Eq,
-	PartialOrd,
-	Ord
-)]
-pub enum AMMLiquiditySplit {
-	ProtocolOwned,
-	LPOwned,
-	Shared,
-}
-
-impl AMMLiquiditySplit {
-	pub fn get_order_action_explanation(&self) -> OrderActionExplanation {
-		match &self {
-			AMMLiquiditySplit::ProtocolOwned =>
-				OrderActionExplanation::OrderFilledWithAMMJit,
-			AMMLiquiditySplit::LPOwned =>
-				OrderActionExplanation::OrderFilledWithLPJit,
-			AMMLiquiditySplit::Shared =>
-				OrderActionExplanation::OrderFilledWithAMMJitLPSplit,
-		}
-	}
-}
-
-// Number of rewards supported by AMMs
-pub const NUM_REWARDS: usize = 3;
-
-#[assert_no_slop]
-#[zero_copy(unsafe)]
-#[derive(Debug, PartialEq, Eq)]
-#[repr(C)]
+#[account]
+#[derive(Default)]
 pub struct AMM {
-	/// Orca
+	pub amm_bump: [u8; 1],
+
+	/// the pubkey of the collateral Vault backing the value of the pool’s synthetic asset
+	pub vault: Pubkey,
+	/// the authority that can push or pull quote asset tokens to/from the Vault when price exceed the max_price_deviance
+	pub vault_balance_authority: Pubkey,
+	
+
+	/// Tokens
 	///
+	/// Mint for the synthetic token
+	pub token_mint_synthetic: Pubkey,
+	/// Mint for the quote token (SOL, XLM, USDC)
+	pub token_mint_quote: Pubkey,
 
-	pub amm_bump: [u8; 1],   // 1
+	/// Vault storing synthetic tokens
+	pub token_vault_synthetic: Pubkey,
+	/// Vault storing quote tokens (SOL, XLM, USDC)
+	pub token_vault_quote: Pubkey,
 
-	pub token_mint_a: Pubkey, // 32
-	pub token_vault_a: Pubkey, // 32
 
-	pub token_mint_b: Pubkey, // 32
-	pub token_vault_b: Pubkey, // 32
-
-	pub tick_spacing: u16, // 2
-	pub tick_spacing_seed: [u8; 2], // 2
-
-	// Stored as hundredths of a basis point
-	// u16::MAX corresponds to ~6.5%
-	pub fee_rate: u16, // 2
-
-	// Portion of fee rate taken stored as basis points
-	pub protocol_fee_rate: u16, // 2
-
-	// Maximum amount that can be held by Solana account
-	pub liquidity: u128, // 16
-
-	// MAX/MIN at Q32.64, but using Q64.64 for rounder bytes
-	// Q64.64
-	pub sqrt_price: u128, // 16
-	pub tick_current_index: i32, // 4
-
-	pub protocol_fee_owed_a: u64, // 8
-	pub protocol_fee_owed_b: u64, // 8
-
-	// Q64.64
-	pub fee_growth_global_a: u128, // 16
-	pub fee_growth_global_b: u128, // 16
-
-	pub reward_last_updated_timestamp: u64, // 8
-
-	pub reward_infos: [AMMRewardInfo; NUM_REWARDS], // 384
+	pub risk_tier: SyntheticTier,
 
 	/// Oracle
 	///
@@ -131,9 +44,9 @@ pub struct AMM {
 	pub oracle: Pubkey,
 	/// the oracle provider information. used to decode/scale the oracle public key
 	pub oracle_source: OracleSource,
-
 	/// stores historically witnessed oracle data
 	pub historical_oracle_data: HistoricalOracleData,
+	pub historical_index_data: HistoricalIndexData,
 	/// the pct size of the oracle confidence interval
 	/// precision: PERCENTAGE_PRECISION
 	pub last_oracle_conf_pct: u64,
@@ -148,261 +61,103 @@ pub struct AMM {
 	/// precision: PRICE_PRECISION
 	pub oracle_std: u64,
 
-	/// Base Reserve (Synthetic)
+	/// Peg
+	/// 
+	/// the maximum percent the pool price can deviate above or below the oracle twap
+	pub max_price_deviance: u16,
+	/// volume divided by synthetic token market cap (how much volume is created per $1 of liquidity)
+	pub liquidity_to_volume_multiplier: u64,
+
+
+	/// Liquidity
 	///
-	/// `x` reserves for constant product mm formula (x * y = k)
-	/// precision: AMM_RESERVE_PRECISION
-	pub base_asset_reserve: u128,
-	/// transformed base_asset_reserve for users buying
-	/// precision: AMM_RESERVE_PRECISION
-	pub ask_base_asset_reserve: u128,
-	/// transformed base_asset_reserve for users selling
-	/// precision: AMM_RESERVE_PRECISION
-	pub bid_base_asset_reserve: u128,
-
-	/// Quote Reserve (SOL and USDC)
-	///
-	/// `y` reserves for constant product mm formula (x * y = k)
-	/// precision: AMM_RESERVE_PRECISION
-	pub quote_asset_reserve: u128,
-	/// transformed quote_asset_reserve for users buying
-	/// precision: AMM_RESERVE_PRECISION
-	pub ask_quote_asset_reserve: u128,
-	/// transformed quote_asset_reserve for users selling
-	/// precision: AMM_RESERVE_PRECISION
-	pub bid_quote_asset_reserve: u128,
-
-	/// determines how close the min/max base asset reserve sit vs base reserves
-	/// allow for decreasing slippage without increasing liquidity and v.v.
-	/// precision: PERCENTAGE_PRECISION
-	pub concentration_coef: u128,
-	/// minimum base_asset_reserve allowed before AMM is unavailable
-	/// precision: AMM_RESERVE_PRECISION
-	pub min_base_asset_reserve: u128,
-	/// maximum base_asset_reserve allowed before AMM is unavailable
-	/// precision: AMM_RESERVE_PRECISION
-	pub max_base_asset_reserve: u128,
-	/// `sqrt(k)` in constant product mm formula (x * y = k). stored to avoid drift caused by integer math issues
-	/// precision: AMM_RESERVE_PRECISION
-	pub sqrt_k: u128,
-	/// normalizing numerical factor for y, its use offers lowest slippage in cp-curve when market is balanced
-	/// precision: PEG_PRECISION
-	pub peg_multiplier: u128,
-	/// y when market is balanced. stored to save computation
-	/// precision: AMM_RESERVE_PRECISION
-	pub terminal_quote_asset_reserve: u128,
-
-	/// Base Asset (Synthetic)
-	///
-	/// always non-negative. tracks number of total longs in market (regardless of counterparty)
-	/// precision: BASE_PRECISION
-	pub base_asset_amount_long: i128,
-	/// tracks net position (longs-shorts) in market with AMM as counterparty
-	/// precision: BASE_PRECISION
-	pub base_asset_amount_with_amm: i128,
-	/// tracks net position (longs-shorts) in market with LPs as counterparty
-	/// precision: BASE_PRECISION
-	pub base_asset_amount_with_unsettled_lp: i128,
-
-	/// max allowed open interest, blocks trades that breach this value
-	/// precision: BASE_PRECISION
-	pub max_open_interest: u128,
-
-	/// Quote Asset (SOL and USDC)
-	///
-	/// sum of all user's quote_asset_amount in market
-	/// precision: QUOTE_PRECISION
-	pub quote_asset_amount: i128,
+	pub tick_spacing: u16,
+	pub tick_spacing_seed: [u8; 2],
+	pub tick_current_index: i32,
+	// Maximum amount that can be held by Solana account
+	pub liquidity: u128,
+	// MAX/MIN at Q32.64, but using Q64.64 for rounder bytes
+	// Q64.64
+	pub sqrt_price: u128,
 
 	/// Fees
 	///
-	pub fee_pool: PoolBalance,
-	/// total fees collected by this market
-	/// precision: QUOTE_PRECISION
-	pub total_fee: i128,
-	/// total fees collected by the vAMM's bid/ask spread
-	/// precision: QUOTE_PRECISION
-	pub total_mm_fee: i128,
-	/// total fees collected by exchange fee schedule
-	/// precision: QUOTE_PRECISION
-	pub total_exchange_fee: u128,
-	/// total fees minus any recognized upnl and pool withdraws
-	/// precision: QUOTE_PRECISION
-	pub total_fee_minus_distributions: i128,
-	/// sum of all fees from fee pool withdrawn to revenue pool
-	/// precision: QUOTE_PRECISION
-	pub total_fee_withdrawn: u128,
+	// Stored as hundredths of a basis point
+	// u16::MAX corresponds to ~6.5%
+	pub fee_rate: u16,
+	// Portion of fee rate taken stored as basis points
+	pub protocol_fee_rate: u16,
+	/// portion of the fee rate sent to the Insurance Fund as basis points
+	pub insurance_fund_fee_rate: u16,
 
-	/// average estimate of bid price over FIVE_MINUTES
-	/// precision: PRICE_PRECISION
-	pub last_bid_price_twap: u64,
-	/// average estimate of ask price over FIVE_MINUTES
-	/// precision: PRICE_PRECISION
-	pub last_ask_price_twap: u64,
-	/// average estimate of (bid+ask)/2 price over FIVE_MINUTES
-	/// precision: PRICE_PRECISION
-	pub last_mark_price_twap: u64,
-	/// the last blockchain slot the amm was updated
-	pub last_update_slot: u64,
+	pub fee_growth_global_synthetic: u128,
+	pub fee_growth_global_quote: u128,
 
-	/// the base step size (increment) of orders
-	/// precision: BASE_PRECISION
-	pub order_step_size: u64,
-	/// the price tick size of orders
-	/// precision: PRICE_PRECISION
-	pub order_tick_size: u64,
-	/// the minimum base size of an order
-	/// precision: BASE_PRECISION
-	pub min_order_size: u64,
-	/// the max base size a single user can have
-	/// precision: BASE_PRECISION
-	pub max_position_size: u64,
+	pub protocol_fee_owed_synthetic: u64,
+	pub protocol_fee_owed_quote: u64,
 
-	/// Volume
+	/// Rewards
 	///
-	/// estimated total of volume in market
-	/// QUOTE_PRECISION
-	pub volume_24h: u64,
-	/// the volume intensity of buy fills against AMM
-	pub buy_intensity_volume: u64,
-	/// the volume intensity of sell fills against AMM
-	pub sell_intensity_volume: u64,
-	/// the count intensity of buy fills against AMM
-	pub buy_intensity_count: u32,
-	/// the count intensity of sell fills against AMM
-	pub sell_intensity_count: u32,
-
-	/// the blockchain unix timestamp at the time of the last trade
-	pub last_trade_ts: i64,
-	/// estimate of standard deviation of the fill (mark) prices
-	/// precision: PRICE_PRECISION
-	pub mark_std: u64,
-	/// the last unix_timestamp the mark twap was updated
-	pub last_mark_price_twap_ts: i64,
-
-	/// Spread
-	///
-	/// the minimum spread the AMM can quote. also used as step size for some spread logic increases.
-	pub base_spread: u32,
-	/// the maximum spread the AMM can quote
-	pub max_spread: u32,
-	/// the spread for asks vs the reserve price
-	pub buy_spread: u32,
-	/// the spread for bids vs the reserve price
-	pub sell_spread: u32,
-
-	/// the fraction of total available liquidity a single fill on the AMM can consume
-	pub max_fill_reserve_fraction: u16,
-	/// the maximum slippage a single fill on the AMM can push
-	pub max_slippage_ratio: u16,
-	/// the update intensity of AMM formulaic updates (adjusting k). 0-100
-	pub curve_update_intensity: u8,
-	/// the jit intensity of AMM. larger intensity means larger participation in jit. 0 means no jit participation.
-	/// (0, 100] is intensity for protocol-owned AMM. (100, 200] is intensity for user LP-owned AMM.
-	pub amm_jit_intensity: u8,
-
-	pub padding1: u8,
-	pub padding2: u16,
-	pub reference_price_offset: i32,
-	pub padding: [u8; 12],
+	pub reward_last_updated_timestamp: u64,
+	pub reward_infos: [AMMRewardInfo; NUM_REWARDS], // 384
 }
 
-impl Default for AMM {
-	fn default() -> Self {
-		AMM {
-			token: 0,
-			token_mint: 0,
-			oracle: Pubkey::default(),
-			historical_oracle_data: HistoricalOracleData::default(),
-
-			fee_pool: PoolBalance::default(),
-			base_asset_reserve: 0,
-			quote_asset_reserve: 0,
-			concentration_coef: 0,
-			min_base_asset_reserve: 0,
-			max_base_asset_reserve: 0,
-			sqrt_k: 0,
-			peg_multiplier: 0,
-			terminal_quote_asset_reserve: 0,
-			base_asset_amount_long: 0,
-			base_asset_amount_with_amm: 0,
-			base_asset_amount_with_unsettled_lp: 0,
-			max_open_interest: 0,
-			quote_asset_amount: 0,
-			total_fee: 0,
-			total_mm_fee: 0,
-			total_exchange_fee: 0,
-			total_fee_minus_distributions: 0,
-			total_fee_withdrawn: 0,
-			ask_base_asset_reserve: 0,
-			ask_quote_asset_reserve: 0,
-			bid_base_asset_reserve: 0,
-			bid_quote_asset_reserve: 0,
-			last_oracle_normalised_price: 0,
-			last_oracle_reserve_price_spread_pct: 0,
-			last_bid_price_twap: 0,
-			last_ask_price_twap: 0,
-			last_mark_price_twap: 0,
-			last_update_slot: 0,
-			last_oracle_conf_pct: 0,
-			order_step_size: 0,
-			order_tick_size: 0,
-			min_order_size: 1,
-			max_position_size: 0,
-			volume_24h: 0,
-			buy_intensity_volume: 0,
-			sell_intensity_volume: 0,
-			last_trade_ts: 0,
-			mark_std: 0,
-			oracle_std: 0,
-			last_mark_price_twap_ts: 0,
-			base_spread: 0,
-			max_spread: 0,
-			buy_spread: 0,
-			sell_spread: 0,
-			buy_intensity_count: 0,
-			sell_intensity_count: 0,
-			max_fill_reserve_fraction: 0,
-			max_slippage_ratio: 0,
-			curve_update_intensity: 0,
-			amm_jit_intensity: 0,
-			oracle_source: OracleSource::default(),
-			last_oracle_valid: false,
-
-			padding1: 0,
-			padding2: 0,
-			reference_price_offset: 0,
-			padding: [0; 12],
-		}
-	}
-}
+// Number of rewards supported by AMMs
+pub const NUM_REWARDS: usize = 3;
 
 impl AMM {
 	pub const LEN: usize = 8 + 261 + 384;
+
+	pub fn is_price_inside_range(&self, price: u64) -> bool {
+		if  {
+			0
+		} else if swap_update.next_sqrt_price < limit {
+			1
+		} else {
+			true
+		};
+	}
+
 	pub fn seeds(&self) -> [&[u8]; 6] {
 		[
 			&b"amm"[..],
-			self.token_mint_a.as_ref(),
-			self.token_mint_b.as_ref(),
+			self.token_mint_synthetic.as_ref(),
+			self.token_mint_quote.as_ref(),
 			self.tick_spacing_seed.as_ref(),
 			self.amm_bump.as_ref(),
 		]
 	}
 
-	pub fn input_token_mint(&self, a_to_b: bool) -> Pubkey {
-		if a_to_b { self.token_mint_a } else { self.token_mint_b }
+	pub fn input_token_mint(&self, synthetic_to_quote: bool) -> Pubkey {
+		if synthetic_to_quote {
+			self.token_mint_synthetic
+		} else {
+			self.token_mint_quote
+		}
 	}
 
-	pub fn input_token_vault(&self, a_to_b: bool) -> Pubkey {
-		if a_to_b { self.token_vault_a } else { self.token_vault_b }
+	pub fn input_token_vault(&self, synthetic_to_quote: bool) -> Pubkey {
+		if synthetic_to_quote {
+			self.token_vault_synthetic
+		} else {
+			self.token_vault_quote
+		}
 	}
 
-	pub fn output_token_mint(&self, a_to_b: bool) -> Pubkey {
-		if a_to_b { self.token_mint_b } else { self.token_mint_a }
+	pub fn output_token_mint(&self, synthetic_to_quote: bool) -> Pubkey {
+		if synthetic_to_quote {
+			self.token_mint_quote
+		} else {
+			self.token_mint_synthetic
+		}
 	}
 
-	pub fn output_token_vault(&self, a_to_b: bool) -> Pubkey {
-		if a_to_b { self.token_vault_b } else { self.token_vault_a }
+	pub fn output_token_vault(&self, synthetic_to_quote: bool) -> Pubkey {
+		if synthetic_to_quote {
+			self.token_vault_quote
+		} else {
+			self.token_vault_synthetic
+		}
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -412,12 +167,15 @@ impl AMM {
 		tick_spacing: u16,
 		sqrt_price: u128,
 		default_fee_rate: u16,
-		token_mint_a: Pubkey,
-		token_vault_a: Pubkey,
-		token_mint_b: Pubkey,
-		token_vault_b: Pubkey
+		token_mint_synthetic: Pubkey,
+		token_vault_synthetic: Pubkey,
+		token_mint_quote: Pubkey,
+		token_vault_quote: Pubkey,
+		// cusotm
+		oracle: Pubkey,
+		oracle_source: OracleSource
 	) -> Result<()> {
-		if token_mint_a.ge(&token_mint_b) {
+		if token_mint_synthetic.ge(&token_mint_quote) {
 			return Err(ErrorCode::InvalidTokenMintOrder.into());
 		}
 
@@ -427,30 +185,47 @@ impl AMM {
 
 		self.amm_bump = [bump];
 
+		// Tokens
+		self.token_mint_synthetic = token_mint_synthetic;
+		self.token_vault_synthetic = token_vault_synthetic;
+
+		self.token_mint_quote = token_mint_quote;
+		self.token_vault_quote = token_vault_quote;
+
+		// Oracle
+		self.oracle = oracle.key();
+		self.oracle_source = oracle_source;
+		self.historical_oracle_data = HistoricalOracleData::default();
+		self.historical_index_data = HistoricalIndexData::default();
+		self.last_oracle_conf_pct = 0;
+		self.last_oracle_valid = false;
+		self.last_oracle_normalised_price = 0;
+		self.last_oracle_reserve_price_spread_pct = 0;
+		self.oracle_std = 0;
+
+		// Liquidity
+		self.sqrt_price = sqrt_price;
+		self.liquidity = 0;
 		self.tick_spacing = tick_spacing;
 		self.tick_spacing_seed = self.tick_spacing.to_le_bytes();
-
-		self.update_fee_rate(default_fee_rate)?;
-		self.update_protocol_fee_rate(whirlpools_config.default_protocol_fee_rate)?;
-
-		self.liquidity = 0;
-		self.sqrt_price = sqrt_price;
 		self.tick_current_index = tick_index_from_sqrt_price(&sqrt_price);
 
-		self.protocol_fee_owed_a = 0;
-		self.protocol_fee_owed_b = 0;
+		// Fees
 
-		initialize_synthetic_token();
+		self.update_fee_rate(default_fee_rate)?;
+		self.update_protocol_fee_rate(amms_config.default_protocol_fee_rate)?;
 
-		self.token_mint_a = token_mint_a;
-		self.token_vault_a = token_vault_a;
-		self.fee_growth_global_a = 0;
+		self.protocol_fee_owed_synthetic = 0;
+		self.protocol_fee_owed_quote = 0;
 
-		self.token_mint_b = token_mint_b;
-		self.token_vault_b = token_vault_b;
-		self.fee_growth_global_b = 0;
+		self.fee_growth_global_synthetic = 0;
+		self.fee_growth_global_quote = 0;
 
-		self.reward_infos = [AMMRewardInfo::new(self.admin); NUM_REWARDS];
+		// Rewards
+		self.reward_infos = [
+			AMMRewardInfo::new(amms_config.reward_emissions_super_authority);
+			NUM_REWARDS
+		];
 
 		Ok(())
 	}
@@ -458,7 +233,7 @@ impl AMM {
 	/// Update all reward values for the AMM.
 	///
 	/// # Parameters
-	/// - `reward_infos` - An array of all updated whirlpool rewards
+	/// - `reward_infos` - An array of all updated amm rewards
 	/// - `reward_last_updated_timestamp` - The timestamp when the rewards were last updated
 	pub fn update_rewards(
 		&mut self,
@@ -479,7 +254,7 @@ impl AMM {
 		self.liquidity = liquidity;
 	}
 
-	/// Update the reward authority at the specified Whirlpool reward index.
+	/// Update the reward authority at the specified AMM reward index.
 	pub fn update_reward_authority(
 		&mut self,
 		index: usize,
@@ -548,22 +323,22 @@ impl AMM {
 		fee_growth_global: u128,
 		reward_infos: [AMMRewardInfo; NUM_REWARDS],
 		protocol_fee: u64,
-		is_token_fee_in_a: bool,
-		reward_last_updated_timestamp: u64
+		is_token_fee_in_synthetic: bool,
+		reward_last_updated_timestamp: u64,
 	) {
 		self.tick_current_index = tick_index;
 		self.sqrt_price = sqrt_price;
 		self.liquidity = liquidity;
 		self.reward_infos = reward_infos;
 		self.reward_last_updated_timestamp = reward_last_updated_timestamp;
-		if is_token_fee_in_a {
+		if is_token_fee_in_synthetic {
 			// Add fees taken via a
-			self.fee_growth_global_a = fee_growth_global;
-			self.protocol_fee_owed_a += protocol_fee;
+			self.fee_growth_global_synthetic = fee_growth_global;
+			self.protocol_fee_owed_synthetic += protocol_fee;
 		} else {
 			// Add fees taken via b
-			self.fee_growth_global_b = fee_growth_global;
-			self.protocol_fee_owed_b += protocol_fee;
+			self.fee_growth_global_quote = fee_growth_global;
+			self.protocol_fee_owed_quote += protocol_fee;
 		}
 	}
 
@@ -589,235 +364,8 @@ impl AMM {
 	}
 
 	pub fn reset_protocol_fees_owed(&mut self) {
-		self.protocol_fee_owed_a = 0;
-		self.protocol_fee_owed_b = 0;
-	}
-
-	/// Drift
-
-	pub fn get_fallback_price(
-		self,
-		side: &OrderSide,
-		amm_available_liquidity: u64,
-		oracle_price: i64,
-		seconds_til_order_expiry: i64
-	) -> NormalResult<u64> {
-		// PRICE_PRECISION
-		if side.eq(&OrderSide::Buy) {
-			// pick amm ask + buffer if theres liquidity
-			// otherwise be aggressive vs oracle + 1hr premium
-			if amm_available_liquidity >= self.min_order_size {
-				let reserve_price = self.reserve_price()?;
-				let amm_ask_price: i64 = self.ask_price(reserve_price)?.cast()?;
-				amm_ask_price
-					.safe_add(
-						amm_ask_price / (seconds_til_order_expiry * 20).clamp(100, 200)
-					)?
-					.cast::<u64>()
-			} else {
-				oracle_price
-					.safe_add(
-						self.last_ask_price_twap
-							.cast::<i64>()?
-							.safe_sub(self.historical_oracle_data.last_oracle_price_twap)?
-							.max(0)
-					)?
-					.safe_add(
-						oracle_price / (seconds_til_order_expiry * 2).clamp(10, 50)
-					)?
-					.cast::<u64>()
-			}
-		} else {
-			// pick amm bid - buffer if theres liquidity
-			// otherwise be aggressive vs oracle + 1hr bid premium
-			if amm_available_liquidity >= self.min_order_size {
-				let reserve_price = self.reserve_price()?;
-				let amm_bid_price: i64 = self.bid_price(reserve_price)?.cast()?;
-				amm_bid_price
-					.safe_sub(
-						amm_bid_price / (seconds_til_order_expiry * 20).clamp(100, 200)
-					)?
-					.cast::<u64>()
-			} else {
-				oracle_price
-					.safe_add(
-						self.last_bid_price_twap
-							.cast::<i64>()?
-							.safe_sub(self.historical_oracle_data.last_oracle_price_twap)?
-							.min(0)
-					)?
-					.safe_sub(
-						oracle_price / (seconds_til_order_expiry * 2).clamp(10, 50)
-					)?
-					.max(0)
-					.cast::<u64>()
-			}
-		}
-	}
-
-	pub fn get_lower_bound_sqrt_k(self) -> NormalResult<u128> {
-		Ok(
-			self.sqrt_k.min(
-				self.user_lp_shares
-					.safe_add(self.user_lp_shares.safe_div(1000)?)?
-					.max(self.min_order_size.cast()?)
-					.max(self.base_asset_amount_with_amm.unsigned_abs().cast()?)
-			)
-		)
-	}
-
-	pub fn get_protocol_owned_position(self) -> NormalResult<i64> {
-		self.base_asset_amount_with_amm
-			.safe_add(self.base_asset_amount_with_unsettled_lp)?
-			.cast::<i64>()
-	}
-
-	pub fn get_max_reference_price_offset(self) -> NormalResult<i64> {
-		if self.curve_update_intensity <= 100 {
-			return Ok(0);
-		}
-
-		let lower_bound_multiplier: i64 = self.curve_update_intensity
-			.safe_sub(100)?
-			.cast::<i64>()?;
-
-		// always allow 1-100 bps of price offset, up to a fifth of the market's max_spread
-		let lb_bps = (PERCENTAGE_PRECISION.cast::<i64>()? / 10000).safe_mul(
-			lower_bound_multiplier
-		)?;
-		let max_offset = (self.max_spread.cast::<i64>()? / 5).max(lb_bps);
-
-		Ok(max_offset)
-	}
-
-	pub fn amm_wants_to_jit_make(
-		&self,
-		taker_side: OrderSide
-	) -> NormalResult<bool> {
-		let amm_wants_to_jit_make = match taker_side {
-			OrderSide::Buy => {
-				self.base_asset_amount_with_amm < -self.order_step_size.cast()?
-			}
-			OrderSide::Sell => {
-				self.base_asset_amount_with_amm > self.order_step_size.cast()?
-			}
-		};
-		Ok(amm_wants_to_jit_make && self.amm_jit_is_active())
-	}
-
-	pub fn amm_lp_wants_to_jit_make(
-		&self,
-		taker_side: OrderSide
-	) -> NormalResult<bool> {
-		if self.user_lp_shares == 0 {
-			return Ok(false);
-		}
-
-		let amm_lp_wants_to_jit_make = match taker_side {
-			OrderSide::Buy => {
-				self.base_asset_amount_per_lp >
-					self.get_target_base_asset_amount_per_lp()?
-			}
-			OrderSide::Sell => {
-				self.base_asset_amount_per_lp <
-					self.get_target_base_asset_amount_per_lp()?
-			}
-		};
-		Ok(amm_lp_wants_to_jit_make && self.amm_lp_jit_is_active())
-	}
-
-	pub fn amm_lp_allowed_to_jit_make(
-		&self,
-		amm_wants_to_jit_make: bool
-	) -> NormalResult<bool> {
-		// only allow lps to make when the amm inventory is below a certain level of available liquidity
-		// i.e. 10%
-		if amm_wants_to_jit_make {
-			// inventory scale
-			let (max_bids, max_asks) = amm::_calculate_market_open_bids_asks(
-				self.base_asset_reserve,
-				self.min_base_asset_reserve,
-				self.max_base_asset_reserve
-			)?;
-
-			let min_side_liquidity = max_bids.min(max_asks.abs());
-			let protocol_owned_min_side_liquidity = get_proportion_i128(
-				min_side_liquidity,
-				self.sqrt_k.safe_sub(self.user_lp_shares)?,
-				self.sqrt_k
-			)?;
-
-			Ok(
-				self.base_asset_amount_with_amm.abs() <
-					protocol_owned_min_side_liquidity.safe_div(10)?
-			)
-		} else {
-			Ok(true)
-		}
-	}
-
-	pub fn amm_jit_is_active(&self) -> bool {
-		self.amm_jit_intensity > 0
-	}
-
-	pub fn amm_lp_jit_is_active(&self) -> bool {
-		self.amm_jit_intensity > 100
-	}
-
-	pub fn reserve_price(&self) -> NormalResult<u64> {
-		amm::calculate_price(
-			self.quote_asset_reserve,
-			self.base_asset_reserve,
-			self.peg_multiplier
-		)
-	}
-
-	pub fn bid_price(&self, reserve_price: u64) -> NormalResult<u64> {
-		reserve_price
-			.cast::<u128>()?
-			.safe_mul(
-				BID_ASK_SPREAD_PRECISION_U128.safe_sub(self.sell_spread.cast()?)?
-			)?
-			.safe_div(BID_ASK_SPREAD_PRECISION_U128)?
-			.cast()
-	}
-
-	pub fn ask_price(&self, reserve_price: u64) -> NormalResult<u64> {
-		reserve_price
-			.cast::<u128>()?
-			.safe_mul(
-				BID_ASK_SPREAD_PRECISION_U128.safe_add(self.buy_spread.cast()?)?
-			)?
-			.safe_div(BID_ASK_SPREAD_PRECISION_U128)?
-			.cast::<u64>()
-	}
-
-	pub fn bid_ask_price(&self, reserve_price: u64) -> NormalResult<(u64, u64)> {
-		let bid_price = self.bid_price(reserve_price)?;
-		let ask_price = self.ask_price(reserve_price)?;
-		Ok((bid_price, ask_price))
-	}
-
-	pub fn last_ask_premium(&self) -> NormalResult<i64> {
-		let reserve_price = self.reserve_price()?;
-		let ask_price = self.ask_price(reserve_price)?.cast::<i64>()?;
-		ask_price.safe_sub(self.historical_oracle_data.last_oracle_price)
-	}
-
-	pub fn last_bid_discount(&self) -> NormalResult<i64> {
-		let reserve_price = self.reserve_price()?;
-		let bid_price = self.bid_price(reserve_price)?.cast::<i64>()?;
-		self.historical_oracle_data.last_oracle_price.safe_sub(bid_price)
-	}
-
-	pub fn can_lower_k(&self) -> NormalResult<bool> {
-		let (max_bids, max_asks) = amm::calculate_market_open_bids_asks(self)?;
-		let can_lower =
-			self.base_asset_amount_with_amm.unsigned_abs() <
-				max_bids.unsigned_abs().min(max_asks.unsigned_abs()) &&
-			self.base_asset_amount_with_amm.unsigned_abs() <
-				self.sqrt_k.safe_sub(self.user_lp_shares)?;
-		Ok(can_lower)
+		self.protocol_fee_owed_synthetic = 0;
+		self.protocol_fee_owed_quote = 0;
 	}
 
 	pub fn get_oracle_twap(
@@ -903,33 +451,6 @@ impl AMM {
 			.cast::<i64>()
 	}
 
-	pub fn update_volume_24h(
-		&mut self,
-		quote_asset_amount: u64,
-		position_side: OrderSide,
-		now: i64
-	) -> NormalResult {
-		let since_last = max(1_i64, now.safe_sub(self.last_trade_ts)?);
-
-		amm::update_amm_buy_sell_intensity(
-			self,
-			now,
-			quote_asset_amount,
-			position_side
-		)?;
-
-		self.volume_24h = stats::calculate_rolling_sum(
-			self.volume_24h,
-			quote_asset_amount,
-			since_last,
-			TWENTY_FOUR_HOUR
-		)?;
-
-		self.last_trade_ts = now;
-
-		Ok(())
-	}
-
 	pub fn get_new_oracle_conf_pct(
 		&self,
 		confidence: u64, // price precision
@@ -968,67 +489,97 @@ impl AMM {
 	) -> NormalResult<bool> {
 		Ok(self.last_oracle_valid && current_slot == self.last_update_slot)
 	}
-}
 
-#[cfg(test)]
-impl AMM {
-	pub fn default_test() -> Self {
-		let default_reserves = 100 * AMM_RESERVE_PRECISION;
-		// make sure tests dont have the default sqrt_k = 0
-		AMM {
-			base_asset_reserve: default_reserves,
-			quote_asset_reserve: default_reserves,
-			sqrt_k: default_reserves,
-			concentration_coef: MAX_CONCENTRATION_COEFFICIENT,
-			order_step_size: 1,
-			order_tick_size: 1,
-			max_base_asset_reserve: u64::MAX as u128,
-			min_base_asset_reserve: 0,
-			terminal_quote_asset_reserve: default_reserves,
-			peg_multiplier: crate::math::constants::PEG_PRECISION,
-			max_fill_reserve_fraction: 1,
-			max_spread: 1000,
-			historical_oracle_data: HistoricalOracleData {
-				last_oracle_price: PRICE_PRECISION_I64,
-				..HistoricalOracleData::default()
-			},
-			last_oracle_valid: true,
-			..AMM::default()
+	pub fn is_price_divergence_ok(
+		&self,
+		oracle_price: i64
+	) -> NormalResult<bool> {
+		let oracle_divergence = oracle_price
+			.safe_sub(self.historical_oracle_data.last_oracle_price_twap_5min)?
+			.safe_mul(PERCENTAGE_PRECISION_I64)?
+			.safe_div(
+				self.historical_oracle_data.last_oracle_price_twap_5min.min(
+					oracle_price
+				)
+			)?
+			.unsigned_abs();
+
+		let oracle_divergence_limit = match self.synthetic_tier {
+			SyntheticTier::A => PERCENTAGE_PRECISION_U64 / 200, // 50 bps
+			SyntheticTier::B => PERCENTAGE_PRECISION_U64 / 200, // 50 bps
+			SyntheticTier::C => PERCENTAGE_PRECISION_U64 / 100, // 100 bps
+			SyntheticTier::Speculative => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
+			SyntheticTier::HighlySpeculative => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
+			SyntheticTier::Isolated => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
+		};
+
+		if oracle_divergence >= oracle_divergence_limit {
+			msg!(
+				"market_index={} price divergence too large to safely settle pnl: {} >= {}",
+				self.market_index,
+				oracle_divergence,
+				oracle_divergence_limit
+			);
+			return Ok(false);
 		}
+
+		let min_price = oracle_price.min(
+			self.historical_oracle_data.last_oracle_price_twap_5min
+		);
+
+		let std_limit = (
+			match self.synthetic_tier {
+				SyntheticTier::A => min_price / 50, // 200 bps
+				SyntheticTier::B => min_price / 50, // 200 bps
+				SyntheticTier::C => min_price / 20, // 500 bps
+				SyntheticTier::Speculative => min_price / 10, // 1000 bps
+				SyntheticTier::HighlySpeculative => min_price / 10, // 1000 bps
+				SyntheticTier::Isolated => min_price / 10, // 1000 bps
+			}
+		).unsigned_abs();
+
+		if self.oracle_std.max(self.mark_std) >= std_limit {
+			msg!(
+				"market_index={} std too large to safely settle pnl: {} >= {}",
+				self.market_index,
+				self.oracle_std.max(self.mark_std),
+				std_limit
+			);
+			return Ok(false);
+		}
+
+		Ok(true)
 	}
 
-	pub fn default_btc_test() -> Self {
-		AMM {
-			base_asset_reserve: 65 * AMM_RESERVE_PRECISION,
-			quote_asset_reserve: 63015384615,
-			terminal_quote_asset_reserve: 64 * AMM_RESERVE_PRECISION,
-			sqrt_k: 64 * AMM_RESERVE_PRECISION,
+	pub fn is_index_fund_market(&self) -> bool {
+		self.SyntheticType == SyntheticType::IndexFund
+	}
 
-			peg_multiplier: 19_400_000_000,
+	pub fn is_yield_market(&self) -> bool {
+		self.SyntheticType == SyntheticType::Yield
+	}
 
-			concentration_coef: MAX_CONCENTRATION_COEFFICIENT,
-			max_base_asset_reserve: 90 * AMM_RESERVE_PRECISION,
-			min_base_asset_reserve: 45 * AMM_RESERVE_PRECISION,
+	pub fn get_max_confidence_interval_multiplier(self) -> NormalResult<u64> {
+		// assuming validity_guard_rails max confidence pct is 2%
+		Ok(match self.synthetic_tier {
+			SyntheticTier::A => 1, // 2%
+			SyntheticTier::B => 1, // 2%
+			SyntheticTier::C => 2, // 4%
+			SyntheticTier::Speculative => 10, // 20%
+			SyntheticTier::HighlySpeculative => 50, // 100%
+			SyntheticTier::Isolated => 50, // 100%
+		})
+	}
 
-			base_asset_amount_with_amm: -(AMM_RESERVE_PRECISION as i128),
-			mark_std: PRICE_PRECISION as u64,
-
-			quote_asset_amount: 19_000_000_000, // short 1 BTC @ $19000
-			historical_oracle_data: HistoricalOracleData {
-				last_oracle_price: 19_400 * PRICE_PRECISION_I64,
-				last_oracle_price_twap: 19_400 * PRICE_PRECISION_I64,
-				last_oracle_price_twap_ts: 1662800000_i64,
-				..HistoricalOracleData::default()
-			},
-			last_mark_price_twap_ts: 1662800000,
-
-			curve_update_intensity: 100,
-
-			base_spread: 250,
-			max_spread: 975,
-			last_oracle_valid: true,
-			..AMM::default()
-		}
+	pub fn get_sanitize_clamp_denominator(self) -> NormalResult<Option<i64>> {
+		Ok(match self.synthetic_tier {
+			SyntheticTier::A => Some(10_i64), // 10%
+			SyntheticTier::B => Some(5_i64), // 20%
+			SyntheticTier::C => Some(2_i64), // 50%
+			SyntheticTier::Speculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+			SyntheticTier::HighlySpeculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+			SyntheticTier::Isolated => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+		})
 	}
 }
 

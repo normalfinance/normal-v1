@@ -280,3 +280,33 @@ pub fn oracle_validity(
 
 	Ok(oracle_validity)
 }
+
+pub fn get_timestamp_from_price_feed_account(
+	price_feed_account: &AccountInfo
+) -> Result<i64> {
+	if price_feed_account.data_is_empty() {
+		Ok(0)
+	} else {
+		let price_feed_account_data = price_feed_account.try_borrow_data()?;
+		let price_feed_account = PriceUpdateV2::try_deserialize(
+			&mut &price_feed_account_data[..]
+		)?;
+		Ok(price_feed_account.price_message.publish_time)
+	}
+}
+
+pub fn get_timestamp_from_price_update_message(
+	update_message: &PrefixedVec<u16, u8>
+) -> Result<i64> {
+	let message = from_slice::<byteorder::BE, Message>(
+		update_message.as_ref()
+	).map_err(|_| ErrorCode::OracleDeserializeMessageFailed)?;
+	let next_timestamp = match message {
+		Message::PriceFeedMessage(price_feed_message) =>
+			price_feed_message.publish_time,
+		Message::TwapMessage(_) => {
+			return Err(ErrorCode::OracleUnsupportedMessageType.into());
+		}
+	};
+	Ok(next_timestamp)
+}
