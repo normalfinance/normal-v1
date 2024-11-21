@@ -195,7 +195,7 @@ pub fn handle_resolve_perp_bankruptcy<'c: 'info, 'info>(
 			spot_market,
 			now,
 			&ctx.accounts.token_program,
-			&ctx.accounts.drift_signer,
+			&ctx.accounts.normal_signer,
 			state,
 			&mint
 		)?;
@@ -235,7 +235,7 @@ pub fn handle_resolve_perp_bankruptcy<'c: 'info, 'info>(
 			&ctx.accounts.token_program,
 			&ctx.accounts.insurance_fund_vault,
 			&ctx.accounts.spot_market_vault,
-			&ctx.accounts.drift_signer,
+			&ctx.accounts.normal_signer,
 			state.signer_nonce,
 			pay_from_insurance,
 			&mint
@@ -320,7 +320,7 @@ pub fn handle_settle_revenue_to_insurance_fund<'c: 'info, 'info>(
 		&ctx.accounts.token_program,
 		&ctx.accounts.spot_market_vault,
 		&ctx.accounts.insurance_fund_vault,
-		&ctx.accounts.drift_signer,
+		&ctx.accounts.normal_signer,
 		state.signer_nonce,
 		token_amount,
 		&mint
@@ -414,9 +414,9 @@ pub struct ResolveBankruptcy<'info> {
         bump,
     )]
 	pub insurance_fund_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-	#[account(constraint = state.signer.eq(&drift_signer.key()))]
-	/// CHECK: forced drift_signer
-	pub drift_signer: AccountInfo<'info>,
+	#[account(constraint = state.signer.eq(&normal_signer.key()))]
+	/// CHECK: forced normal_signer
+	pub normal_signer: AccountInfo<'info>,
 	pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -436,9 +436,9 @@ pub struct SettleRevenueToInsuranceFund<'info> {
         bump,
     )]
 	pub spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-	#[account(constraint = state.signer.eq(&drift_signer.key()))]
-	/// CHECK: forced drift_signer
-	pub drift_signer: AccountInfo<'info>,
+	#[account(constraint = state.signer.eq(&normal_signer.key()))]
+	/// CHECK: forced normal_signer
+	pub normal_signer: AccountInfo<'info>,
 	#[account(
         mut,
         seeds = [b"insurance_fund_vault".as_ref(), market_index.to_le_bytes().as_ref()],

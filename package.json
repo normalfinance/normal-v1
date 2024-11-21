@@ -2,8 +2,10 @@
 	"directories": {
 		"test": "tests"
 	},
-	"author": "",
-	"license": "ISC",
+	"contributors": [
+		"jblewnormal <joshua@normalfinance.io>"
+	],
+	"license": "Apache-2.0",
 	"scripts": {
 		"generate-docs": "typedoc --skipErrorChecking --logLevel Error",
 		"prepare": "husky install",
@@ -13,18 +15,28 @@
 		"lint:fix": "eslint . --ext ts --fix"
 	},
 	"dependencies": {
-		"@coral-xyz/anchor": "^0.30.1"
+		"@docusaurus/core": "^3.6.2",
+		"@docusaurus/preset-classic": "^3.6.2"
 	},
 	"devDependencies": {
+		"@coral-xyz/anchor": "0.29.0",
+		"@coral-xyz/anchor-30": "npm:@coral-xyz/anchor@0.30.1",
+		"@pythnetwork/client": "^2.5.1",
+		"@solana/spl-token": "0.3.7",
+		"@solana/web3.js": "1.73.2",
+		"@types/chai": "^5.0.0",
+		"@types/mocha": "^8.2.2",
+		"@typescript-eslint/eslint-plugin": "^4.28.0",
+		"@typescript-eslint/parser": "^4.28.0",
 		"chai": "^4.3.4",
-		"mocha": "^9.0.3",
-		"ts-mocha": "^10.0.0",
-		"@types/bn.js": "^5.1.0",
-		"@types/chai": "^4.3.0",
-		"@types/mocha": "^9.0.0",
-		"typescript": "^4.3.5",
+		"eslint": "^7.29.0",
+		"eslint-config-prettier": "8.3.0",
+		"eslint-plugin-prettier": "3.4.0",
 		"husky": "^7.0.4",
-		"prettier": "^2.6.2"
+		"prettier": "3.0.1",
+		"typedoc": "0.23.23",
+		"typescript": "^4.9",
+		"@pythnetwork/price-service-client": "^1.9.0"
 	},
 	"engines": {
 		"node": ">=12"
