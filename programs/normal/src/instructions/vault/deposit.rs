@@ -60,73 +60,32 @@ pub fn handle_vault_deposit(
 	ctx: Context<DepositCollateral>,
 	amount: u128
 ) -> Result<()> {
-	verify_position_authority_interface(
-		&ctx.accounts.position_token_account,
-		&ctx.accounts.position_authority
-	)?;
+	
 
-	let clock = Clock::get()?;
 
-	if amount == 0 {
-		return Err(ErrorCode::LiquidityZero.into());
-	}
-	let liquidity_delta = math::amm::convert_to_liquidity_delta(amount, true)?;
-	let timestamp = to_timestamp_u64(clock.unix_timestamp)?;
-
-	let update = controller::liquidity::calculate_modify_liquidity(
-		&ctx.accounts.amm,
-		&ctx.accounts.position,
-		&ctx.accounts.tick_array_lower,
-		&ctx.accounts.tick_array_upper,
-		liquidity_delta,
-		timestamp
-	)?;
-
-	controller::liquidity::sync_modify_liquidity_values(
-		&mut ctx.accounts.amm,
-		&mut ctx.accounts.position,
-		&ctx.accounts.tick_array_lower,
-		&ctx.accounts.tick_array_upper,
-		update,
-		timestamp
-	)?;
-
-	let (delta_synthetic, delta_quote) =
-		controller::liquidity::calculate_liquidity_token_deltas(
-			ctx.accounts.amm.tick_current_index,
-			ctx.accounts.amm.sqrt_price,
-			&ctx.accounts.position,
-			liquidity_delta
-		)?;
-
-	controller::vault::deposit_collateral(&ctx.accounts.vault);
-
-	// Mint vault.collateralization_ratio much synthetic to the AMM
-	mint_synthetic_to_amm(
-		authority,
+	// Deposit collateral into the new Vault
+	transfer_from_owner_to_vault(
+		position_authority,
 		token_owner_account,
 		token_vault,
 		token_program,
 		amount
 	);
 
-	// Send 1 - vault.default_liquidity_utilization much collateral to the Vault
-	transfer_from_owner_to_vault(
-		&ctx.accounts.position_authority,
-		&ctx.accounts.token_owner_account_quote,
-		&ctx.accounts.token_vault_quote,
-		&ctx.accounts.token_program,
-		delta_quote
+	// Provide liquidity to Pool
+	position.open_position(
+		amm,
+		position_mint.key(),
+		tick_lower_index,
+		tick_upper_index
 	)?;
 
-	// Send vault.default_liquidity_utilization much collateral to the AMM
-	transfer_from_owner_to_amm(
-		&ctx.accounts.position_authority,
-		&ctx.accounts.token_owner_account_quote,
-		&ctx.accounts.token_vault_quote,
-		&ctx.accounts.token_program,
-		delta_quote
-	)?;
+	mint_position_token_and_remove_authority(
+		amm,
+		position_mint,
+		&ctx.accounts.position_token_account,
+		&ctx.accounts.token_program
+	);
 
 	Ok(())
 }

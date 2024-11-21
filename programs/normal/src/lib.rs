@@ -61,6 +61,28 @@ pub mod normal {
 	}
 
 	/**
+	 * Collateral Instructions
+	 */
+
+	pub fn add_collateral_type(ctx: Context<AdminUpdateState>) -> Result<()> {
+		handle_add_collateral_type(ctx)
+	}
+
+	pub fn remove_collateral_type(ctx: Context<AdminUpdateState>) -> Result<()> {
+		handle_remove_collateral_type(ctx)
+	}
+
+	/**
+	 * Vaults Config Instructions
+	 */
+
+	pub fn initialize_vaults_config(
+		ctx: Context<AdminUpdateState>
+	) -> Result<()> {
+		handle_initialize_vaults_config(ctx)
+	}
+
+	/**
 	 *
 	 * AMM Instructions (admin)
 	 *

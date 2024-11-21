@@ -7,6 +7,7 @@ pub use initialize;
 pub use vault_config::*;
 pub use vault::*;
 pub use keeper::*;
+pub use collateral;
 
 mod admin;
 mod constraints;
@@ -18,3 +19,4 @@ mod initialize;
 mod vault_config;
 mod vault;
 mod keeper;
+mod collateral;

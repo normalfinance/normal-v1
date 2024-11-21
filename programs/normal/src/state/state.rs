@@ -13,6 +13,8 @@ use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
 use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
 
+use super::vault_config::CollateralType;
+
 // #[cfg(test)]
 // mod tests;
 
@@ -29,6 +31,10 @@ pub struct State {
 	pub min_collateral_auction_duration: u8,
 	pub default_auction_duration: u8,
 	pub exchange_status: u8,
+
+	pub collateral_types: Vec<CollateralType>,
+
+
 	// account able to update and collect protocol fees
 	// pub fee_authority: Pubkey,
 	// // account with permissions to collect protocol pool fees

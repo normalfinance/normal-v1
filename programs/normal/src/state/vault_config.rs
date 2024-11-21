@@ -4,6 +4,14 @@ use crate::{ errors::ErrorCode, math::MAX_PROTOCOL_FEE_RATE };
 
 use super::insurance_fund::InsuranceFund;
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Copy)]
+pub struct CollateralType {
+	identifier: [u8; 32], // Unique identifier (e.g., hash of collateral name)
+	mint: Pubkey, // Token mint address for collateral type
+	liquidation_ratio: u64, // Minimum collateralization ratio - the threshold at which the vault becomes eligible for liquidation (usually the same as the minimum collateralization ratio).
+	liquidation_penalty: u64, /// A fee applied to the collateral when the vault is liquidated, incentivizing users to maintain sufficient collateral.
+}
+
 #[account]
 pub struct VaultsConfig {
 	/// The token mint of the vaults
@@ -12,19 +20,16 @@ pub struct VaultsConfig {
 	pub oracle: Pubkey,
 	/// The AMM
 	pub amm: Pubkey,
-	/// Details on the insurance fund covering bankruptcies in this markets token
-    /// Covers bankruptcies for borrows with this markets token and perps settling in this markets token
-    pub insurance_fund: InsuranceFund,
-	//
-	pub collateral_type: str,
+
+	// reference to the collateral type identifier
+	pub collateral_type: [u8; 32],
+
 	///
 	pub min_collateral_ratio: u64,
 	/// maximum amount of synthetic that can be generated against a specific collateral type, ensuring that the system does not become overexposed to any one asset.
 	pub debt_ceiling: u64,
-	/// the threshold at which the vault becomes eligible for liquidation (usually the same as the minimum collateralization ratio).
-	pub liquidation_ratio: u64,
-	/// A fee applied to the collateral when the vault is liquidated, incentivizing users to maintain sufficient collateral.
-	pub liquidation_penalty: u64,
+	
+	
 	pub default_liquidity_utilization: u64,
 	/// The maximum percent of the collateral that can be sent to the AMM as liquidity
 	pub max_liquidity_utilization: u64,

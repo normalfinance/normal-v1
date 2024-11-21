@@ -9,7 +9,6 @@ use solana_program::sysvar::instructions::{
 	ID as IX_ID,
 };
 
-use crate::controller::insurance::update_user_stats_if_stake_amount;
 use crate::controller::position::PositionDirection;
 use crate::error::ErrorCode;
 use crate::ids::swift_server;
@@ -17,10 +16,6 @@ use crate::instructions::constraints::*;
 use crate::instructions::optional_accounts::{ load_maps, AccountMaps };
 use crate::math::casting::Cast;
 use crate::math::constants::QUOTE_SPOT_MARKET_INDEX;
-use crate::math::margin::{
-	calculate_user_equity,
-	meets_settle_pnl_maintenance_margin_requirement,
-};
 use crate::math::orders::{
 	estimate_price_from_side,
 	find_bids_and_asks_from_users,
@@ -28,10 +23,6 @@ use crate::math::orders::{
 use crate::math::spot_withdraw::validate_spot_market_vault_amount;
 use crate::optional_accounts::{ get_token_mint, update_prelaunch_oracle };
 use crate::state::fill_mode::FillMode;
-use crate::state::fulfillment_params::drift::MatchFulfillmentParams;
-use crate::state::fulfillment_params::openbook_v2::OpenbookV2FulfillmentParams;
-use crate::state::fulfillment_params::phoenix::PhoenixFulfillmentParams;
-use crate::state::fulfillment_params::serum::SerumFulfillmentParams;
 use crate::state::insurance_fund_stake::InsuranceFundStake;
 use crate::state::oracle_map::OracleMap;
 use crate::state::order_params::{
@@ -41,38 +32,8 @@ use crate::state::order_params::{
 	SwiftServerMessage,
 };
 use crate::state::paused_operations::PerpOperation;
-use crate::state::perp_market::{ ContractType, MarketStatus, PerpMarket };
-use crate::state::perp_market_map::{
-	get_market_set_for_user_positions,
-	get_market_set_from_list,
-	get_writable_perp_market_set,
-	get_writable_perp_market_set_from_vec,
-	MarketSet,
-	PerpMarketMap,
-};
-use crate::state::settle_pnl_mode::SettlePnlMode;
-use crate::state::spot_fulfillment_params::SpotFulfillmentParams;
-use crate::state::spot_market::SpotMarket;
-use crate::state::spot_market_map::{
-	get_writable_spot_market_set,
-	get_writable_spot_market_set_from_many,
-	SpotMarketMap,
-};
+
 use crate::state::state::State;
-use crate::state::user::{
-	MarketType,
-	OrderStatus,
-	OrderTriggerCondition,
-	OrderType,
-	User,
-	UserStats,
-};
-use crate::state::user_map::{
-	load_user_map,
-	load_user_maps,
-	UserMap,
-	UserStatsMap,
-};
 use crate::state::vault::Vault;
 use crate::validation::sig_verification::verify_ed25519_ix;
 use crate::validation::user::validate_user_is_idle;
@@ -374,7 +335,6 @@ pub fn handle_settle_revenue_to_insurance_fund<'c: 'info, 'info>(
 
 	Ok(())
 }
-
 
 #[derive(Accounts)]
 pub struct UpdateVaultIdle<'info> {

@@ -30,7 +30,7 @@ pub struct Vault {
 	/// An addresses that can control the account on the authority's behalf. Has limited power, cant withdraw
 	pub delegate: Pubkey,
 	/// The global Vault Config account
-	pub config: Pubkey,
+	pub vaults_config: Pubkey,
 	/// The vault used to store the vault's deposits (collateral)
 	/// The amount in the vault should be equal to or greater than deposits - liquidity_balance
 	pub vault: Pubkey,
@@ -53,6 +53,15 @@ pub struct Vault {
 }
 
 impl Vault {
+	pub fn initialize(&self, collateral_type: ) {
+		// set collateral type
+		// set token_program, token_mint
+
+		self.collateral_type = token_mint_synthetic;
+		self.token_vault_synthetic = token_vault_synthetic;
+		
+	}
+
 	pub fn is_being_liquidated(&self) -> bool {
 		self.status &
 			((VaultStatus::BeingLiquidated as u8) | (VaultStatus::Bankrupt as u8)) > 0
