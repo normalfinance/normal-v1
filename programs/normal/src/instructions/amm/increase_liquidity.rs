@@ -52,7 +52,7 @@ pub struct ModifyLiquidity<'info> {
 	pub tick_array_upper: AccountLoader<'info, TickArray>,
 }
 
-pub fn handler(
+pub fn handle_increase_liquidity(
 	ctx: Context<ModifyLiquidity>,
 	liquidity_amount: u128,
 	token_max_quote: u64

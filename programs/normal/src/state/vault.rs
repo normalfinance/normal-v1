@@ -23,17 +23,19 @@ pub enum VaultStatus {
 #[account]
 #[derive(Default)]
 pub struct Vault {
-	/// The address of the vault. It is a pda of the market index
+	/// The vault's address. It is a pda of the market index
 	pub pubkey: Pubkey,
 	/// The owner/authority of the account
 	pub authority: Pubkey,
 	/// An addresses that can control the account on the authority's behalf. Has limited power, cant withdraw
 	pub delegate: Pubkey,
-	/// The global Vault Config account
-	pub vaults_config: Pubkey,
+	/// The market account
+	pub market: Pubkey,
 	/// The vault used to store the vault's deposits (collateral)
 	/// The amount in the vault should be equal to or greater than deposits - liquidity_balance
 	pub vault: Pubkey,
+	pub vault_index: u16,
+	// pub market_index: u16, // TODO: do we need this?
 	/// Whether the vault is active, being liquidated or bankrupt
 	pub status: u8,
 	/// The last slot a vault was active. Used to determine if a vault is idle
@@ -53,13 +55,15 @@ pub struct Vault {
 }
 
 impl Vault {
-	pub fn initialize(&self, collateral_type: ) {
-		// set collateral type
+	pub fn is_for(&self, market_index: u16) -> bool {
+		self.market_index == market_index
+	}
+
+	pub fn initialize(&self) {
 		// set token_program, token_mint
 
 		self.collateral_type = token_mint_synthetic;
 		self.token_vault_synthetic = token_vault_synthetic;
-		
 	}
 
 	pub fn is_being_liquidated(&self) -> bool {
@@ -83,7 +87,7 @@ impl Vault {
 		self.status &= !(status as u8);
 	}
 
-	pub fn enter_liquidation(&mut self, slot: u64) -> DriftResult<u16> {
+	pub fn enter_liquidation(&mut self, slot: u64) -> NormalResult<u16> {
 		if self.is_being_liquidated() {
 			return self.next_liquidation_id.safe_sub(1);
 		}
@@ -121,7 +125,7 @@ impl Vault {
 	pub fn update_reduce_only_status(
 		&mut self,
 		reduce_only: bool
-	) -> DriftResult {
+	) -> NormalResult {
 		if reduce_only {
 			self.add_user_status(VaultStatus::ReduceOnly);
 		} else {

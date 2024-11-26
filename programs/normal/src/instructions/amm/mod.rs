@@ -7,7 +7,6 @@ pub mod collect_protocol_fees;
 pub mod collect_reward;
 pub mod decrease_liquidity;
 pub mod increase_liquidity;
-pub mod initialize_config;
 pub mod initialize_fee_tier;
 pub mod initialize_amm;
 pub mod initialize_reward;
@@ -35,7 +34,6 @@ pub use collect_protocol_fees::*;
 pub use collect_reward::*;
 
 pub use increase_liquidity::*;
-pub use initialize_config::*;
 pub use initialize_fee_tier::*;
 pub use initialize_amm::*;
 pub use initialize_reward::*;

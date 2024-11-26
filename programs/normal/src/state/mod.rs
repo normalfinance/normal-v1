@@ -1,13 +1,20 @@
 pub mod amm;
+pub mod collateral;
 pub mod events;
-pub mod fund;
-pub mod insurance_fund;
+pub mod index_fund;
+pub mod insurance;
 pub mod load_ref;
 pub mod oracle;
 pub mod oracle_map;
 pub mod position;
+pub mod paused_operations;
 pub mod tick;
-pub mod vault_config;
+pub mod margin_calculation;
+pub mod market_map;
+pub mod market;
+pub mod vault_map;
 pub mod vault;
 #[allow(clippy::module_inception)]
 pub mod state;
+pub mod user;
+pub mod user_map;

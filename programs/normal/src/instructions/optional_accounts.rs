@@ -1,4 +1,5 @@
 use crate::error::{ NormalResult, ErrorCode };
+use crate::state::market_map::MarketMap;
 use std::convert::TryFrom;
 
 use crate::math::safe_unwrap::SafeUnwrap;
@@ -19,6 +20,7 @@ use std::iter::Peekable;
 use std::slice::Iter;
 
 pub struct AccountMaps<'a> {
+	pub market_map: MarketMap<'a>,
 	pub oracle_map: OracleMap<'a>,
 }
 
@@ -33,8 +35,10 @@ pub fn load_maps<'a, 'b>(
 		slot,
 		oracle_guard_rails
 	)?;
+	let market_map = MarketMap::load(writable_markets, account_info_iter)?;
 
 	Ok(AccountMaps {
+		market_map,
 		oracle_map,
 	})
 }

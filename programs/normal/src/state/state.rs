@@ -13,8 +13,6 @@ use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
 use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
 
-use super::vault_config::CollateralType;
-
 // #[cfg(test)]
 // mod tests;
 
@@ -24,25 +22,21 @@ use super::vault_config::CollateralType;
 pub struct State {
 	pub admin: Pubkey,
 	pub signer: Pubkey,
-	// rules for validating oracle price data
 	pub oracle_guard_rails: OracleGuardRails,
-	// prevents transaction from being reused or replayed
+	pub number_of_authorities: u64,
+	pub number_of_sub_accounts: u64,
+	pub liquidation_margin_buffer_ratio: u32,
+	pub number_of_markets: u16,
 	pub signer_nonce: u8,
-	pub min_collateral_auction_duration: u8,
-	pub default_auction_duration: u8,
 	pub exchange_status: u8,
-
-	pub collateral_types: Vec<CollateralType>,
-
-
-	// account able to update and collect protocol fees
-	// pub fee_authority: Pubkey,
-	// // account with permissions to collect protocol pool fees
-	// pub collect_protocol_fees_authority: Pubkey,
-	// // account permissioned to manage pool rewards and emissions
-	// pub reward_emissions_super_authority: Pubkey,
-	// // the fallback protocol fee for pool swaps
-	// pub default_protocol_fee_rate: u16,
+	pub liquidation_duration: u8,
+	pub initial_pct_to_liquidate: u16,
+	pub max_number_of_sub_accounts: u16,
+	pub max_initialize_user_fee: u16,
+	// account permissioned to manage pool rewards and emissions
+	pub reward_emissions_super_authority: Pubkey,
+	// the fallback protocol fee for pool swaps
+	pub default_protocol_fee_rate: u16,
 	pub padding: [u8; 10],
 }
 
@@ -68,19 +62,33 @@ impl State {
 			.safe_unwrap()
 	}
 
-	pub fn amm_paused(&self) -> DriftResult<bool> {
-		Ok(self.get_exchange_status()?.contains(ExchangeStatus::AmmPaused))
+	pub fn max_number_of_sub_accounts(&self) -> u64 {
+		if self.max_number_of_sub_accounts <= 5 {
+			return self.max_number_of_sub_accounts as u64;
+		}
+
+		(self.max_number_of_sub_accounts as u64).saturating_mul(100)
 	}
 
-	pub fn update_fee_authority(&mut self, fee_authority: Pubkey) {
-		self.fee_authority = fee_authority;
-	}
+	pub fn get_init_user_fee(&self) -> DriftResult<u64> {
+		let max_init_fee: u64 =
+			((self.max_initialize_user_fee as u64) * LAMPORTS_PER_SOL_U64) / 100;
 
-	pub fn update_collect_protocol_fees_authority(
-		&mut self,
-		collect_protocol_fees_authority: Pubkey
-	) {
-		self.collect_protocol_fees_authority = collect_protocol_fees_authority;
+		let target_utilization: u64 = (8 * PERCENTAGE_PRECISION_U64) / 10;
+
+		let account_space_utilization: u64 = self.number_of_sub_accounts
+			.safe_mul(PERCENTAGE_PRECISION_U64)?
+			.safe_div(self.max_number_of_sub_accounts().max(1))?;
+
+		let init_fee: u64 = if account_space_utilization > target_utilization {
+			max_init_fee
+				.safe_mul(account_space_utilization.safe_sub(target_utilization)?)?
+				.safe_div(PERCENTAGE_PRECISION_U64.safe_sub(target_utilization)?)?
+		} else {
+			0
+		};
+
+		Ok(init_fee)
 	}
 
 	pub fn update_reward_emissions_super_authority(

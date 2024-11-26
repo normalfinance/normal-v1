@@ -4,7 +4,7 @@ use crate::state::*;
 
 #[derive(Accounts)]
 #[instruction(feed_id : [u8; 32])]
-pub struct InitVaultConfig<'info> {
+pub struct InitMarket<'info> {
 	#[account(mut)]
 	pub admin: Signer<'info>,
 
@@ -16,8 +16,8 @@ pub struct InitVaultConfig<'info> {
 	pub state: Box<Account<'info, State>>,
 }
 
-pub fn handle_initialize_vault_config(
-	ctx: Context<InitVaultConfig>,
+pub fn handle_initialize_market(
+	ctx: Context<InitMarket>,
 	
 ) -> Result<()> {
 	let config = &mut ctx.accounts.config;

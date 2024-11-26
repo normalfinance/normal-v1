@@ -4,22 +4,6 @@ use anchor_lang::prelude::*;
 use solana_program::msg;
 
 use crate::controller::amm::get_fee_pool_tokens;
-use crate::controller::funding::settle_funding_payment;
-use crate::controller::lp::burn_lp_shares;
-use crate::controller::orders;
-use crate::controller::orders::{
-	cancel_order,
-	fill_perp_order,
-	place_perp_order,
-};
-use crate::controller::position::{
-	get_position_index,
-	update_position_and_market,
-	update_quote_asset_amount,
-	update_quote_asset_and_break_even_amount,
-	PositionDirection,
-};
-use crate::controller::repeg::update_amm_and_check_validity;
 use crate::controller::spot_balance::{
 	update_revenue_pool_balances,
 	update_spot_balances,
@@ -27,7 +11,7 @@ use crate::controller::spot_balance::{
 	update_spot_market_cumulative_interest,
 };
 use crate::controller::spot_position::update_spot_balances_and_cumulative_deposits;
-use crate::error::{ DriftResult, ErrorCode };
+use crate::error::{ NormalResult, ErrorCode };
 use crate::math::bankruptcy::is_user_bankrupt;
 use crate::math::casting::Cast;
 use crate::math::constants::{
@@ -43,13 +27,11 @@ use crate::math::liquidation::{
 	calculate_asset_transfer_for_liability_transfer,
 	calculate_base_asset_amount_to_cover_margin_shortage,
 	calculate_cumulative_deposit_interest_delta_to_resolve_bankruptcy,
-	calculate_funding_rate_deltas_to_resolve_bankruptcy,
 	calculate_liability_transfer_implied_by_asset_amount,
 	calculate_liability_transfer_to_cover_margin_shortage,
 	calculate_liquidation_multiplier,
 	calculate_max_pct_to_liquidate,
 	calculate_perp_if_fee,
-	calculate_spot_if_fee,
 	get_liquidation_fee,
 	get_liquidation_order_params,
 	validate_transfer_satisfies_limit_price,
@@ -57,7 +39,6 @@ use crate::math::liquidation::{
 };
 use crate::math::margin::{
 	calculate_margin_requirement_and_total_collateral_and_liability_info,
-	calculate_user_safest_position_tiers,
 	meets_initial_margin_requirement,
 	MarginRequirementType,
 };
@@ -98,18 +79,13 @@ use crate::state::margin_calculation::{
 };
 use crate::state::oracle_map::OracleMap;
 use crate::state::order_params::PlaceOrderOptions;
-use crate::state::paused_operations::{ PerpOperation, SpotOperation };
-use crate::state::perp_market::MarketStatus;
-use crate::state::perp_market_map::PerpMarketMap;
-use crate::state::spot_market::SpotBalanceType;
-use crate::state::spot_market_map::SpotMarketMap;
+use crate::state::paused_operations::SynthOperation;
+use crate::state::market::MarketStatus;
+use crate::state::market_map::MarketMap;
 use crate::state::state::State;
 use crate::state::traits::Size;
 use crate::state::user::{
 	MarketType,
-	Order,
-	OrderStatus,
-	OrderType,
 	User,
 	UserStats,
 };
@@ -128,13 +104,12 @@ pub fn liquidate_vault(
 	liquidator: &mut User,
 	liquidator_key: &Pubkey,
 	liquidator_stats: &mut UserStats,
-	perp_market_map: &PerpMarketMap,
-	spot_market_map: &SpotMarketMap,
+	market_map: &MarketMap,
 	oracle_map: &mut OracleMap,
 	slot: u64,
 	now: i64,
 	state: &State
-) -> DriftResult {
+) -> NormalResult {
 	let liquidation_margin_buffer_ratio = state.liquidation_margin_buffer_ratio;
 	let initial_pct_to_liquidate = state.initial_pct_to_liquidate as u128;
 	let liquidation_duration = state.liquidation_duration as u128;
@@ -147,10 +122,10 @@ pub fn liquidate_vault(
 		"liquidator bankrupt"
 	)?;
 
-	let market = perp_market_map.get_ref(&market_index)?;
+	let market = market_map.get_ref(&market_index)?;
 
 	validate!(
-		!market.is_operation_paused(PerpOperation::Liquidation),
+		!market.is_operation_paused(SynthOperation::Liquidation),
 		ErrorCode::InvalidLiquidation,
 		"Liquidation operation is paused for market {}",
 		market_index
@@ -158,25 +133,10 @@ pub fn liquidate_vault(
 
 	drop(market);
 
-	settle_funding_payment(
-		user,
-		user_key,
-		perp_market_map.get_ref_mut(&market_index)?.deref_mut(),
-		now
-	)?;
-
-	settle_funding_payment(
-		liquidator,
-		liquidator_key,
-		perp_market_map.get_ref_mut(&market_index)?.deref_mut(),
-		now
-	)?;
-
 	let margin_calculation =
 		calculate_margin_requirement_and_total_collateral_and_liability_info(
 			user,
-			perp_market_map,
-			spot_market_map,
+			market_map,
 			oracle_map,
 			MarginContext::liquidation(
 				liquidation_margin_buffer_ratio
@@ -218,22 +178,7 @@ pub fn liquidate_vault(
 		ErrorCode::PositionDoesntHaveOpenPositionOrOrders
 	)?;
 
-	let canceled_order_ids = orders::cancel_orders(
-		user,
-		user_key,
-		Some(liquidator_key),
-		perp_market_map,
-		spot_market_map,
-		oracle_map,
-		now,
-		slot,
-		OrderActionExplanation::Liquidation,
-		None,
-		None,
-		None
-	)?;
-
-	let mut market = perp_market_map.get_ref_mut(&market_index)?;
+	let mut market = market_map.get_ref_mut(&market_index)?;
 	let oracle_price_data = oracle_map.get_price_data(&market.amm.oracle)?;
 
 	update_amm_and_check_validity(
@@ -277,15 +222,11 @@ pub fn liquidate_vault(
 	}
 
 	// check if user exited liquidation territory
-	let intermediate_margin_calculation = if
-		!canceled_order_ids.is_empty() ||
-		lp_shares > 0
-	{
+	let intermediate_margin_calculation = if lp_shares > 0 {
 		let intermediate_margin_calculation =
 			calculate_margin_requirement_and_total_collateral_and_liability_info(
 				user,
 				perp_market_map,
-				spot_market_map,
 				oracle_map,
 				MarginContext::liquidation(
 					liquidation_margin_buffer_ratio
@@ -311,7 +252,7 @@ pub fn liquidate_vault(
 				margin_requirement: margin_calculation.margin_requirement,
 				total_collateral: margin_calculation.total_collateral,
 				bankrupt: user.is_bankrupt(),
-				canceled_order_ids,
+
 				margin_freed,
 				liquidate_perp: LiquidatePerpRecord {
 					market_index,
@@ -605,7 +546,6 @@ pub fn liquidate_vault(
 		meets_initial_margin_requirement(
 			liquidator,
 			perp_market_map,
-			spot_market_map,
 			oracle_map
 		)?;
 
@@ -630,7 +570,7 @@ pub fn liquidate_vault(
 		market_index,
 		status: OrderStatus::Open,
 		order_type: OrderType::Market,
-		market_type: MarketType::Perp,
+		market_type: MarketType::Synth,
 		direction: user_position_direction_to_close,
 		existing_position_direction: user_existing_position_direction,
 		..Order::default()
@@ -658,7 +598,7 @@ pub fn liquidate_vault(
 		} else {
 			OrderType::Market
 		},
-		market_type: MarketType::Perp,
+		market_type: MarketType::Synth,
 		direction: user_existing_position_direction,
 		existing_position_direction: liquidator_existing_position_direction,
 		..Order::default()
@@ -675,7 +615,7 @@ pub fn liquidate_vault(
 		action: OrderAction::Fill,
 		action_explanation: OrderActionExplanation::Liquidation,
 		market_index,
-		market_type: MarketType::Perp,
+		market_type: MarketType::Synth,
 		filler: None,
 		filler_reward: None,
 		fill_record_id: Some(fill_record_id),
@@ -713,7 +653,7 @@ pub fn liquidate_vault(
 		margin_requirement: margin_calculation.margin_requirement,
 		total_collateral: margin_calculation.total_collateral,
 		bankrupt: user.is_bankrupt(),
-		canceled_order_ids,
+
 		margin_freed,
 		liquidate_perp: LiquidatePerpRecord {
 			market_index,
@@ -733,18 +673,17 @@ pub fn liquidate_vault(
 	Ok(())
 }
 
-pub fn resolve_perp_bankruptcy(
+pub fn resolve_vault_bankruptcy(
 	market_index: u16,
 	user: &mut User,
 	user_key: &Pubkey,
 	liquidator: &mut User,
 	liquidator_key: &Pubkey,
-	perp_market_map: &PerpMarketMap,
-	spot_market_map: &SpotMarketMap,
+	market_map: &MarketMap,
 	oracle_map: &mut OracleMap,
 	now: i64,
 	insurance_fund_vault_balance: u64
-) -> DriftResult<u64> {
+) -> NormalResult<u64> {
 	if !user.is_bankrupt() && is_user_bankrupt(user) {
 		user.enter_bankruptcy();
 	}
@@ -767,10 +706,10 @@ pub fn resolve_perp_bankruptcy(
 		"liquidator bankrupt"
 	)?;
 
-	let market = perp_market_map.get_ref(&market_index)?;
+	let market = market_map.get_ref(&market_index)?;
 
 	validate!(
-		!market.is_operation_paused(PerpOperation::Liquidation),
+		!market.is_operation_paused(SynthOperation::Liquidation),
 		ErrorCode::InvalidLiquidation,
 		"Liquidation operation is paused for market {}",
 		market_index
@@ -796,8 +735,7 @@ pub fn resolve_perp_bankruptcy(
 	let MarginCalculation { margin_requirement, total_collateral, .. } =
 		calculate_margin_requirement_and_total_collateral_and_liability_info(
 			user,
-			perp_market_map,
-			spot_market_map,
+			market_map,
 			oracle_map,
 			MarginContext::standard(MarginRequirementType::Maintenance)
 		)?;
@@ -806,9 +744,9 @@ pub fn resolve_perp_bankruptcy(
 	// subtract 1 from available insurance_fund_vault_balance so deposits in insurance vault always remains >= 1
 
 	let if_payment = {
-		let mut perp_market = perp_market_map.get_ref_mut(&market_index)?;
-		let max_insurance_withdraw = perp_market.insurance_claim.quote_max_insurance
-			.safe_sub(perp_market.insurance_claim.quote_settled_insurance)?
+		let mut market = market_map.get_ref_mut(&market_index)?;
+		let max_insurance_withdraw = market.insurance_claim.quote_max_insurance
+			.safe_sub(market.insurance_claim.quote_settled_insurance)?
 			.cast::<u128>()?;
 
 		let if_payment = loss
@@ -816,8 +754,8 @@ pub fn resolve_perp_bankruptcy(
 			.min(insurance_fund_vault_balance.saturating_sub(1).cast()?)
 			.min(max_insurance_withdraw);
 
-		perp_market.insurance_claim.quote_settled_insurance =
-			perp_market.insurance_claim.quote_settled_insurance.safe_add(
+		market.insurance_claim.quote_settled_insurance =
+			market.insurance_claim.quote_settled_insurance.safe_add(
 				if_payment.cast()?
 			)?;
 
@@ -836,7 +774,7 @@ pub fn resolve_perp_bankruptcy(
 			if_payment,
 			&SpotBalanceType::Deposit,
 			spot_market,
-			&mut perp_market.pnl_pool,
+			&mut market.pnl_pool,
 			false
 		)?;
 
@@ -851,11 +789,11 @@ pub fn resolve_perp_bankruptcy(
 	)?;
 
 	let fee_pool_payment: i128 = if losses_remaining < 0 {
-		let perp_market = &mut perp_market_map.get_ref_mut(&market_index)?;
+		let market = &mut market_map.get_ref_mut(&market_index)?;
 		let spot_market = &mut spot_market_map.get_ref_mut(
 			&QUOTE_SPOT_MARKET_INDEX
 		)?;
-		let fee_pool_tokens = get_fee_pool_tokens(perp_market, spot_market)?;
+		let fee_pool_tokens = get_fee_pool_tokens(market, spot_market)?;
 		msg!("fee_pool_tokens={:?}", fee_pool_tokens);
 
 		losses_remaining.abs().min(fee_pool_tokens.cast()?)
@@ -869,7 +807,7 @@ pub fn resolve_perp_bankruptcy(
 	)?;
 
 	if fee_pool_payment > 0 {
-		let perp_market = &mut perp_market_map.get_ref_mut(&market_index)?;
+		let market = &mut market_map.get_ref_mut(&market_index)?;
 		let spot_market = &mut spot_market_map.get_ref_mut(
 			&QUOTE_SPOT_MARKET_INDEX
 		)?;
@@ -878,7 +816,7 @@ pub fn resolve_perp_bankruptcy(
 			fee_pool_payment.unsigned_abs(),
 			&SpotBalanceType::Borrow,
 			spot_market,
-			&mut perp_market.amm.fee_pool,
+			&mut market.amm.fee_pool,
 			false
 		)?;
 	}
@@ -892,15 +830,15 @@ pub fn resolve_perp_bankruptcy(
 		"loss_to_socialize must be non-positive"
 	)?;
 
-	let cumulative_funding_rate_delta =
-		calculate_funding_rate_deltas_to_resolve_bankruptcy(
-			loss_to_socialize,
-			perp_market_map.get_ref(&market_index)?.deref()
-		)?;
+	// let cumulative_funding_rate_delta =
+	// 	calculate_funding_rate_deltas_to_resolve_bankruptcy(
+	// 		loss_to_socialize,
+	// 		market_map.get_ref(&market_index)?.deref()
+	// 	)?;
 
 	// socialize loss
 	if loss_to_socialize < 0 {
-		let mut market = perp_market_map.get_ref_mut(&market_index)?;
+		let mut market = market_map.get_ref_mut(&market_index)?;
 
 		market.amm.total_social_loss = market.amm.total_social_loss.safe_add(
 			loss_to_socialize.unsigned_abs()
@@ -919,7 +857,7 @@ pub fn resolve_perp_bankruptcy(
 
 	// clear bad debt
 	{
-		let mut market = perp_market_map.get_ref_mut(&market_index)?;
+		let mut market = market_map.get_ref_mut(&market_index)?;
 		let position_index = get_position_index(
 			&user.perp_positions,
 			market_index
@@ -951,7 +889,7 @@ pub fn resolve_perp_bankruptcy(
 		margin_requirement,
 		total_collateral,
 		bankrupt: true,
-		perp_bankruptcy: PerpBankruptcyRecord {
+		vault_bankruptcy: PerpBankruptcyRecord {
 			market_index,
 			if_payment,
 			pnl: loss,
@@ -971,7 +909,7 @@ pub fn set_vault_status_to_being_liquidated(
 	oracle_map: &mut OracleMap,
 	slot: u64,
 	state: &State
-) -> DriftResult {
+) -> NormalResult {
 	validate!(!vault.is_bankrupt(), ErrorCode::UserBankrupt, "vault bankrupt")?;
 
 	validate!(

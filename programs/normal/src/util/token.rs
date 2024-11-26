@@ -313,7 +313,11 @@ pub fn mint_position_token_with_metadata_and_remove_authority<'info>(
 		None
 	)?;
 
-	remove_position_token_mint_syntheticuthority(amm, position_mint, token_program)
+	remove_position_token_mint_syntheticuthority(
+		amm,
+		position_mint,
+		token_program
+	)
 }
 
 fn mint_position_token<'info>(

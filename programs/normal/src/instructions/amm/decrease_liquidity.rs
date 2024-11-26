@@ -17,10 +17,7 @@ use crate::util::{
 
 use super::increase_liquidity::ModifyLiquidity;
 
-/*
-  Removes liquidity from an existing AMM Position.
-*/
-pub fn handler(
+pub fn handle_decrease_liquidity(
 	ctx: Context<ModifyLiquidity>,
 	liquidity_amount: u128,
 	token_min_a: u64,

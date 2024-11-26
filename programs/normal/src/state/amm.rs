@@ -21,7 +21,6 @@ pub struct AMM {
 	pub vault: Pubkey,
 	/// the authority that can push or pull quote asset tokens to/from the Vault when price exceed the max_price_deviance
 	pub vault_balance_authority: Pubkey,
-	
 
 	/// Tokens
 	///
@@ -34,7 +33,6 @@ pub struct AMM {
 	pub token_vault_synthetic: Pubkey,
 	/// Vault storing quote tokens (SOL, XLM, USDC)
 	pub token_vault_quote: Pubkey,
-
 
 	pub risk_tier: SyntheticTier,
 
@@ -62,12 +60,11 @@ pub struct AMM {
 	pub oracle_std: u64,
 
 	/// Peg
-	/// 
+	///
 	/// the maximum percent the pool price can deviate above or below the oracle twap
 	pub max_price_deviance: u16,
 	/// volume divided by synthetic token market cap (how much volume is created per $1 of liquidity)
 	pub liquidity_to_volume_multiplier: u64,
-
 
 	/// Liquidity
 	///
@@ -109,13 +106,13 @@ impl AMM {
 	pub const LEN: usize = 8 + 261 + 384;
 
 	pub fn is_price_inside_range(&self, price: u64) -> bool {
-		if  {
+		if price < 0 {
 			0
 		} else if swap_update.next_sqrt_price < limit {
 			1
 		} else {
 			true
-		};
+		}
 	}
 
 	pub fn seeds(&self) -> [&[u8]; 6] {
@@ -324,7 +321,7 @@ impl AMM {
 		reward_infos: [AMMRewardInfo; NUM_REWARDS],
 		protocol_fee: u64,
 		is_token_fee_in_synthetic: bool,
-		reward_last_updated_timestamp: u64,
+		reward_last_updated_timestamp: u64
 	) {
 		self.tick_current_index = tick_index;
 		self.sqrt_price = sqrt_price;

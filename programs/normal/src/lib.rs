@@ -36,57 +36,175 @@ declare_id!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
 pub mod normal {
 	use super::*;
 
-	/**
-	 *
-	 * State/admin instructions
-	 *
-	 */
+	// State instructions
 
 	pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-		handle_initialize(ctx)
+		handle_initialize_state(ctx)
 	}
 
-	pub fn update_admin(
+	pub fn update_state_admin(
 		ctx: Context<AdminUpdateState>,
 		admin: Pubkey
 	) -> Result<()> {
-		handle_update_admin(ctx, admin)
+		handle_update_state_admin(ctx, admin)
 	}
 
-	pub fn update_fee_structure(
+	pub fn update_state_initial_pct_to_liquidate(
 		ctx: Context<AdminUpdateState>,
-		fee_structure: FeeStructure
+		initial_pct_to_liquidate: u16
 	) -> Result<()> {
-		handle_update_fee_structure(ctx, fee_structure)
+		handle_update_state_initial_pct_to_liquidate(ctx, initial_pct_to_liquidate)
 	}
 
-	/**
-	 * Collateral Instructions
-	 */
-
-	pub fn add_collateral_type(ctx: Context<AdminUpdateState>) -> Result<()> {
-		handle_add_collateral_type(ctx)
-	}
-
-	pub fn remove_collateral_type(ctx: Context<AdminUpdateState>) -> Result<()> {
-		handle_remove_collateral_type(ctx)
-	}
-
-	/**
-	 * Vaults Config Instructions
-	 */
-
-	pub fn initialize_vaults_config(
-		ctx: Context<AdminUpdateState>
+	pub fn update_state_liquidation_duration(
+		ctx: Context<AdminUpdateState>,
+		liquidation_duration: u8
 	) -> Result<()> {
-		handle_initialize_vaults_config(ctx)
+		handle_update_state_liquidation_duration(ctx, liquidation_duration)
 	}
 
-	/**
-	 *
-	 * AMM Instructions (admin)
-	 *
-	 */
+	pub fn update_state_liquidation_margin_buffer_ratio(
+		ctx: Context<AdminUpdateState>,
+		liquidation_margin_buffer_ratio: u32
+	) -> Result<()> {
+		handle_update_state_liquidation_margin_buffer_ratio(
+			ctx,
+			liquidation_margin_buffer_ratio
+		)
+	}
+
+	pub fn update_state_max_number_of_sub_accounts(
+		ctx: Context<AdminUpdateState>,
+		max_number_of_sub_accounts: u16
+	) -> Result<()> {
+		handle_update_state_max_number_of_sub_accounts(
+			ctx,
+			max_number_of_sub_accounts
+		)
+	}
+
+	pub fn update_state_max_initialize_user_fee(
+		ctx: Context<AdminUpdateState>,
+		max_initialize_user_fee: u16
+	) -> Result<()> {
+		handle_update_state_max_initialize_user_fee(ctx, max_initialize_user_fee)
+	}
+
+	// Market instructions
+
+	pub fn initialize_market(ctx: Context<InitMarket>) -> Result<()> {
+		handle_initialize_market(ctx)
+	}
+
+	pub fn update_market_synthetic_tier(
+		ctx: Context<AdminUpdateMarket>,
+		synthetic_tier: SyntheticTier
+	) -> Result<()> {
+		handle_update_market_synthetic_tier(ctx, synthetic_tier)
+	}
+
+	// User instructions
+
+	pub fn initialize_user<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, InitializeUser<'info>>,
+		sub_account_id: u16,
+		name: [u8; 32]
+	) -> Result<()> {
+		handle_initialize_user(ctx, sub_account_id, name)
+	}
+
+	pub fn initialize_user_stats<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, InitializeUserStats>
+	) -> Result<()> {
+		handle_initialize_user_stats(ctx)
+	}
+
+	pub fn initialize_referrer_name(
+		ctx: Context<InitializeReferrerName>,
+		name: [u8; 32]
+	) -> Result<()> {
+		handle_initialize_referrer_name(ctx, name)
+	}
+
+	pub fn update_user_name(
+		ctx: Context<UpdateUser>,
+		_sub_account_id: u16,
+		name: [u8; 32]
+	) -> Result<()> {
+		handle_update_user_name(ctx, _sub_account_id, name)
+	}
+
+	pub fn update_user_delegate(
+		ctx: Context<UpdateUser>,
+		_sub_account_id: u16,
+		delegate: Pubkey
+	) -> Result<()> {
+		handle_update_user_delegate(ctx, _sub_account_id, delegate)
+	}
+
+	pub fn update_user_reduce_only(
+		ctx: Context<UpdateUser>,
+		_sub_account_id: u16,
+		reduce_only: bool
+	) -> Result<()> {
+		handle_update_user_reduce_only(ctx, _sub_account_id, reduce_only)
+	}
+
+	pub fn update_user_advanced_lp(
+		ctx: Context<UpdateUser>,
+		_sub_account_id: u16,
+		advanced_lp: bool
+	) -> Result<()> {
+		handle_update_user_advanced_lp(ctx, _sub_account_id, advanced_lp)
+	}
+
+	pub fn delete_user<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, DeleteUser>
+	) -> Result<()> {
+		handle_delete_user(ctx)
+	}
+
+	pub fn reclaim_rent(ctx: Context<ReclaimRent>) -> Result<()> {
+		handle_reclaim_rent(ctx)
+	}
+
+	// Kepper instructions
+
+	pub fn update_user_idle<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, UpdateUserIdle<'info>>
+	) -> Result<()> {
+		handle_update_user_idle(ctx)
+	}
+
+	pub fn liquidate_vault<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, LiquidateVault<'info>>,
+		market_index: u16,
+		liquidator_max_base_asset_amount: u64,
+		limit_price: Option<u64>
+	) -> Result<()> {
+		handle_liquidate_vault(
+			ctx,
+			market_index,
+			liquidator_max_base_asset_amount,
+			limit_price
+		)
+	}
+
+	pub fn set_vault_status_to_being_liquidated<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, SetUserStatusToBeingLiquidated<'info>>
+	) -> Result<()> {
+		handle_set_vault_status_to_being_liquidated(ctx)
+	}
+
+	pub fn resolve_vault_bankruptcy<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, ResolveBankruptcy<'info>>,
+		quote_spot_market_index: u16,
+		market_index: u16
+	) -> Result<()> {
+		handle_resolve_vault_bankruptcy(ctx, quote_spot_market_index, market_index)
+	}
+
+	// AMM instructions
 
 	/// Initializes a market's AMM account.
 	/// Fee rate is set to the default values on the config and supplied fee_tier.
@@ -445,25 +563,11 @@ pub mod normal {
 		handle_close_liquidity_position_with_token_extensions(ctx)
 	}
 
-	pub fn update_market_synthetic_tier(
-		ctx: Context<AdminUpdateMarket>,
-		synthetic_tier: SyntheticTier
-	) -> Result<()> {
-		handle_update_market_synthetic_tier(ctx, synthetic_tier)
-	}
-
 	/**
 	 *
 	 * FEE POOL INSTRUCTIONS
 	 *
 	 */
-
-	pub fn transfer_fees_to_insurance_fund<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, TransferFeesToInsuranceFund<'info>>,
-		market_index: u16
-	) -> Result<()> {
-		handle_tranfer_fees_to_insurance_fund(ctx, market_index)
-	}
 
 	pub fn transfer_fees_to_treasury<'c: 'info, 'info>(
 		ctx: Context<'_, '_, 'c, 'info, TransferFeesToTreasury<'info>>,
@@ -489,44 +593,40 @@ pub mod normal {
 
 	/**
 	 *
-	 * Fund Instructions
+	 * Index Fund instructions
 	 *
 	 */
 
-	pub fn initialize_fund<'c: 'info, 'info>(
+	pub fn initialize_index_fund<'c: 'info, 'info>(
 		ctx: Context<'_, '_, 'c, 'info, InitializeIndexFund<'info>>,
 		name: [u8; 32],
 		public: bool
 	) -> Result<()> {
-		handle_initialize_fund(ctx, name, public)
+		handle_initialize_index_fund(ctx, name, public)
 	}
 
-	pub fn update_fund_visibility<'c: 'info, 'info>(
+	pub fn update_index_fund_visibility<'c: 'info, 'info>(
 		ctx: Context<'_, '_, 'c, 'info, UpdateIndexFund<'info>>,
 		public: bool
 	) -> Result<()> {
-		handle_update_fund_visibility(ctx, public)
+		handle_update_index_fund_visibility(ctx, public)
 	}
 
-	pub fn update_fund_assets<'c: 'info, 'info>(
+	pub fn update_index_fund_assets<'c: 'info, 'info>(
 		ctx: Context<'_, '_, 'c, 'info, UpdateIndexFund<'info>>,
 		assets: IndexFundAssets
 	) -> Result<()> {
-		handle_update_fund_assets(ctx, assets)
+		handle_update_index_fund_assets(ctx, assets)
 	}
 
-	pub fn rebalance_fund<'c: 'info, 'info>(
+	pub fn rebalance_index_fund<'c: 'info, 'info>(
 		ctx: Context<'_, '_, 'c, 'info, RebalanceIndexFund<'info>>,
 		market_index: u16
 	) -> Result<()> {
-		handle_rebalance_fund(ctx, market_index)
+		handle_rebalance_index_fund(ctx, market_index)
 	}
 
-	/**
-	 *
-	 * Oracle Instructions
-	 *
-	 */
+	// Oracle instructions
 
 	pub fn initialize_pyth_pull_oracle(
 		ctx: Context<InitPythPullPriceFeed>,
@@ -562,5 +662,64 @@ pub mod normal {
 		params: Vec<u8>
 	) -> Result<()> {
 		handle_post_multi_pyth_pull_oracle_updates_atomic(ctx, params)
+	}
+
+	// Insurance Fund instructions
+
+	pub fn initialize_insurnace_fund(
+		ctx: Context<InitializeInsuranceFund>
+	) -> Result<()> {
+		handle_initialize_insurance_fund(ctx)
+	}
+
+	pub fn update_insurance_fund_unstaking_period(
+		ctx: Context<AdminUpdateInsurnaceFund>,
+		insurance_fund_unstaking_period: i64
+	) -> Result<()> {
+		handle_update_insurance_fund_unstaking_period(
+			ctx,
+			insurance_fund_unstaking_period
+		)
+	}
+
+	pub fn settle_revenue_to_insurance_fund<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, SettleRevenueToInsuranceFund<'info>>,
+		market_index: u16
+	) -> Result<()> {
+		handle_settle_revenue_to_insurance_fund(ctx, market_index)
+	}
+
+	// Insurane Fund Staker instructions
+
+	pub fn initialize_insurance_fund_stake(
+		ctx: Context<InitializeInsuranceFundStake>
+	) -> Result<()> {
+		handle_initialize_insurance_fund_stake(ctx)
+	}
+
+	pub fn add_insurance_fund_stake<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, AddInsuranceFundStake<'info>>,
+		amount: u64
+	) -> Result<()> {
+		handle_add_insurance_fund_stake(ctx, amount)
+	}
+
+	pub fn request_remove_insurance_fund_stake(
+		ctx: Context<RequestRemoveInsuranceFundStake>,
+		amount: u64
+	) -> Result<()> {
+		handle_request_remove_insurance_fund_stake(ctx, amount)
+	}
+
+	pub fn cancel_request_remove_insurance_fund_stake(
+		ctx: Context<RequestRemoveInsuranceFundStake>
+	) -> Result<()> {
+		handle_cancel_request_remove_insurance_fund_stake(ctx)
+	}
+
+	pub fn remove_insurance_fund_stake<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, RequestRemoveInsuranceFundStake<'info>>
+	) -> Result<()> {
+		handle_remove_insurance_fund_stake(ctx)
 	}
 }

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use vault::Vault;
-use vault_config::VaultsConfig;
+use market::VaultsConfig;
 
 use crate::{ state::* };
 

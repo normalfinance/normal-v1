@@ -28,6 +28,36 @@ pub fn has_been_approved(proposal_id: Pubkey) -> anchor_lang::Result<()> {
 	Ok(())
 }
 
+pub fn can_sign_for_user(
+	user: &AccountLoader<User>,
+	signer: &Signer
+) -> anchor_lang::Result<bool> {
+	user
+		.load()
+		.map(|user| {
+			user.authority.eq(signer.key) ||
+				(user.delegate.eq(signer.key) && !user.delegate.eq(&Pubkey::default()))
+		})
+}
+
+pub fn is_stats_for_user(
+	user: &AccountLoader<User>,
+	user_stats: &AccountLoader<UserStats>
+) -> anchor_lang::Result<bool> {
+	let user = user.load()?;
+	let user_stats = user_stats.load()?;
+	Ok(user_stats.authority.eq(&user.authority))
+}
+
+pub fn is_stats_for_if_stake(
+	if_stake: &AccountLoader<InsuranceFundStake>,
+	user_stats: &AccountLoader<UserStats>
+) -> anchor_lang::Result<bool> {
+	let if_stake = if_stake.load()?;
+	let user_stats = user_stats.load()?;
+	Ok(user_stats.authority.eq(&if_stake.authority))
+}
+
 pub fn can_sign_for_vault(
 	vault: &AccountLoader<Vault>,
 	signer: &Signer
@@ -55,13 +85,6 @@ pub fn valid_oracle_for_amm(
 
 pub fn liq_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
 	if state.get_exchange_status()?.contains(ExchangeStatus::LiqPaused) {
-		return Err(ErrorCode::ExchangePaused.into());
-	}
-	Ok(())
-}
-
-pub fn deposit_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
-	if state.get_exchange_status()?.contains(ExchangeStatus::DepositPaused) {
 		return Err(ErrorCode::ExchangePaused.into());
 	}
 	Ok(())

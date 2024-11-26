@@ -24,7 +24,7 @@ pub fn handle_initialize_fund(
 	name: [u8; 32],
 	public: bool
 ) -> Result<()> {
-	**fund = Fund {
+	**index_fund = Fund {
 		admin: &ctx.accounts.admin,
 		name,
 		public,
