@@ -6,12 +6,12 @@ use solana_program::msg;
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::amm;
 use crate::math::casting::Cast;
-use crate::constants::constants::BID_ASK_SPREAD_PRECISION;
+use crate::constants::main::BID_ASK_SPREAD_PRECISION;
 use crate::math::safe_math::SafeMath;
 
 use crate::state::oracle::OraclePriceData;
-use crate::state::paused_operations::PerpOperation;
-use crate::state::perp_market::PerpMarket;
+use crate::state::paused_operations::SynthOperation;
+use crate::state::market::Market;
 use crate::state::state::{ OracleGuardRails, ValidityGuardRails };
 use crate::state::user::MarketType;
 use std::fmt;

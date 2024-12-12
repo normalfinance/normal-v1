@@ -9,7 +9,7 @@ use crate::{
 	state::*,
 };
 use amm::AMM;
-use position::Position;
+use lp::Position;
 use tick::TickArray;
 use crate::controller::*;
 use anchor_lang::prelude::{ AccountLoader, * };

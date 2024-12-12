@@ -15,10 +15,6 @@ use super::oracle::{ HistoricalOracleData, OracleSource };
 #[account]
 #[derive(Default)]
 pub struct AMM {
-	pub amm_bump: [u8; 1],
-
-	/// the pubkey of the collateral Vault backing the value of the pool’s synthetic asset
-	pub vault: Pubkey,
 	/// the authority that can push or pull quote asset tokens to/from the Vault when price exceed the max_price_deviance
 	pub vault_balance_authority: Pubkey,
 
@@ -34,8 +30,6 @@ pub struct AMM {
 	/// Vault storing quote tokens (SOL, XLM, USDC)
 	pub token_vault_quote: Pubkey,
 
-	pub risk_tier: SyntheticTier,
-
 	/// Oracle
 	///
 	/// oracle price data public key
@@ -44,7 +38,6 @@ pub struct AMM {
 	pub oracle_source: OracleSource,
 	/// stores historically witnessed oracle data
 	pub historical_oracle_data: HistoricalOracleData,
-	pub historical_index_data: HistoricalIndexData,
 	/// the pct size of the oracle confidence interval
 	/// precision: PERCENTAGE_PRECISION
 	pub last_oracle_conf_pct: u64,
@@ -99,6 +92,21 @@ pub struct AMM {
 	pub reward_infos: [AMMRewardInfo; NUM_REWARDS], // 384
 }
 
+impl Default for AMM {
+	fn default() -> Self {
+		AMM {
+			oracle: Pubkey::default(),
+			historical_oracle_data: HistoricalOracleData::default(),
+			last_oracle_normalised_price: 0,
+			last_oracle_reserve_price_spread_pct: 0,
+			last_oracle_conf_pct: 0,
+			oracle_std: 0,
+			oracle_source: OracleSource::default(),
+			last_oracle_valid: false,
+		}
+	}
+}
+
 // Number of rewards supported by AMMs
 pub const NUM_REWARDS: usize = 3;
 
@@ -113,16 +121,6 @@ impl AMM {
 		} else {
 			true
 		}
-	}
-
-	pub fn seeds(&self) -> [&[u8]; 6] {
-		[
-			&b"amm"[..],
-			self.token_mint_synthetic.as_ref(),
-			self.token_mint_quote.as_ref(),
-			self.tick_spacing_seed.as_ref(),
-			self.amm_bump.as_ref(),
-		]
 	}
 
 	pub fn input_token_mint(&self, synthetic_to_quote: bool) -> Pubkey {
@@ -157,76 +155,6 @@ impl AMM {
 		}
 	}
 
-	#[allow(clippy::too_many_arguments)]
-	pub fn initialize(
-		&mut self,
-		bump: u8,
-		tick_spacing: u16,
-		sqrt_price: u128,
-		default_fee_rate: u16,
-		token_mint_synthetic: Pubkey,
-		token_vault_synthetic: Pubkey,
-		token_mint_quote: Pubkey,
-		token_vault_quote: Pubkey,
-		// cusotm
-		oracle: Pubkey,
-		oracle_source: OracleSource
-	) -> Result<()> {
-		if token_mint_synthetic.ge(&token_mint_quote) {
-			return Err(ErrorCode::InvalidTokenMintOrder.into());
-		}
-
-		if !(MIN_SQRT_PRICE_X64..=MAX_SQRT_PRICE_X64).contains(&sqrt_price) {
-			return Err(ErrorCode::SqrtPriceOutOfBounds.into());
-		}
-
-		self.amm_bump = [bump];
-
-		// Tokens
-		self.token_mint_synthetic = token_mint_synthetic;
-		self.token_vault_synthetic = token_vault_synthetic;
-
-		self.token_mint_quote = token_mint_quote;
-		self.token_vault_quote = token_vault_quote;
-
-		// Oracle
-		self.oracle = oracle.key();
-		self.oracle_source = oracle_source;
-		self.historical_oracle_data = HistoricalOracleData::default();
-		self.historical_index_data = HistoricalIndexData::default();
-		self.last_oracle_conf_pct = 0;
-		self.last_oracle_valid = false;
-		self.last_oracle_normalised_price = 0;
-		self.last_oracle_reserve_price_spread_pct = 0;
-		self.oracle_std = 0;
-
-		// Liquidity
-		self.sqrt_price = sqrt_price;
-		self.liquidity = 0;
-		self.tick_spacing = tick_spacing;
-		self.tick_spacing_seed = self.tick_spacing.to_le_bytes();
-		self.tick_current_index = tick_index_from_sqrt_price(&sqrt_price);
-
-		// Fees
-
-		self.update_fee_rate(default_fee_rate)?;
-		self.update_protocol_fee_rate(amms_config.default_protocol_fee_rate)?;
-
-		self.protocol_fee_owed_synthetic = 0;
-		self.protocol_fee_owed_quote = 0;
-
-		self.fee_growth_global_synthetic = 0;
-		self.fee_growth_global_quote = 0;
-
-		// Rewards
-		self.reward_infos = [
-			AMMRewardInfo::new(amms_config.reward_emissions_super_authority);
-			NUM_REWARDS
-		];
-
-		Ok(())
-	}
-
 	/// Update all reward values for the AMM.
 	///
 	/// # Parameters
@@ -249,66 +177,6 @@ impl AMM {
 	) {
 		self.update_rewards(reward_infos, reward_last_updated_timestamp);
 		self.liquidity = liquidity;
-	}
-
-	/// Update the reward authority at the specified AMM reward index.
-	pub fn update_reward_authority(
-		&mut self,
-		index: usize,
-		authority: Pubkey
-	) -> Result<()> {
-		if index >= NUM_REWARDS {
-			return Err(ErrorCode::InvalidRewardIndex.into());
-		}
-		self.reward_infos[index].authority = authority;
-
-		Ok(())
-	}
-
-	pub fn update_emissions(
-		&mut self,
-		index: usize,
-		reward_infos: [AMMRewardInfo; NUM_REWARDS],
-		timestamp: u64,
-		emissions_per_second_x64: u128
-	) -> Result<()> {
-		if index >= NUM_REWARDS {
-			return Err(ErrorCode::InvalidRewardIndex.into());
-		}
-		self.update_rewards(reward_infos, timestamp);
-		self.reward_infos[index].emissions_per_second_x64 =
-			emissions_per_second_x64;
-
-		Ok(())
-	}
-
-	pub fn initialize_reward(
-		&mut self,
-		index: usize,
-		mint: Pubkey,
-		vault: Pubkey
-	) -> Result<()> {
-		if index >= NUM_REWARDS {
-			return Err(ErrorCode::InvalidRewardIndex.into());
-		}
-
-		let lowest_index = match
-			self.reward_infos.iter().position(|r| !r.initialized())
-		{
-			Some(lowest_index) => lowest_index,
-			None => {
-				return Err(ErrorCode::InvalidRewardIndex.into());
-			}
-		};
-
-		if lowest_index != index {
-			return Err(ErrorCode::InvalidRewardIndex.into());
-		}
-
-		self.reward_infos[index].mint = mint;
-		self.reward_infos[index].vault = vault;
-
-		Ok(())
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -337,27 +205,6 @@ impl AMM {
 			self.fee_growth_global_quote = fee_growth_global;
 			self.protocol_fee_owed_quote += protocol_fee;
 		}
-	}
-
-	pub fn update_fee_rate(&mut self, fee_rate: u16) -> Result<()> {
-		if fee_rate > MAX_FEE_RATE {
-			return Err(ErrorCode::FeeRateMaxExceeded.into());
-		}
-		self.fee_rate = fee_rate;
-
-		Ok(())
-	}
-
-	pub fn update_protocol_fee_rate(
-		&mut self,
-		protocol_fee_rate: u16
-	) -> Result<()> {
-		if protocol_fee_rate > MAX_PROTOCOL_FEE_RATE {
-			return Err(ErrorCode::ProtocolFeeRateMaxExceeded.into());
-		}
-		self.protocol_fee_rate = protocol_fee_rate;
-
-		Ok(())
 	}
 
 	pub fn reset_protocol_fees_owed(&mut self) {
@@ -581,7 +428,7 @@ impl AMM {
 }
 
 /// Stores the state relevant for tracking liquidity mining rewards at the `AMM` level.
-/// These values are used in conjunction with `PositionRewardInfo`, `Tick.reward_growths_outside`,
+/// These values are used in conjunction with `LPRewardInfo`, `Tick.reward_growths_outside`,
 /// and `AMM.reward_last_updated_timestamp` to determine how many rewards are earned by open
 /// positions.
 #[derive(
@@ -632,9 +479,4 @@ impl AMMRewardInfo {
 		}
 		reward_growths
 	}
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Copy)]
-pub struct AMMBumps {
-	pub amm_bump: u8,
 }

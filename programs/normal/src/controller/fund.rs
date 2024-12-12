@@ -6,7 +6,7 @@ pub fn rebalance(market: &mut Market, now: i64) -> NormalResult<()> {
 	// rebalance...
 
 
-	let weights = math::fund::generate_weights(method);
+	let weights = math::index::generate_weights(method);
 
 
 	emit!(IndexFundRebalanceRecord {

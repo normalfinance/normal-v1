@@ -49,8 +49,6 @@ pub fn handle_initialize_user<'c: 'info, 'info>(
 	user.authority = ctx.accounts.authority.key();
 	user.sub_account_id = sub_account_id;
 	user.name = name;
-	user.next_order_id = 1;
-	user.next_liquidation_id = 1;
 
 	let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
 
@@ -86,15 +84,6 @@ pub fn handle_initialize_user<'c: 'info, 'info>(
 		user_stats.referrer = referrer;
 	}
 
-	let whitelist_mint = &ctx.accounts.state.whitelist_mint;
-	if !whitelist_mint.eq(&Pubkey::default()) {
-		validate_whitelist_token(
-			get_whitelist_token(remaining_accounts_iter)?,
-			whitelist_mint,
-			&ctx.accounts.authority.key()
-		)?;
-	}
-
 	validate!(
 		sub_account_id == user_stats.number_of_sub_accounts_created,
 		ErrorCode::InvalidUserSubAccountId,
@@ -118,8 +107,6 @@ pub fn handle_initialize_user<'c: 'info, 'info>(
 	)?;
 
 	let now_ts = Clock::get()?.unix_timestamp;
-
-	user.last_fuel_bonus_update_ts = now_ts.cast()?;
 
 	emit!(NewUserRecord {
 		ts: now_ts,

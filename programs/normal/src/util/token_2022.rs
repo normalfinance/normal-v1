@@ -13,6 +13,7 @@ use anchor_spl::token_2022::spl_token_2022::{
 use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_interface::{ Mint, TokenAccount };
 use lposition::LiquidityPosition;
+use market::Market;
 use solana_program::program::{ invoke, invoke_signed };
 use solana_program::system_instruction::{ create_account, transfer };
 
@@ -332,7 +333,7 @@ pub fn burn_and_close_user_position_token_2022<'info>(
 pub fn build_position_token_metadata<'info>(
 	position_mint: &Signer<'info>,
 	position: &Account<'info, LiquidityPosition>,
-	amm: &Account<'info, AMM>
+	market: &Account<'info, Market>
 ) -> (String, String, String) {
 	// WP_2022_METADATA_NAME_PREFIX + " xxxx...yyyy"
 	// xxxx and yyyy are the first and last 4 chars of mint address
@@ -349,7 +350,7 @@ pub fn build_position_token_metadata<'info>(
 	let uri = format!(
 		"{}/{}/{}",
 		WP_2022_METADATA_URI_BASE,
-		amm.key(),
+		market.key(),
 		position.key()
 	);
 

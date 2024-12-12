@@ -11,6 +11,56 @@ use anchor_lang::Discriminator;
 use std::io::Write;
 
 #[event]
+pub struct NewUserRecord {
+	/// unix_timestamp of action
+	pub ts: i64,
+	pub user_authority: Pubkey,
+	pub user: Pubkey,
+	pub sub_account_id: u16,
+	pub name: [u8; 32],
+	pub referrer: Pubkey,
+}
+
+#[event]
+pub struct DepositRecord {
+	/// unix_timestamp of action
+	pub ts: i64,
+	pub user_authority: Pubkey,
+	/// user account public key
+	pub user: Pubkey,
+	pub deposit_record_id: u64,
+	/// precision: token mint precision
+	pub amount: u64,
+	/// spot market index
+	pub market_index: u16,
+	/// precision: PRICE_PRECISION
+	pub oracle_price: i64,
+	/// precision: SPOT_BALANCE_PRECISION
+	pub market_deposit_balance: u128,
+	/// precision: SPOT_BALANCE_PRECISION
+	pub market_withdraw_balance: u128,
+	/// precision: SPOT_CUMULATIVE_INTEREST_PRECISION
+	pub market_cumulative_deposit_interest: u128,
+	/// precision: SPOT_CUMULATIVE_INTEREST_PRECISION
+	pub market_cumulative_borrow_interest: u128,
+	/// precision: QUOTE_PRECISION
+	pub total_deposits_after: u64,
+	/// precision: QUOTE_PRECISION
+	pub total_withdraws_after: u64,
+	pub explanation: DepositExplanation,
+	pub transfer_user: Option<Pubkey>,
+}
+
+#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default)]
+pub enum DepositExplanation {
+	#[default]
+	None,
+	Transfer,
+	// Borrow,
+	// RepayBorrow,
+}
+
+#[event]
 #[derive(Default)]
 pub struct LiquidationRecord {
 	pub ts: i64,
@@ -22,10 +72,7 @@ pub struct LiquidationRecord {
 	pub margin_freed: u64,
 	pub liquidation_id: u16,
 	pub bankrupt: bool,
-	pub canceled_order_ids: Vec<u32>,
 	pub liquidate_vault: LiquidateVaultRecord,
-	pub liquidate_borrow_for_perp_pnl: LiquidateBorrowForPerpPnlRecord,
-	pub liquidate_perp_pnl_for_deposit: LiquidatePerpPnlForDepositRecord,
 	pub vault_bankruptcy: VaultBankruptcyRecord,
 }
 
@@ -39,14 +86,10 @@ pub enum LiquidationType {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
 pub struct LiquidateVaultRecord {
 	pub market_index: u16,
+	pub vault_index: u16,
 	pub oracle_price: i64,
 	pub base_asset_amount: i64,
 	pub quote_asset_amount: i64,
-	/// precision: AMM_RESERVE_PRECISION
-	pub lp_shares: u64,
-	pub fill_record_id: u64,
-	pub user_order_id: u32,
-	pub liquidator_order_id: u32,
 	/// precision: QUOTE_PRECISION
 	pub liquidator_fee: u64,
 	/// precision: QUOTE_PRECISION
@@ -55,19 +98,18 @@ pub struct LiquidateVaultRecord {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
 pub struct VaultBankruptcyRecord {
 	pub market_index: u16,
+	pub vault_index: u16,
 	pub pnl: i128,
 	pub if_payment: u128,
 	pub clawback_user: Option<Pubkey>,
 	pub clawback_user_payment: Option<u128>,
-	pub cumulative_funding_rate_delta: i128,
 }
 
 #[event]
 #[derive(Default)]
 pub struct InsuranceFundRecord {
 	pub ts: i64,
-	pub spot_market_index: u16,
-	pub perp_market_index: u16,
+	pub market_index: u16,
 	/// precision: PERCENTAGE_PRECISION
 	pub user_if_factor: u32,
 	/// precision: PERCENTAGE_PRECISION

@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface::TokenInterface;
 
-use crate::State;
+use crate::{ state::market::AuctionConfig, State };
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -23,8 +24,7 @@ pub struct Initialize<'info> {
 
 pub fn handle_initialize_state(
 	ctx: Context<Initialize>,
-	reward_emissions_super_authority: Pubkey,
-	default_protocol_fee_rate: u16
+	total_debt_ceiling: u64
 ) -> Result<()> {
 	let (normal_signer, normal_signer_nonce) = Pubkey::find_program_address(
 		&[b"normal_signer".as_ref()],
@@ -38,15 +38,18 @@ pub fn handle_initialize_state(
 		number_of_authorities: 0,
 		number_of_sub_accounts: 0,
 		number_of_markets: 0,
+		number_of_vaults: 0,
 		liquidation_margin_buffer_ratio: DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO,
-		signer: drift_signer,
-		signer_nonce: drift_signer_nonce,
+		signer: normal_signer,
+		signer_nonce: normal_signer_nonce,
 		liquidation_duration: 0,
 		initial_pct_to_liquidate: 0,
 		max_number_of_sub_accounts: 0,
 		max_initialize_user_fee: 0,
-		reward_emissions_super_authority,
-		default_protocol_fee_rate,
+		total_debt_ceiling,
+		debt_auction_config: AuctionConfig::default(),
+		insurance_fund: Pubkey::default(), // TODO: fix
+		emergency_oracles: [], // TODO: fix
 		padding: [0; 10],
 	};
 

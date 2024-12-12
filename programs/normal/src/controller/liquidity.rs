@@ -9,7 +9,7 @@ use crate::{
 	state::*,
 };
 use amm::AMM;
-use position::Position;
+use lp::Position;
 use tick::TickArray;
 use crate::controller::*;
 use anchor_lang::prelude::{ AccountLoader, * };
@@ -20,7 +20,7 @@ pub struct ModifyLiquidityUpdate {
 	pub tick_lower_update: TickUpdate,
 	pub tick_upper_update: TickUpdate,
 	pub reward_infos: [AMMRewardInfo; NUM_REWARDS],
-	pub position_update: PositionUpdate,
+	pub position_update: LPUpdate,
 }
 
 // Calculates state after modifying liquidity by the liquidity_delta for the given positon.
@@ -64,7 +64,7 @@ pub fn calculate_fee_and_reward_growths<'info>(
 	tick_array_lower: &AccountLoader<'info, TickArray>,
 	tick_array_upper: &AccountLoader<'info, TickArray>,
 	timestamp: u64
-) -> Result<(PositionUpdate, [AMMRewardInfo; NUM_REWARDS])> {
+) -> Result<(LPUpdate, [AMMRewardInfo; NUM_REWARDS])> {
 	let tick_array_lower = tick_array_lower.load()?;
 	let tick_lower = tick_array_lower.get_tick(
 		position.tick_lower_index,
@@ -182,7 +182,6 @@ fn _calculate_modify_liquidity(
 }
 
 pub fn calculate_liquidity_token_deltas(
-	amm: &AMM,
 	current_tick_index: i32,
 	sqrt_price: u128,
 	position: &Position,

@@ -1,9 +1,3 @@
-use crate::controller::lp::apply_lp_rebase_to_perp_position;
-use crate::controller::position::{
-	add_new_position,
-	get_position_index,
-	PositionDirection,
-};
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::auction::{ calculate_auction_price, is_auction_complete };
 use crate::math::casting::Cast;
@@ -16,12 +10,7 @@ use crate::math::constants::{
 	QUOTE_SPOT_MARKET_INDEX,
 	THIRTY_DAY,
 };
-use crate::math::lp::{
-	calculate_lp_open_bids_asks,
-	calculate_settle_lp_metrics,
-};
 use crate::math::margin::MarginRequirementType;
-use crate::math::orders::{ standardize_base_asset_amount, standardize_price };
 use crate::math::position::{
 	calculate_base_asset_value_and_pnl_with_oracle_price,
 	calculate_base_asset_value_with_oracle_price,
@@ -36,8 +25,6 @@ use crate::math::spot_balance::{
 };
 use crate::math::stats::calculate_rolling_sum;
 use crate::state::oracle::StrictOraclePrice;
-use crate::state::perp_market::{ ContractType, PerpMarket };
-use crate::state::spot_market::{ SpotBalance, SpotBalanceType, SpotMarket };
 use crate::state::traits::Size;
 use crate::{ get_then_update_id, QUOTE_PRECISION_U64 };
 use crate::{ math_error, SPOT_WEIGHT_PRECISION_I128 };
@@ -57,10 +44,11 @@ use crate::math::margin::{
 };
 use crate::state::margin_calculation::{ MarginCalculation, MarginContext };
 use crate::state::oracle_map::OracleMap;
-use crate::state::perp_market_map::PerpMarketMap;
-use crate::state::spot_market_map::SpotMarketMap;
 
+use super::market_map::MarketMap;
 use super::vault::Vault;
+use super::vault_map::VaultMap;
+use super::vp::VaultPosition;
 
 // #[cfg(test)]
 // mod tests;
@@ -89,14 +77,14 @@ pub struct User {
 	pub delegate: Pubkey,
 	/// Encoded display name e.g. "toly"
 	pub name: [u8; 32],
-	/// The user's vaults
-	pub vaults: [Vault; 8],
-	/// The total socialized loss the users has incurred upon the protocol
+	/// The user's vault positions
+	pub vault_positions: [VaultPosition; 8],
+	/// The total values of deposits the user has made
 	/// precision: QUOTE_PRECISION
-	pub total_social_loss: u64,
-	/// Fees (taker fees, maker rebate, filler reward) for spot
+	pub total_deposits: u64,
+	/// The total values of withdrawals the user has made
 	/// precision: QUOTE_PRECISION
-	pub cumulative_spot_fees: i64,
+	pub total_withdraws: u64,
 	/// The amount of margin freed during liquidation. Used to force the liquidation to occur over a period of time
 	/// Defaults to zero when not being liquidated
 	/// precision: QUOTE_PRECISION
@@ -144,14 +132,145 @@ impl User {
 		self.status &= !(status as u8);
 	}
 
-	pub fn increment_total_socialized_loss(&mut self, value: u64) -> NormalResult {
-		self.total_social_loss = self.total_social_loss.saturating_add(value);
+	pub fn get_vault_position_index(
+		&self,
+		vault_index: u16
+	) -> NormalResult<usize> {
+		// first spot position is always quote asset
+		if vault_index == 0 {
+			validate!(
+				self.vault_positions[0].vault_index == 0,
+				ErrorCode::DefaultError,
+				"User position 0 not vault_index=0"
+			)?;
+			return Ok(0);
+		}
+
+		self.vault_positions
+			.iter()
+			.position(|vault_position| vault_position.vault_index == vault_index)
+			.ok_or(ErrorCode::CouldNotFindSpotPosition)
+	}
+
+	pub fn get_vault_position(
+		&self,
+		vault_index: u16
+	) -> NormalResult<&SpotPosition> {
+		self
+			.get_vault_position_index(vault_index)
+			.map(|vault_index| &self.vault_positions[vault_index])
+	}
+
+	pub fn get_vault_position_mut(
+		&mut self,
+		vault_index: u16
+	) -> NormalResult<&mut SpotPosition> {
+		self
+			.get_vault_position_index(vault_index)
+			.map(move |vault_index| &mut self.vault_positions[vault_index])
+	}
+
+	pub fn get_quote_vault_position(&self) -> &SpotPosition {
+		match self.get_vault_position(QUOTE_SPOT_MARKET_INDEX) {
+			Ok(position) => position,
+			Err(_) => unreachable!(),
+		}
+	}
+
+	pub fn get_quote_vault_position_mut(&mut self) -> &mut SpotPosition {
+		match self.get_vault_position_mut(QUOTE_SPOT_MARKET_INDEX) {
+			Ok(position) => position,
+			Err(_) => unreachable!(),
+		}
+	}
+
+	pub fn add_vault_position(
+		&mut self,
+		market_index: u16,
+		balance_type: SpotBalanceType
+	) -> NormalResult<usize> {
+		let new_vault_position_index = self.vault_positions
+			.iter()
+			.enumerate()
+			.position(
+				|(index, vault_position)| index != 0 && vault_position.is_available()
+			)
+			.ok_or(ErrorCode::NoSpotPositionAvailable)?;
+
+		let new_vault_position = SpotPosition {
+			market_index,
+			balance_type,
+			..SpotPosition::default()
+		};
+
+		self.vault_positions[new_vault_position_index] = new_vault_position;
+
+		Ok(new_vault_position_index)
+	}
+
+	pub fn force_get_vault_position_mut(
+		&mut self,
+		vault_index: u16
+	) -> NormalResult<&mut SpotPosition> {
+		self
+			.get_vault_position_index(vault_index)
+			.or_else(|_|
+				self.add_vault_position(vault_index, SpotBalanceType::Deposit)
+			)
+			.map(move |vault_index| &mut self.vault_positions[vault_index])
+	}
+
+	pub fn force_get_vault_position_index(
+		&mut self,
+		vault_index: u16
+	) -> NormalResult<usize> {
+		self
+			.get_vault_position_index(vault_index)
+			.or_else(|_|
+				self.add_vault_position(vault_index, SpotBalanceType::Deposit)
+			)
+	}
+
+	pub fn get_deposit_value(
+		&mut self,
+		amount: u64,
+		price: i64,
+		precision: u128
+	) -> NormalResult<u64> {
+		let value = amount
+			.cast::<u128>()?
+			.safe_mul(price.cast::<u128>()?)?
+			.safe_div(precision)?
+			.cast::<u64>()?;
+
+		Ok(value)
+	}
+
+	pub fn increment_total_deposits(
+		&mut self,
+		amount: u64,
+		price: i64,
+		precision: u128
+	) -> NormalResult {
+		let value = self.get_deposit_value(amount, price, precision);
+		self.total_deposits = self.total_deposits.saturating_add(value);
 
 		Ok(())
 	}
 
-	pub fn update_cumulative_spot_fees(&mut self, amount: i64) -> NormalResult {
-		safe_increment!(self.cumulative_spot_fees, amount);
+	pub fn increment_total_withdraws(
+		&mut self,
+		amount: u64,
+		price: i64,
+		precision: u128
+	) -> NormalResult {
+		let value = amount
+			.cast::<u128>()?
+			.safe_mul(price.cast()?)?
+			.safe_div(precision)?
+			.cast::<u64>()?;
+		self.total_withdraws = self.total_withdraws.saturating_add(value);
+
 		Ok(())
 	}
 
@@ -209,23 +328,10 @@ impl User {
 		Ok(())
 	}
 
-	pub fn update_advanced_lp_status(
-		&mut self,
-		advanced_lp: bool
-	) -> NormalResult {
-		if advanced_lp {
-			self.add_user_status(UserStatus::AdvancedLp);
-		} else {
-			self.remove_user_status(UserStatus::AdvancedLp);
-		}
-
-		Ok(())
-	}
-
 	pub fn calculate_margin(
 		&mut self,
-		perp_market_map: &PerpMarketMap,
-		spot_market_map: &SpotMarketMap,
+		market_map: &MarketMap,
+		vault_map: &VaultMap,
 		oracle_map: &mut OracleMap,
 		context: MarginContext,
 		now: i64
@@ -233,13 +339,62 @@ impl User {
 		let margin_calculation =
 			calculate_margin_requirement_and_total_collateral_and_liability_info(
 				self,
-				perp_market_map,
-				spot_market_map,
+				market_map,
+				vault_map,
 				oracle_map,
 				context
 			)?;
 
 		Ok(margin_calculation)
+	}
+
+	pub fn meets_withdraw_margin_requirement(
+		&mut self,
+		market_map: &MarketMap,
+		vault_map: &VaultMap,
+		oracle_map: &mut OracleMap,
+		margin_requirement_type: MarginRequirementType,
+		withdraw_market_index: u16,
+		withdraw_amount: u128,
+		user_stats: &mut UserStats,
+		now: i64
+	) -> NormalResult<bool> {
+		let strict = margin_requirement_type == MarginRequirementType::Initial;
+		let context = MarginContext::standard(margin_requirement_type).strict(
+			strict
+		);
+
+		let calculation =
+			calculate_margin_requirement_and_total_collateral_and_liability_info(
+				self,
+				market_map,
+				vault_map,
+				oracle_map,
+				context
+			)?;
+
+		if
+			calculation.margin_requirement > 0 ||
+			calculation.get_num_of_liabilities()? > 0
+		{
+			validate!(
+				calculation.all_oracles_valid,
+				ErrorCode::InvalidOracle,
+				"User attempting to withdraw with outstanding liabilities when an oracle is invalid"
+			)?;
+		}
+
+		validate_any_isolated_tier_requirements(self, calculation)?;
+
+		validate!(
+			calculation.meets_margin_requirement(),
+			ErrorCode::InsufficientCollateral,
+			"User attempting to withdraw where total_collateral {} is below initial_margin_requirement {}",
+			calculation.total_collateral,
+			calculation.margin_requirement
+		)?;
+
+		Ok(true)
 	}
 }
 
@@ -250,12 +405,6 @@ pub struct UserFees {
 	/// Total taker fee paid
 	/// precision: QUOTE_PRECISION
 	pub total_fee_paid: u64,
-	/// Total maker fee rebate
-	/// precision: QUOTE_PRECISION
-	pub total_fee_rebate: u64,
-	/// Total discount from holding token
-	/// precision: QUOTE_PRECISION
-	pub total_token_discount: u64,
 	/// Total discount from being referred
 	/// precision: QUOTE_PRECISION
 	pub total_referee_discount: u64,
@@ -306,6 +455,17 @@ pub struct UserStats {
 	/// Epoch is used to limit referrer rewards earned in single epoch
 	pub next_epoch_ts: i64,
 
+	/// Rolling 30day collateral volume for user
+	/// precision: QUOTE_PRECISION
+	pub collateral_volume_30d: u64,
+	/// Rolling 30day trade volume for user
+	/// precision: QUOTE_PRECISION
+	pub trade_volume_30d: u64,
+	/// last time the collateral volume was updated
+	pub last_collateral_volume_30d_ts: i64,
+	/// last time the trade volume was updated
+	pub last_trade_volume_30d_ts: i64,
+
 	/// The amount of tokens staked in the quote spot markets if
 	pub if_staked_quote_asset_amount: u64,
 	/// The current number of sub accounts
@@ -315,28 +475,55 @@ pub struct UserStats {
 	pub number_of_sub_accounts_created: u16,
 	/// Whether the user is a referrer. Sub account 0 can not be deleted if user is a referrer
 	pub is_referrer: bool,
-	pub disable_update_perp_bid_ask_twap: bool,
-	pub padding1: [u8; 2],
-
-	/// The amount of tokens staked in the governance spot markets if
-	pub if_staked_gov_token_amount: u64,
-
 	pub padding: [u8; 12],
 }
 
 impl Size for UserStats {
-	const SIZE: usize = 240;
+	const SIZE: usize = 168;
 }
 
 impl UserStats {
-	pub fn increment_total_fees(&mut self, fee: u64) -> NormalResult {
-		self.fees.total_fee_paid = self.fees.total_fee_paid.safe_add(fee)?;
+	pub fn update_collateral_volume_30d(
+		&mut self,
+		quote_asset_amount: u64,
+		now: i64
+	) -> DriftResult {
+		let since_last = max(
+			1_i64,
+			now.safe_sub(self.last_collateral_volume_30d_ts)?
+		);
+
+		self.collateral_volume_30d = calculate_rolling_sum(
+			self.collateral_volume_30d,
+			quote_asset_amount,
+			since_last,
+			THIRTY_DAY
+		)?;
+		self.last_collateral_volume_30d_ts = now;
 
 		Ok(())
 	}
 
-	pub fn increment_total_rebate(&mut self, fee: u64) -> NormalResult {
-		self.fees.total_fee_rebate = self.fees.total_fee_rebate.safe_add(fee)?;
+	pub fn update_trade_volume_30d(
+		&mut self,
+		quote_asset_amount: u64,
+		now: i64
+	) -> DriftResult {
+		let since_last = max(1_i64, now.safe_sub(self.last_trade_volume_30d_ts)?);
+
+		self.trade_volume_30d = calculate_rolling_sum(
+			self.trade_volume_30d,
+			quote_asset_amount,
+			since_last,
+			THIRTY_DAY
+		)?;
+		self.last_trade_volume_30d_ts = now;
+
+		Ok(())
+	}
+
+	pub fn increment_total_fees(&mut self, fee: u64) -> NormalResult {
+		self.fees.total_fee_paid = self.fees.total_fee_paid.safe_add(fee)?;
 
 		Ok(())
 	}
@@ -383,14 +570,14 @@ impl UserStats {
 	}
 
 	pub fn get_total_30d_volume(&self) -> NormalResult<u64> {
-		self.taker_volume_30d.safe_add(self.maker_volume_30d)
+		self.trade_volume_30d.safe_add(self.collateral_volume_30d)
 	}
 
 	pub fn get_age_ts(&self, now: i64) -> i64 {
 		// upper bound of age of the user stats account
-		let min_action_ts: i64 = self.last_filler_volume_30d_ts
-			.min(self.last_maker_volume_30d_ts)
-			.min(self.last_taker_volume_30d_ts);
+		let min_action_ts: i64 = self.last_collateral_volume_30d_ts.min(
+			self.last_trade_volume_30d_ts
+		);
 		now.saturating_sub(min_action_ts).max(0)
 	}
 }

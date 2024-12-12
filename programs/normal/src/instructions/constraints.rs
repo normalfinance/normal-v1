@@ -71,6 +71,13 @@ pub fn can_sign_for_vault(
 		})
 }
 
+pub fn market_valid(market: &AccountLoader<Market>) -> anchor_lang::Result<()> {
+	if market.load()?.status == MarketStatus::Delisted {
+		return Err(ErrorCode::MarketDelisted.into());
+	}
+	Ok(())
+}
+
 pub fn valid_oracle_for_amm(
 	oracle: &AccountInfo,
 	amm: &AccountLoader<AMM>

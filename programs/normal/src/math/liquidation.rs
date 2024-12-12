@@ -24,6 +24,7 @@ use crate::state::oracle_map::OracleMap;
 use crate::state::market::Market;
 use crate::state::market_map::MarketMap;
 use crate::state::user::{ User };
+use crate::state::vault_map::VaultMap;
 use crate::{
 	validate,
 	MarketType,
@@ -34,9 +35,6 @@ use crate::{
 use solana_program::msg;
 
 pub const LIQUIDATION_FEE_ADJUST_GRACE_PERIOD_SLOTS: u64 = 1_500; // ~10 minutes
-
-// #[cfg(test)]
-// mod tests;
 
 pub fn calculate_base_asset_amount_to_cover_margin_shortage(
 	margin_shortage: u128,
@@ -217,6 +215,7 @@ pub fn calculate_asset_transfer_for_liability_transfer(
 pub fn is_user_being_liquidated(
 	user: &User,
 	market_map: &MarketMap,
+	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32
 ) -> NormalResult<bool> {
@@ -224,6 +223,7 @@ pub fn is_user_being_liquidated(
 		calculate_margin_requirement_and_total_collateral_and_liability_info(
 			user,
 			market_map,
+			vault_map,
 			oracle_map,
 			MarginContext::liquidation(liquidation_margin_buffer_ratio)
 		)?;
@@ -236,7 +236,7 @@ pub fn is_user_being_liquidated(
 pub fn validate_user_not_being_liquidated(
 	user: &mut User,
 	market_map: &MarketMap,
-	// spot_market_map: &SpotMarketMap,
+	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32
 ) -> NormalResult {
@@ -247,7 +247,7 @@ pub fn validate_user_not_being_liquidated(
 	let is_still_being_liquidated = is_user_being_liquidated(
 		user,
 		market_map,
-		spot_market_map,
+		vault_map,
 		oracle_map,
 		liquidation_margin_buffer_ratio
 	)?;
@@ -277,7 +277,6 @@ pub fn calculate_liquidation_multiplier(
 			LIQUIDATION_FEE_PRECISION.safe_sub(liquidation_fee),
 	}
 }
-
 
 pub fn calculate_cumulative_deposit_interest_delta_to_resolve_bankruptcy(
 	borrow: u128,
@@ -360,7 +359,7 @@ pub fn calculate_max_pct_to_liquidate(
 	margin_freeable.safe_mul(LIQUIDATION_PCT_PRECISION)?.safe_div(margin_shortage)
 }
 
-pub fn calculate_perp_if_fee(
+pub fn calculate_vault_if_fee(
 	margin_shortage: u128,
 	user_base_asset_amount: u64,
 	margin_ratio: u32,

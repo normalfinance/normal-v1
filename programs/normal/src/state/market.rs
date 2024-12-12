@@ -1,10 +1,15 @@
 use anchor_lang::prelude::*;
 
-use crate::{ errors::ErrorCode, math::MAX_PROTOCOL_FEE_RATE };
+use crate::{
+	errors::ErrorCode,
+	math::{ margin::MarginRequirementType, MAX_PROTOCOL_FEE_RATE },
+};
 
 use super::{
+	amm::AMM,
 	collateral::Collateral,
 	insurance::{ InsuranceClaim, InsuranceFund },
+	oracle::OracleSource,
 };
 
 #[derive(
@@ -18,44 +23,17 @@ use super::{
 	Default
 )]
 pub enum MarketStatus {
-	/// warm up period for initialization, fills are paused
+	/// warm up period for initialization, swapping is paused
 	#[default]
 	Initialized,
 	/// all operations allowed
 	Active,
-	/// Deprecated in favor of PausedOperations
-	FundingPaused,
-	/// Deprecated in favor of PausedOperations
-	AmmPaused,
-	/// Deprecated in favor of PausedOperations
-	FillPaused,
-	/// Deprecated in favor of PausedOperations
-	WithdrawPaused,
-	/// fills only able to reduce liability
+	/// swaps only able to reduce liability
 	ReduceOnly,
 	/// market has determined settlement price and positions are expired must be settled
 	Settlement,
 	/// market has no remaining participants
 	Delisted,
-}
-
-impl MarketStatus {
-	pub fn validate_not_deprecated(&self) -> NormalResult {
-		if
-			matches!(
-				self,
-				MarketStatus::FundingPaused |
-					MarketStatus::AmmPaused |
-					MarketStatus::FillPaused |
-					MarketStatus::WithdrawPaused
-			)
-		{
-			msg!("MarketStatus is deprecated");
-			Err(ErrorCode::DefaultError)
-		} else {
-			Ok(())
-		}
-	}
 }
 
 #[derive(
@@ -127,60 +105,126 @@ impl SyntheticTier {
 	}
 }
 
+#[derive(
+	Clone,
+	Copy,
+	BorshSerialize,
+	BorshDeserialize,
+	PartialEq,
+	Debug,
+	Eq,
+	Default
+)]
+pub enum AuctionType {
+	#[default]
+	/// selling collateral from a Vault liquidation
+	Collateral,
+	/// selling newly minted NORM to cover Protocol Debt (the deficit from Collateral Auctions)
+	Debt,
+	/// selling excess synthetic token proceeds over the Insurance Fund max limit for NORM to be burned
+	Surplus,
+}
+
+#[derive(Copy, AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct AuctionConfig {
+	/// where collateral auctions should take place (3rd party AMM vs private)
+	pub auction_location: AuctionPreference,
+	/// Maximum time allowed for the auction to complete.
+	pub auction_duration: u16,
+	/// Determines how quickly the starting price decreases during the auction if there are no bids.
+	pub auction_bid_decrease_rate: u16,
+	/// May be capped to prevent overly large auctions that could affect the market price.
+	pub max_auction_lot_size: u64,
+}
+
 #[account]
 pub struct Market {
 	/// The market's address. It is a pda of the market index
 	pub pubkey: Pubkey,
-	/// oracle price data public key
-	pub oracle: Pubkey,
-	/// The AMM
-	pub amm: Pubkey,
-	/// Encoded display name for the market e.g. SOL-PERP
-	pub name: [u8; 32],
-	/// sdfd
-	pub collateral: Collateral,
-	/// The perp market's claim on the insurance fund
-	pub insurance_claim: InsuranceClaim,
-
-	/// The token mint of the vaults
-	// pub mint: Pubkey,
-
-	/// number of users in a position (pnl) or pnl (quote)
-	pub number_of_users: u32,
 	pub market_index: u16,
+	/// Encoded display name for the market e.g. BTC-SOL
+	pub name: [u8; 32],
 	/// Whether a market is active, reduce only, expired, etc
 	/// Affects whether users can open/close positions
 	pub status: MarketStatus,
-	/// Currently only Perpetual markets are supported
 	pub synthetic_type: SyntheticType,
 	/// The contract tier determines how much insurance a market can receive, with more speculative markets receiving less insurance
 	/// It also influences the order perp markets can be liquidated, with less speculative markets being liquidated first
 	pub synthetic_tier: SyntheticTier,
 	pub paused_operations: u8,
+	pub number_of_users: u32,
 
+	// Oracle
+	//
+	pub oracle: Pubkey,
+	pub oracle_source: OracleSource,
+
+	// Collateral / Liquidations
+	//
+	// Mint for the collateral token
+	pub token_mint_collateral: Pubkey,
+	// Vault storing synthetic tokens from liquidation
+	pub token_vault_synthetic: Pubkey,
+	// Vault storing collateral tokens for auction
+	pub token_vault_collateral: Pubkey,
+	// A fee applied to the collateral when the vault is liquidated, incentivizing users to maintain sufficient collateral.
+	pub liquidation_penalty: u32,
+	/// The fee the liquidator is paid for liquidating a Vault
+	/// precision: LIQUIDATOR_FEE_PRECISION
+	pub liquidator_fee: u32,
+	/// The fee the insurance fund receives from liquidation
+	/// precision: LIQUIDATOR_FEE_PRECISION
+	pub insurance_fund_liquidation_fee: u32,
+	/// The margin ratio which determines how much collateral is required to open a position
+	/// e.g. margin ratio of .1 means a user must have $100 of total collateral to open a $1000 position
+	/// precision: MARGIN_PRECISION
+	pub margin_ratio_initial: u32,
+	/// The margin ratio which determines when a user will be liquidated
+	/// e.g. margin ratio of .05 means a user must have $50 of total collateral to maintain a $1000 position
+	/// else they will be liquidated
+	/// precision: MARGIN_PRECISION
+	pub margin_ratio_maintenance: u32,
+	/// The initial margin fraction factor. Used to increase margin ratio for large positions
+	/// precision: MARGIN_PRECISION
+	pub imf_factor: u32,
+	/// maximum amount of synthetic tokens that can be minted against the market's collateral
+	pub debt_ceiling: u128,
+	/// minimum amount of synthetic tokens that can be minted against a user's collateral to avoid inefficiencies
+	pub debt_floor: u32,
 	///
-	pub min_collateral_ratio: u64,
-	/// maximum amount of synthetic that can be generated against a specific collateral type, ensuring that the system does not become overexposed to any one asset.
-	pub debt_ceiling: u64,
+	pub collateral_lending_utilization: u64,
 
-	pub default_liquidity_utilization: u64,
-	/// The maximum percent of the collateral that can be sent to the AMM as liquidity
-	pub max_liquidity_utilization: u64,
+	// AMM
+	//
+	pub amm: AMM,
+
+	// Insurance
+	//
+	/// The market's claim on the insurance fund
+	pub insurance_claim: InsuranceClaim,
+	/// The total socialized loss from borrows, in the mint's token
+	/// precision: token mint precision
+	pub total_gov_token_inflation: u128,
 
 	/// Auction Config
 	///
 	/// where collateral auctions should take place (3rd party AMM vs private)
-	pub auction_preference: AuctionPreference,
-	/// Initial auction price for the collateral, typically set above market value to incentivize participation.
-	pub start_price: u64,
-	/// Maximum time allowed for the auction to complete.
-	pub duration: u16,
-	/// Determines how quickly the starting price decreases during the auction if there are no bids.
-	pub bid_decrease_rate: u16,
-	/// The amount of collateral being auctioned.
-	pub lot_size: u64,
-	/// May be capped to prevent overly large auctions that could affect the market price.
-	pub max_lot_size: u64,
+	pub collateral_action_config: AuctionConfig,
+
+	// Metrics
+	//
+	// Total synthetic token debt
+	pub outstanding_debt: u128,
+	// Unbacked synthetic tokens (result of collateral auction deficits)
+	pub protocol_debt: u64,
+
+	// Shutdown
+	//
+	/// The ts when the market will be expired. Only set if market is in reduce only mode
+	pub expiry_ts: i64,
+	/// The price at which positions will be settled. Only set if market is expired
+	/// precision = PRICE_PRECISION
+	pub expiry_price: i64,
 
 	pub padding: [u8; 43],
 }
@@ -189,9 +233,73 @@ impl Default for Market {
 	fn default() -> Self {
 		Market {
 			pubkey: Pubkey::default(),
-			amm: Pubkey::default(),
+			market_index: 0,
+			name: [0; 32],
+			status: MarketStatus::default(),
+			synthetic_type: SyntheticType::default(),
+			synthetic_tier: SyntheticTier::default(),
+			paused_operations: 0,
+			number_of_users: 0,
 
-			collateral: Collateral::default(),
+			oracle: Pubkey::default(),
+			oracle_source: OracleSource::default(),
+
+			token_mint_collateral: Pubkey::default(),
+			token_vault_synthetic: Pubkey::default(),
+			token_vault_collateral: Pubkey::default(),
+
+			liquidation_penalty: 0,
+			liquidator_fee: 0,
+			insurance_fund_liquidation_fee: 0,
+			margin_ratio_initial: 0,
+			margin_ratio_maintenance: 0,
+			imf_factor: 0,
+			debt_ceiling: 0,
+			debt_floor: 0,
+			collateral_lending_utilization: 0,
+			collateral_action_config: AuctionConfig::default(),
+
+			amm: AMM {
+				oracle: 0,
+				oracle_source,
+				historical_oracle_data: HistoricalOracleData::default(),
+				last_oracle_conf_pct: 0,
+				last_oracle_valid: false,
+				last_oracle_normalised_price: 0,
+				last_oracle_reserve_price_spread_pct: 0,
+				oracle_std: 0,
+
+				tick_spacing,
+				tick_spacing_seed: tick_spacing.to_le_bytes(),
+
+				liquidity: 0,
+				sqrt_price,
+				tick_current_index: tick_index_from_sqrt_price(&sqrt_price),
+
+				fee_rate: 0,
+				protocol_fee_rate: 0,
+
+				protocol_fee_owed_synthetic: 0,
+				protocol_fee_owed_quote: 0,
+
+				token_mint_synthetic,
+				token_vault_synthetic,
+				fee_growth_global_synthetic: 0,
+
+				token_mint_quote,
+				token_vault_quote,
+				fee_growth_global_quote: 0,
+
+				reward_infos: [],
+			},
+
+			insurance_claim: InsuranceClaim::default(),
+
+			outstanding_debt: 0,
+			protocol_debt: 0,
+
+			expiry_ts: 0,
+			expiry_price: 0,
 
 			padding: [0; 43],
 		}
@@ -199,65 +307,65 @@ impl Default for Market {
 }
 
 impl Size for Market {
-	const SIZE: usize = 1216;
+	const SIZE: usize = 1216; // TODO:
 }
 
 impl Market {
+	// TODO: add to market creation
+	// if default_protocol_fee_rate > MAX_PROTOCOL_FEE_RATE {
+	// 	return Err(ErrorCode::ProtocolFeeRateMaxExceeded.into());
+	// }
+
 	pub fn is_operation_paused(&self, operation: SynthOperation) -> bool {
-        SynthOperation::is_operation_paused(self.paused_operations, operation)
-    }
+		SynthOperation::is_operation_paused(self.paused_operations, operation)
+	}
+
+	pub fn update_debt_ceiling(&self, debt_ceiling: u64) -> NormalResult<u64> {
+		if debt_ceiling > MAX_PROTOCOL_FEE_RATE {
+			return Err(ErrorCode::ProtocolFeeRateMaxExceeded.into());
+		}
+
+		// TODO: check if within rolling window
+	}
 
 	pub fn get_margin_ratio(
-        &self,
-        size: u128,
-        margin_type: MarginRequirementType,
-    ) -> NormalResult<u32> {
-        if self.status == MarketStatus::Settlement {
-            return Ok(0); // no liability weight on size
-        }
+		&self,
+		size: u128,
+		margin_type: MarginRequirementType
+	) -> NormalResult<u32> {
+		if self.status == MarketStatus::Settlement {
+			return Ok(0); // no liability weight on size
+		}
 
-        let default_margin_ratio = match margin_type {
-            MarginRequirementType::Initial => self.margin_ratio_initial,
-            MarginRequirementType::Fill => {
-                self.margin_ratio_initial
-                    .safe_add(self.margin_ratio_maintenance)?
-                    / 2
-            }
-            MarginRequirementType::Maintenance => self.margin_ratio_maintenance,
-        };
+		let default_margin_ratio = match margin_type {
+			MarginRequirementType::Initial => self.margin_ratio_initial,
+			// MarginRequirementType::Fill => {
+			// 	self.margin_ratio_initial.safe_add(self.margin_ratio_maintenance)? / 2
+			// }
+			MarginRequirementType::Maintenance => self.margin_ratio_maintenance,
+		};
 
-        let size_adj_margin_ratio = calculate_size_premium_liability_weight(
-            size,
-            self.imf_factor,
-            default_margin_ratio,
-            MARGIN_PRECISION_U128,
-        )?;
+		let size_adj_margin_ratio = calculate_size_premium_liability_weight(
+			size,
+			self.imf_factor,
+			default_margin_ratio,
+			MARGIN_PRECISION_U128
+		)?;
 
-        let margin_ratio = default_margin_ratio.max(size_adj_margin_ratio);
+		let margin_ratio = default_margin_ratio.max(size_adj_margin_ratio);
 
-        Ok(margin_ratio)
-    }
+		Ok(margin_ratio)
+	}
 
-    pub fn get_max_liquidation_fee(&self) -> NormalResult<u32> {
-        let max_liquidation_fee = (self.liquidator_fee.safe_mul(MAX_LIQUIDATION_MULTIPLIER)?).min(
-            self.margin_ratio_maintenance
-                .safe_mul(LIQUIDATION_FEE_PRECISION)?
-                .safe_div(MARGIN_PRECISION)?,
-        );
-        Ok(max_liquidation_fee)
-    }
-
-	pub fn initialize(
-		&mut self,
-		reward_emissions_super_authority: Pubkey,
-		default_protocol_fee_rate: u16
-	) -> Result<()> {
-		self.fee_authority = fee_authority;
-		self.collect_protocol_fees_authority = collect_protocol_fees_authority;
-		self.reward_emissions_super_authority = reward_emissions_super_authority;
-		self.update_default_protocol_fee_rate(default_protocol_fee_rate)?;
-
-		Ok(())
+	pub fn get_max_liquidation_fee(&self) -> NormalResult<u32> {
+		let max_liquidation_fee = self.liquidator_fee
+			.safe_mul(MAX_LIQUIDATION_MULTIPLIER)?
+			.min(
+				self.margin_ratio_maintenance
+					.safe_mul(LIQUIDATION_FEE_PRECISION)?
+					.safe_div(MARGIN_PRECISION)?
+			);
+		Ok(max_liquidation_fee)
 	}
 
 	pub fn update_liquidation_penalty(&mut self, liquidation_penalty: u64) {

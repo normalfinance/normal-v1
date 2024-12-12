@@ -18,7 +18,7 @@ use super::user::MarketType;
 #[derive(Clone, Copy, Debug)]
 pub enum MarginCalculationMode {
 	Standard {
-		track_open_orders_fraction: bool,
+		// track_open_orders_fraction: bool,
 	},
 	Liquidation {
 		market_to_track_margin_requirement: Option<MarketIdentifier>,
@@ -125,13 +125,12 @@ pub struct MarginCalculation {
 	margin_requirement_plus_buffer: u128,
 	#[cfg(test)]
 	pub margin_requirement_plus_buffer: u128,
-	pub num_perp_liabilities: u8,
+	pub num_vault_liabilities: u8,
 	pub all_oracles_valid: bool,
 	pub with_perp_isolated_liability: bool,
 	pub total_spot_asset_value: i128,
-	pub total_perp_liability_value: u128,
-	pub total_perp_pnl: i128,
-	pub open_orders_margin_requirement: u128,
+	pub total_vault_liability_value: u128,
+	// pub open_orders_margin_requirement: u128,
 	tracked_market_margin_requirement: u128,
 }
 
@@ -142,13 +141,13 @@ impl MarginCalculation {
 			total_collateral: 0,
 			margin_requirement: 0,
 			margin_requirement_plus_buffer: 0,
-			num_perp_liabilities: 0,
+			num_vault_liabilities: 0,
 			all_oracles_valid: true,
 			with_perp_isolated_liability: false,
 			total_spot_asset_value: 0,
-			total_perp_liability_value: 0,
-			total_perp_pnl: 0,
-			open_orders_margin_requirement: 0,
+			total_vault_liability_value: 0,
+			// total_perp_pnl: 0,
+			// open_orders_margin_requirement: 0,
 			tracked_market_margin_requirement: 0,
 		}
 	}
@@ -190,17 +189,17 @@ impl MarginCalculation {
 		Ok(())
 	}
 
-	pub fn add_open_orders_margin_requirement(
-		&mut self,
-		margin_requirement: u128
-	) -> NormalResult {
-		self.open_orders_margin_requirement =
-			self.open_orders_margin_requirement.safe_add(margin_requirement)?;
-		Ok(())
-	}
+	// pub fn add_open_orders_margin_requirement(
+	// 	&mut self,
+	// 	margin_requirement: u128
+	// ) -> NormalResult {
+	// 	self.open_orders_margin_requirement =
+	// 		self.open_orders_margin_requirement.safe_add(margin_requirement)?;
+	// 	Ok(())
+	// }
 
-	pub fn add_perp_liability(&mut self) -> NormalResult {
-		self.num_perp_liabilities = self.num_perp_liabilities.safe_add(1)?;
+	pub fn add_vault_liability(&mut self) -> NormalResult {
+		self.num_vault_liabilities = self.num_vault_liabilities.safe_add(1)?;
 		Ok(())
 	}
 
@@ -215,18 +214,12 @@ impl MarginCalculation {
 	}
 
 	#[cfg(feature = "drift-rs")]
-	pub fn add_perp_liability_value(
+	pub fn add_vault_liability_value(
 		&mut self,
-		perp_liability_value: u128
+		vault_liability_value: u128
 	) -> NormalResult {
-		self.total_perp_liability_value =
-			self.total_perp_liability_value.safe_add(perp_liability_value)?;
-		Ok(())
-	}
-
-	#[cfg(feature = "drift-rs")]
-	pub fn add_perp_pnl(&mut self, perp_pnl: i128) -> NormalResult {
-		self.total_perp_pnl = self.total_perp_pnl.safe_add(perp_pnl)?;
+		self.total_vault_liability_value =
+			self.total_vault_liability_value.safe_add(vault_liability_value)?;
 		Ok(())
 	}
 
@@ -238,20 +231,20 @@ impl MarginCalculation {
 		self.with_perp_isolated_liability |= isolated;
 	}
 
-	pub fn validate_num_spot_liabilities(&self) -> NormalResult {
-		if self.num_spot_liabilities > 0 {
-			validate!(
-				self.margin_requirement > 0,
-				ErrorCode::InvalidMarginRatio,
-				"num_spot_liabilities={} but margin_requirement=0",
-				self.num_spot_liabilities
-			)?;
-		}
-		Ok(())
-	}
+	// pub fn validate_num_spot_liabilities(&self) -> NormalResult {
+	// 	if self.num_spot_liabilities > 0 {
+	// 		validate!(
+	// 			self.margin_requirement > 0,
+	// 			ErrorCode::InvalidMarginRatio,
+	// 			"num_spot_liabilities={} but margin_requirement=0",
+	// 			self.num_spot_liabilities
+	// 		)?;
+	// 	}
+	// 	Ok(())
+	// }
 
 	pub fn get_num_of_liabilities(&self) -> NormalResult<u8> {
-		self.num_spot_liabilities.safe_add(self.num_perp_liabilities)
+		self.num_vault_liabilities;
 	}
 
 	pub fn meets_margin_requirement(&self) -> bool {
@@ -330,11 +323,5 @@ impl MarginCalculation {
 
 	fn is_liquidation_mode(&self) -> bool {
 		matches!(self.context.mode, MarginCalculationMode::Liquidation { .. })
-	}
-
-	pub fn track_open_orders_fraction(&self) -> bool {
-		matches!(self.context.mode, MarginCalculationMode::Standard {
-			track_open_orders_fraction: true,
-		})
 	}
 }

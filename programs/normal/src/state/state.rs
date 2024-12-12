@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use enumflags2::BitFlags;
 
 use crate::error::NormalResult;
-use crate::constants::constants::{
+use crate::constants::main::{
 	FEE_DENOMINATOR,
 	FEE_PERCENTAGE_DENOMINATOR,
 	MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND,
@@ -13,6 +13,8 @@ use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
 use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
 
+use super::market::AuctionConfig;
+
 // #[cfg(test)]
 // mod tests;
 
@@ -22,21 +24,54 @@ use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
 pub struct State {
 	pub admin: Pubkey,
 	pub signer: Pubkey,
-	pub oracle_guard_rails: OracleGuardRails,
-	pub number_of_authorities: u64,
-	pub number_of_sub_accounts: u64,
-	pub liquidation_margin_buffer_ratio: u32,
-	pub number_of_markets: u16,
+	// ensures signer transaction are not duplicated
 	pub signer_nonce: u8,
+
+	// Oracle
+	//
+	// validations to ensure oracle prices are accurate and reliable
+	pub oracle_guard_rails: OracleGuardRails,
+	// set of elected keepers who can freeze/update oracles in an emergency
+	pub emergency_oracles: Vec<>,
+
+	// Exchange/AMMs
+	//
+	// the current status of the protocol
 	pub exchange_status: u8,
+	// the total number of markets live on the protocol
+	pub number_of_markets: u16,
+	// the total number of vaults live on the protocol
+	pub number_of_vaults: u16,
+
+	// Insurance Fund
+	//
+	pub insurance_fund: Pubkey,
+
+	pub total_debt_ceiling: u64,
+
+	// User
+	//
+	// ensures user inititialization does not become costly
+	pub max_initialize_user_fee: u16,
+	// tracks the number of User delegate authorities
+	pub number_of_authorities: u64,
+	// tracks the number of User sub-accounts used to partition Vaults
+	pub number_of_sub_accounts: u64,
+	// the maximum number of sub-accounts the protocol is willing to support
+	pub max_number_of_sub_accounts: u16,
+
+	// Liquidation
+	//
+
+	/// The maximum percent of the collateral that can be sent to the AMM as liquidity
+	// pub max_amm_liquidity_utilization: u64,
+	pub liquidation_margin_buffer_ratio: u32,
 	pub liquidation_duration: u8,
 	pub initial_pct_to_liquidate: u16,
-	pub max_number_of_sub_accounts: u16,
-	pub max_initialize_user_fee: u16,
-	// account permissioned to manage pool rewards and emissions
-	pub reward_emissions_super_authority: Pubkey,
-	// the fallback protocol fee for pool swaps
-	pub default_protocol_fee_rate: u16,
+
+	// Debt Auctions
+	pub debt_auction_config: AuctionConfig,
+
 	pub padding: [u8; 10],
 }
 
@@ -45,7 +80,9 @@ pub enum ExchangeStatus {
 	// Active = 0b00000000
 	DepositPaused = 0b00000001,
 	WithdrawPaused = 0b00000010,
-	LiqPaused = 0b00000100,
+	LendPaused = 0b00000100,
+	AmmPaused = 0b00001000,
+	LiqPaused = 0b00010000,
 	// Paused = 0b11111111
 }
 
@@ -56,7 +93,7 @@ impl ExchangeStatus {
 }
 
 impl State {
-	pub fn get_exchange_status(&self) -> DriftResult<BitFlags<ExchangeStatus>> {
+	pub fn get_exchange_status(&self) -> NormalResult<BitFlags<ExchangeStatus>> {
 		BitFlags::<ExchangeStatus>
 			::from_bits(usize::from(self.exchange_status))
 			.safe_unwrap()
@@ -70,7 +107,7 @@ impl State {
 		(self.max_number_of_sub_accounts as u64).saturating_mul(100)
 	}
 
-	pub fn get_init_user_fee(&self) -> DriftResult<u64> {
+	pub fn get_init_user_fee(&self) -> NormalResult<u64> {
 		let max_init_fee: u64 =
 			((self.max_initialize_user_fee as u64) * LAMPORTS_PER_SOL_U64) / 100;
 
@@ -89,25 +126,6 @@ impl State {
 		};
 
 		Ok(init_fee)
-	}
-
-	pub fn update_reward_emissions_super_authority(
-		&mut self,
-		reward_emissions_super_authority: Pubkey
-	) {
-		self.reward_emissions_super_authority = reward_emissions_super_authority;
-	}
-
-	pub fn update_default_protocol_fee_rate(
-		&mut self,
-		default_protocol_fee_rate: u16
-	) -> Result<()> {
-		if default_protocol_fee_rate > MAX_PROTOCOL_FEE_RATE {
-			return Err(ErrorCode::ProtocolFeeRateMaxExceeded.into());
-		}
-		self.default_protocol_fee_rate = default_protocol_fee_rate;
-
-		Ok(())
 	}
 }
 

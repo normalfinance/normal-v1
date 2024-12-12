@@ -23,19 +23,25 @@ pub enum VaultStatus {
 #[account]
 #[derive(Default)]
 pub struct Vault {
-	/// The vault's address. It is a pda of the market index
+	/// The vault's address. It is a pda of the vault index
 	pub pubkey: Pubkey,
 	/// The owner/authority of the account
 	pub authority: Pubkey,
 	/// An addresses that can control the account on the authority's behalf. Has limited power, cant withdraw
 	pub delegate: Pubkey,
-	/// The market account
-	pub market: Pubkey,
-	/// The vault used to store the vault's deposits (collateral)
-	/// The amount in the vault should be equal to or greater than deposits - liquidity_balance
-	pub vault: Pubkey,
 	pub vault_index: u16,
-	// pub market_index: u16, // TODO: do we need this?
+	pub market_index: u16,
+
+	// Metrics
+	//
+
+	/// The total balance lent to 3rd party protocols
+	pub collateral_loan_balance: u64,
+
+	/// The vault used to store the vault's deposits (collateral)
+	/// The amount in the vault should be equal to or greater than deposits - loan_balance
+	pub token_vault_collateral: Pubkey,
+
 	/// Whether the vault is active, being liquidated or bankrupt
 	pub status: u8,
 	/// The last slot a vault was active. Used to determine if a vault is idle
@@ -43,27 +49,18 @@ pub struct Vault {
 	/// Vault is idle if it's balance has been zero for at least 1 week
 	/// Off-chain keeper bots can ignore vaults that are idle
 	pub idle: bool,
-	/// The total balance lent to the AMM for liquidity
-	pub liquidity_balance: u64,
+
 	/// the ratio of collateral value to debt value, which must remain above the liquidation ratio.
 	pub collateralization_ratio: u64,
 	/// the debt created by minting synthetic against the collateral.
 	pub synthetic_tokens_minted: u64,
 
-	pub token_program: u8,
 	pub padding: [u8; 12],
 }
 
 impl Vault {
 	pub fn is_for(&self, market_index: u16) -> bool {
 		self.market_index == market_index
-	}
-
-	pub fn initialize(&self) {
-		// set token_program, token_mint
-
-		self.collateral_type = token_mint_synthetic;
-		self.token_vault_synthetic = token_vault_synthetic;
 	}
 
 	pub fn is_being_liquidated(&self) -> bool {

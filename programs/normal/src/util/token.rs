@@ -1,3 +1,4 @@
+use crate::state::market::Market;
 use crate::state::{ PositionBundle, AMM };
 use anchor_lang::prelude::*;
 use anchor_spl::metadata::{
@@ -165,7 +166,7 @@ pub fn transfer_from_owner_to_vault<'info>(
 }
 
 pub fn transfer_from_vault_to_owner<'info>(
-	amm: &Account<'info, AMM>,
+	market: &Account<'info, Market>,
 	token_vault: &Account<'info, TokenAccount>,
 	token_owner_account: &Account<'info, TokenAccount>,
 	token_program: &Program<'info, Token>,
@@ -177,9 +178,9 @@ pub fn transfer_from_vault_to_owner<'info>(
 			Transfer {
 				from: token_vault.to_account_info(),
 				to: token_owner_account.to_account_info(),
-				authority: amm.to_account_info(),
+				authority: market.to_account_info(),
 			},
-			&[&amm.seeds()]
+			&[&market.seeds()]
 		),
 		amount
 	)
@@ -250,23 +251,23 @@ pub fn burn_and_close_user_position_token<'info>(
 }
 
 pub fn mint_position_token_and_remove_authority<'info>(
-	amm: &Account<'info, AMM>,
+	market: &Account<'info, Market>,
 	position_mint: &Account<'info, Mint>,
 	position_token_account: &Account<'info, TokenAccount>,
 	token_program: &Program<'info, Token>
 ) -> Result<()> {
 	mint_position_token(
-		amm,
+		market,
 		position_mint,
 		position_token_account,
 		token_program
 	)?;
-	remove_position_token_mint_authority(amm, position_mint, token_program)
+	remove_position_token_mint_authority(market, position_mint, token_program)
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn mint_position_token_with_metadata_and_remove_authority<'info>(
-	amm: &Account<'info, AMM>,
+	market: &Account<'info, Market>,
 	position_mint: &Account<'info, Mint>,
 	position_token_account: &Account<'info, TokenAccount>,
 	position_metadata_account: &UncheckedAccount<'info>,
@@ -278,13 +279,13 @@ pub fn mint_position_token_with_metadata_and_remove_authority<'info>(
 	rent: &Sysvar<'info, Rent>
 ) -> Result<()> {
 	mint_position_token(
-		amm,
+		market,
 		position_mint,
 		position_token_account,
 		token_program
 	)?;
 
-	let metadata_mint_auth_account = amm;
+	let metadata_mint_auth_account = market;
 	metadata::create_metadata_accounts_v3(
 		CpiContext::new_with_signer(
 			metadata_program.to_account_info(),
@@ -313,15 +314,15 @@ pub fn mint_position_token_with_metadata_and_remove_authority<'info>(
 		None
 	)?;
 
-	remove_position_token_mint_syntheticuthority(
-		amm,
+	remove_position_token_mint_authority(
+		market,
 		position_mint,
 		token_program
 	)
 }
 
 fn mint_position_token<'info>(
-	amm: &Account<'info, AMM>,
+	market: &Account<'info, Market>,
 	position_mint: &Account<'info, Mint>,
 	position_token_account: &Account<'info, TokenAccount>,
 	token_program: &Program<'info, Token>
@@ -331,23 +332,23 @@ fn mint_position_token<'info>(
 			token_program.key,
 			position_mint.to_account_info().key,
 			position_token_account.to_account_info().key,
-			amm.to_account_info().key,
-			&[amm.to_account_info().key],
+			market.to_account_info().key,
+			&[market.to_account_info().key],
 			1
 		)?,
 		&[
 			position_mint.to_account_info(),
 			position_token_account.to_account_info(),
-			amm.to_account_info(),
+			market.to_account_info(),
 			token_program.to_account_info(),
 		],
-		&[&amm.seeds()]
+		&[&market.seeds()]
 	)?;
 	Ok(())
 }
 
 fn remove_position_token_mint_authority<'info>(
-	amm: &Account<'info, AMM>,
+	market: &Account<'info, Market>,
 	position_mint: &Account<'info, Mint>,
 	token_program: &Program<'info, Token>
 ) -> Result<()> {
@@ -357,15 +358,15 @@ fn remove_position_token_mint_authority<'info>(
 			position_mint.to_account_info().key,
 			Option::None,
 			AuthorityType::MintTokens,
-			amm.to_account_info().key,
-			&[amm.to_account_info().key]
+			market.to_account_info().key,
+			&[market.to_account_info().key]
 		)?,
 		&[
 			position_mint.to_account_info(),
-			amm.to_account_info(),
+			market.to_account_info(),
 			token_program.to_account_info(),
 		],
-		&[&amm.seeds()]
+		&[&market.seeds()]
 	)?;
 	Ok(())
 }

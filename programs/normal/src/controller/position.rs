@@ -1,7 +1,7 @@
 use crate::{
     errors::ErrorCode,
     math::{add_liquidity_delta, checked_mul_shift_right},
-    state::{Position, PositionUpdate, NUM_REWARDS},
+    state::{Position, LPUpdate, NUM_REWARDS},
 };
 
 pub fn next_position_modify_liquidity_update(
@@ -10,8 +10,8 @@ pub fn next_position_modify_liquidity_update(
     fee_growth_inside_synthetic: u128,
     fee_growth_inside_quote: u128,
     reward_growths_inside: &[u128; NUM_REWARDS],
-) -> Result<PositionUpdate, ErrorCode> {
-    let mut update = PositionUpdate::default();
+) -> Result<LPUpdate, ErrorCode> {
+    let mut update = LPUpdate::default();
 
     // Calculate fee deltas.
     // If fee deltas overflow, default to a zero value. This means the position loses

@@ -1,16 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::State;
-
-#[derive(Accounts)]
-pub struct AdminUpdateState<'info> {
-	pub admin: Signer<'info>,
-	#[account(
-        mut,
-        has_one = admin
-    )]
-	pub state: Box<Account<'info, State>>,
-}
+use super::AdminUpdateState;
 
 pub fn handle_update_state_initial_pct_to_liquidate(
 	ctx: Context<AdminUpdateState>,

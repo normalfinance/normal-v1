@@ -3,7 +3,7 @@ use std::cell::Ref;
 
 use crate::error::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::constants::constants::{
+use crate::constants::main::{
 	PRICE_PRECISION,
 	PRICE_PRECISION_I64,
 	PRICE_PRECISION_U64,

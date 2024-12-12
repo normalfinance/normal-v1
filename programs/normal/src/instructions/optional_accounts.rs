@@ -1,5 +1,6 @@
 use crate::error::{ NormalResult, ErrorCode };
 use crate::state::market_map::MarketMap;
+use crate::state::vault_map::VaultMap;
 use std::convert::TryFrom;
 
 use crate::math::safe_unwrap::SafeUnwrap;
@@ -21,12 +22,14 @@ use std::slice::Iter;
 
 pub struct AccountMaps<'a> {
 	pub market_map: MarketMap<'a>,
+	pub vault_map: VaultMap<'a>,
 	pub oracle_map: OracleMap<'a>,
 }
 
 pub fn load_maps<'a, 'b>(
 	account_info_iter: &mut Peekable<Iter<'a, AccountInfo<'a>>>,
 	writable_markets: &'b MarketSet,
+	writable_vaults: &'b MarketSet,
 	slot: u64,
 	oracle_guard_rails: Option<OracleGuardRails>
 ) -> NormalResult<AccountMaps<'a>> {
@@ -35,10 +38,12 @@ pub fn load_maps<'a, 'b>(
 		slot,
 		oracle_guard_rails
 	)?;
+	let vault_map = VaultMap::load(writable_vaults, account_info_iter)?;
 	let market_map = MarketMap::load(writable_markets, account_info_iter)?;
 
 	Ok(AccountMaps {
 		market_map,
+		vault_map,
 		oracle_map,
 	})
 }

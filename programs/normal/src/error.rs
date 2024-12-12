@@ -1,3 +1,5 @@
+use std::num::TryFromIntError;
+
 use anchor_lang::prelude::*;
 
 pub type NormalResult<T = ()> = std::result::Result<T, ErrorCode>;
@@ -5,19 +7,16 @@ pub type NormalResult<T = ()> = std::result::Result<T, ErrorCode>;
 #[error_code]
 #[derive(PartialEq, Eq)]
 pub enum ErrorCode {
-	// Custom
-	#[msg("Invalid Governance Proposal")]
-	InvalidGovernanceProposial,
-
-	// Insurance
-	#[msg("NoFeesToDepotiToInsuranceFund")]
-	NoFeesToDepotiToInsuranceFund,
-
-	#[msg("Invalid Market Authority")]
-	InvalidMarketAuthority,
+	#[msg("Invalid Spot Market Authority")]
+	InvalidSpotMarketAuthority,
 	#[msg("Clearing house not insurance fund authority")]
 	InvalidInsuranceFundAuthority,
-
+	#[msg("Insufficient deposit")]
+	InsufficientDeposit,
+	#[msg("Insufficient collateral")]
+	InsufficientCollateral,
+	#[msg("Sufficient collateral")]
+	SufficientCollateral,
 	#[msg("Max number of positions taken")]
 	MaxNumberOfPositions,
 	#[msg("Admin Controls Prices Disabled")]
@@ -82,7 +81,14 @@ pub enum ErrorCode {
 	InvalidOracle,
 	#[msg("OracleNotFound")]
 	OracleNotFound,
-
+	#[msg("Liquidations Blocked By Oracle")]
+	LiquidationsBlockedByOracle,
+	#[msg("Can not deposit more than max deposit")]
+	MaxDeposit,
+	#[msg("Can not delete user that still has collateral")]
+	CantDeleteUserWithCollateral,
+	#[msg("AMM funding out of bounds pnl")]
+	InvalidFundingProfitability,
 	#[msg("Casting Failure")]
 	CastingFailure,
 	#[msg("InvalidOrder")]
@@ -91,6 +97,8 @@ pub enum ErrorCode {
 	InvalidOrderMaxTs,
 	#[msg("InvalidOrderMarketType")]
 	InvalidOrderMarketType,
+	#[msg("InvalidOrderForInitialMarginReq")]
+	InvalidOrderForInitialMarginReq,
 	#[msg("InvalidOrderNotRiskReducing")]
 	InvalidOrderNotRiskReducing,
 	#[msg("InvalidOrderSizeTooSmall")]
@@ -109,7 +117,8 @@ pub enum ErrorCode {
 	InvalidOrderTrigger,
 	#[msg("InvalidOrderAuction")]
 	InvalidOrderAuction,
-
+	#[msg("InvalidOrderOracleOffset")]
+	InvalidOrderOracleOffset,
 	#[msg("InvalidOrderMinOrderSize")]
 	InvalidOrderMinOrderSize,
 	#[msg("Failed to Place Post-Only Limit Order")]
@@ -142,19 +151,24 @@ pub enum ErrorCode {
 	CouldNotDeserializeReferrerStats,
 	#[msg("User Order Id Already In Use")]
 	UserOrderIdAlreadyInUse,
+	#[msg("No positions liquidatable")]
+	NoPositionsLiquidatable,
+	#[msg("Invalid Margin Ratio")]
+	InvalidMarginRatio,
 	#[msg("Cant Cancel Post Only Order")]
 	CantCancelPostOnlyOrder,
-
+	#[msg("InvalidOracleOffset")]
+	InvalidOracleOffset,
 	#[msg("CantExpireOrders")]
 	CantExpireOrders,
 	#[msg("CouldNotLoadMarketData")]
 	CouldNotLoadMarketData,
-	#[msg("MarketNotFound")]
-	MarketNotFound,
+	#[msg("PerpMarketNotFound")]
+	PerpMarketNotFound,
 	#[msg("InvalidMarketAccount")]
 	InvalidMarketAccount,
 	#[msg("UnableToLoadMarketAccount")]
-	UnableToLoadMarketAccount,
+	UnableToLoadPerpMarketAccount,
 	#[msg("MarketWrongMutability")]
 	MarketWrongMutability,
 	#[msg("UnableToCastUnixTime")]
@@ -165,10 +179,26 @@ pub enum ErrorCode {
 	NoSpotPositionAvailable,
 	#[msg("InvalidSpotMarketInitialization")]
 	InvalidSpotMarketInitialization,
-
+	#[msg("CouldNotLoadSpotMarketData")]
+	CouldNotLoadSpotMarketData,
+	#[msg("SpotMarketNotFound")]
+	SpotMarketNotFound,
+	#[msg("InvalidSpotMarketAccount")]
+	InvalidSpotMarketAccount,
+	#[msg("UnableToLoadSpotMarketAccount")]
+	UnableToLoadSpotMarketAccount,
+	#[msg("SpotMarketWrongMutability")]
+	SpotMarketWrongMutability,
+	#[msg("SpotInterestNotUpToDate")]
+	SpotMarketInterestNotUpToDate,
+	#[msg("SpotMarketInsufficientDeposits")]
+	SpotMarketInsufficientDeposits,
+	#[msg("UserMustSettleTheirOwnPositiveUnsettledPNL")]
+	UserMustSettleTheirOwnPositiveUnsettledPNL,
 	#[msg("CantUpdatePoolBalanceType")]
 	CantUpdatePoolBalanceType,
-
+	#[msg("InsufficientCollateralForSettlingPNL")]
+	InsufficientCollateralForSettlingPNL,
 	#[msg("AMMNotUpdatedInSameSlot")]
 	AMMNotUpdatedInSameSlot,
 	#[msg("AuctionNotComplete")]
@@ -203,14 +233,37 @@ pub enum ErrorCode {
 	OrderNotTriggerable,
 	#[msg("OrderDidNotSatisfyTriggerCondition")]
 	OrderDidNotSatisfyTriggerCondition,
+	#[msg("PositionAlreadyBeingLiquidated")]
+	PositionAlreadyBeingLiquidated,
 	#[msg("PositionDoesntHaveOpenPositionOrOrders")]
 	PositionDoesntHaveOpenPositionOrOrders,
+	#[msg("AllOrdersAreAlreadyLiquidations")]
+	AllOrdersAreAlreadyLiquidations,
+	#[msg("CantCancelLiquidationOrder")]
+	CantCancelLiquidationOrder,
+	#[msg("UserIsBeingLiquidated")]
+	UserIsBeingLiquidated,
+	#[msg("LiquidationsOngoing")]
+	LiquidationsOngoing,
 	#[msg("WrongSpotBalanceType")]
 	WrongSpotBalanceType,
+	#[msg("UserCantLiquidateThemself")]
+	UserCantLiquidateThemself,
+	#[msg("InvalidPerpPositionToLiquidate")]
+	InvalidPerpPositionToLiquidate,
+	#[msg("InvalidBaseAssetAmountForLiquidatePerp")]
+	InvalidBaseAssetAmountForLiquidatePerp,
 
 	#[msg("InvalidPositionDelta")]
 	InvalidPositionDelta,
-
+	#[msg("UserBankrupt")]
+	UserBankrupt,
+	#[msg("UserNotBankrupt")]
+	UserNotBankrupt,
+	#[msg("UserHasInvalidBorrow")]
+	UserHasInvalidBorrow,
+	#[msg("DailyWithdrawLimit")]
+	DailyWithdrawLimit,
 	#[msg("DefaultError")]
 	DefaultError,
 	#[msg("Insufficient LP tokens")]
@@ -225,40 +278,70 @@ pub enum ErrorCode {
 	InvalidSpotMarketVault,
 	#[msg("Invalid Spot Market State")]
 	InvalidSpotMarketState,
-
+	#[msg("InvalidSerumProgram")]
+	InvalidSerumProgram,
+	#[msg("InvalidSerumMarket")]
+	InvalidSerumMarket,
+	#[msg("InvalidSerumBids")]
+	InvalidSerumBids,
+	#[msg("InvalidSerumAsks")]
+	InvalidSerumAsks,
+	#[msg("InvalidSerumOpenOrders")]
+	InvalidSerumOpenOrders,
+	#[msg("FailedSerumCPI")]
+	FailedSerumCPI,
+	#[msg("FailedToFillOnExternalMarket")]
+	FailedToFillOnExternalMarket,
 	#[msg("InvalidFulfillmentConfig")]
 	InvalidFulfillmentConfig,
 	#[msg("InvalidFeeStructure")]
 	InvalidFeeStructure,
+	#[msg("Insufficient IF shares")]
+	InsufficientIFShares,
 	#[msg("the Market has paused this action")]
 	MarketActionPaused,
 	#[msg("the Market status doesnt allow placing orders")]
 	MarketPlaceOrderPaused,
 	#[msg("the Market status doesnt allow filling orders")]
 	MarketFillOrderPaused,
-
-	#[msg("Action violates the Protected Synthetic Tier rules")]
-	ProtectedSyntheticTierViolation,
-	#[msg("Action violates the Isolated Synthetic Tier rules")]
-	IsolatedSyntheticTierViolation,
+	#[msg("the Market status doesnt allow withdraws")]
+	MarketWithdrawPaused,
+	#[msg("Action violates the Protected Asset Tier rules")]
+	ProtectedAssetTierViolation,
+	#[msg("Action violates the Isolated Asset Tier rules")]
+	IsolatedAssetTierViolation,
 	#[msg("User Cant Be Deleted")]
 	UserCantBeDeleted,
-
+	#[msg("Reduce Only Withdraw Increased Risk")]
+	ReduceOnlyWithdrawIncreasedRisk,
 	#[msg("Max Open Interest")]
 	MaxOpenInterest,
-
+	#[msg("Cant Resolve Perp Bankruptcy")]
+	CantResolvePerpBankruptcy,
+	#[msg("Liquidation Doesnt Satisfy Limit Price")]
+	LiquidationDoesntSatisfyLimitPrice,
+	#[msg("Margin Trading Disabled")]
+	MarginTradingDisabled,
+	#[msg("Invalid Market Status to Settle Perp Pnl")]
+	InvalidMarketStatusToSettlePnl,
 	#[msg("PerpMarketNotInSettlement")]
 	PerpMarketNotInSettlement,
 	#[msg("PerpMarketNotInReduceOnly")]
 	PerpMarketNotInReduceOnly,
+	#[msg("PerpMarketSettlementBufferNotReached")]
+	PerpMarketSettlementBufferNotReached,
+	#[msg("PerpMarketSettlementUserHasOpenOrders")]
+	PerpMarketSettlementUserHasOpenOrders,
 	#[msg("PerpMarketSettlementUserHasActiveLP")]
 	PerpMarketSettlementUserHasActiveLP,
+	#[msg("UnableToSettleExpiredUserPosition")]
+	UnableToSettleExpiredUserPosition,
 	#[msg("UnequalMarketIndexForSpotTransfer")]
 	UnequalMarketIndexForSpotTransfer,
-
-	#[msg("InvalidPositionDetected")]
-	InvalidPositionDetected,
-
+	#[msg("InvalidPerpPositionDetected")]
+	InvalidPerpPositionDetected,
+	#[msg("InvalidSpotPositionDetected")]
+	InvalidSpotPositionDetected,
 	#[msg("InvalidAmmDetected")]
 	InvalidAmmDetected,
 	#[msg("InvalidAmmForFillDetected")]
@@ -275,6 +358,10 @@ pub enum ErrorCode {
 	InvalidPDA,
 	#[msg("InvalidPDASigner")]
 	InvalidPDASigner,
+	#[msg("RevenueSettingsCannotSettleToIF")]
+	RevenueSettingsCannotSettleToIF,
+	#[msg("NoRevenueToSettleToIF")]
+	NoRevenueToSettleToIF,
 	#[msg("NoAmmPerpPnlDeficit")]
 	NoAmmPerpPnlDeficit,
 	#[msg("SufficientPerpPnlPool")]
@@ -283,23 +370,50 @@ pub enum ErrorCode {
 	InsufficientPerpPnlPool,
 	#[msg("PerpPnlDeficitBelowThreshold")]
 	PerpPnlDeficitBelowThreshold,
+	#[msg("MaxRevenueWithdrawPerPeriodReached")]
+	MaxRevenueWithdrawPerPeriodReached,
+	#[msg("InvalidSpotPositionDetected")]
+	MaxIFWithdrawReached,
+	#[msg("NoIFWithdrawAvailable")]
+	NoIFWithdrawAvailable,
+	#[msg("InvalidIFUnstake")]
+	InvalidIFUnstake,
+	#[msg("InvalidIFUnstakeSize")]
+	InvalidIFUnstakeSize,
+	#[msg("InvalidIFUnstakeCancel")]
+	InvalidIFUnstakeCancel,
+	#[msg("InvalidIFForNewStakes")]
+	InvalidIFForNewStakes,
+	#[msg("InvalidIFRebase")]
+	InvalidIFRebase,
 	#[msg("InvalidInsuranceUnstakeSize")]
 	InvalidInsuranceUnstakeSize,
 	#[msg("InvalidOrderLimitPrice")]
 	InvalidOrderLimitPrice,
+	#[msg("InvalidIFDetected")]
+	InvalidIFDetected,
 	#[msg("InvalidAmmMaxSpreadDetected")]
 	InvalidAmmMaxSpreadDetected,
 	#[msg("InvalidConcentrationCoef")]
 	InvalidConcentrationCoef,
-
+	#[msg("InvalidSrmVault")]
+	InvalidSrmVault,
 	#[msg("InvalidVaultOwner")]
 	InvalidVaultOwner,
 	#[msg("InvalidMarketStatusForFills")]
 	InvalidMarketStatusForFills,
+	#[msg("IFWithdrawRequestInProgress")]
+	IFWithdrawRequestInProgress,
+	#[msg("NoIFWithdrawRequestInProgress")]
+	NoIFWithdrawRequestInProgress,
+	#[msg("IFWithdrawRequestTooSmall")]
+	IFWithdrawRequestTooSmall,
 	#[msg("IncorrectSpotMarketAccountPassed")]
 	IncorrectSpotMarketAccountPassed,
 	#[msg("BlockchainClockInconsistency")]
 	BlockchainClockInconsistency,
+	#[msg("InvalidIFSharesDetected")]
+	InvalidIFSharesDetected,
 	#[msg("NewLPSizeTooSmall")]
 	NewLPSizeTooSmall,
 	#[msg("MarketStatusInvalidForNewLP")]
@@ -332,7 +446,8 @@ pub enum ErrorCode {
 	InvalidPerpPosition,
 	#[msg("Unable To Get Limit Price")]
 	UnableToGetLimitPrice,
-
+	#[msg("Invalid Liquidation")]
+	InvalidLiquidation,
 	#[msg("Spot Fulfillment Config Disabled")]
 	SpotFulfillmentConfigDisabled,
 	#[msg("Invalid Maker")]
@@ -341,7 +456,12 @@ pub enum ErrorCode {
 	FailedUnwrap,
 	#[msg("Max Number Of Users")]
 	MaxNumberOfUsers,
-
+	#[msg("InvalidOracleForSettlePnl")]
+	InvalidOracleForSettlePnl,
+	#[msg("MarginOrdersOpen")]
+	MarginOrdersOpen,
+	#[msg("TierViolationLiquidatingPerpPnl")]
+	TierViolationLiquidatingPerpPnl,
 	#[msg("CouldNotLoadUserData")]
 	CouldNotLoadUserData,
 	#[msg("UserWrongMutability")]
@@ -368,13 +488,24 @@ pub enum ErrorCode {
 	RevertFill,
 	#[msg("Invalid MarketAccount for Deletion")]
 	InvalidMarketAccountforDeletion,
-
+	#[msg("Invalid Spot Fulfillment Params")]
+	InvalidSpotFulfillmentParams,
 	#[msg("Failed to Get Mint")]
 	FailedToGetMint,
-
+	#[msg("FailedPhoenixCPI")]
+	FailedPhoenixCPI,
+	#[msg("FailedToDeserializePhoenixMarket")]
+	FailedToDeserializePhoenixMarket,
 	#[msg("InvalidPricePrecision")]
 	InvalidPricePrecision,
-
+	#[msg("InvalidPhoenixProgram")]
+	InvalidPhoenixProgram,
+	#[msg("InvalidPhoenixMarket")]
+	InvalidPhoenixMarket,
+	#[msg("InvalidSwap")]
+	InvalidSwap,
+	#[msg("SwapLimitPriceBreached")]
+	SwapLimitPriceBreached,
 	#[msg("SpotMarketReduceOnly")]
 	SpotMarketReduceOnly,
 
@@ -384,28 +515,34 @@ pub enum ErrorCode {
 	CantUpdatePerpBidAskTwap,
 	#[msg("UserReduceOnly")]
 	UserReduceOnly,
-
+	#[msg("InvalidMarginCalculation")]
+	InvalidMarginCalculation,
 	#[msg("CantPayUserInitFee")]
 	CantPayUserInitFee,
 	#[msg("CantReclaimRent")]
 	CantReclaimRent,
 	#[msg("InsuranceFundOperationPaused")]
 	InsuranceFundOperationPaused,
-
+	#[msg("NoUnsettledPnl")]
+	NoUnsettledPnl,
+	#[msg("PnlPoolCantSettleUser")]
+	PnlPoolCantSettleUser,
 	#[msg("OracleInvalid")]
 	OracleNonPositive,
 	#[msg("OracleTooVolatile")]
 	OracleTooVolatile,
 	#[msg("OracleTooUncertain")]
 	OracleTooUncertain,
-
+	#[msg("OracleStaleForMargin")]
+	OracleStaleForMargin,
 	#[msg("OracleInsufficientDataPoints")]
 	OracleInsufficientDataPoints,
 	#[msg("OracleStaleForAMM")]
 	OracleStaleForAMM,
 	#[msg("Unable to parse pull oracle message")]
 	UnableToParsePullOracleMessage,
-
+	#[msg("Can not borow more than max borrows")]
+	MaxBorrows,
 	#[msg("Updates must be monotonically increasing")]
 	OracleUpdatesNotMonotonic,
 	#[msg("Trying to update price feed with the wrong feed id")]
@@ -416,7 +553,7 @@ pub enum ErrorCode {
 	OracleDeserializeMessageFailed,
 	#[msg("Wrong guardian set owner in update price atomic")]
 	OracleWrongGuardianSetOwner,
-	#[msg("Oracle post update atomic price feed account must be normal program")]
+	#[msg("Oracle post update atomic price feed account must be drift program")]
 	OracleWrongWriteAuthority,
 	#[msg("Oracle vaa owner must be wormhole program")]
 	OracleWrongVaaOwner,
@@ -430,9 +567,16 @@ pub enum ErrorCode {
 	OracleMismatchedVaaAndPriceUpdates,
 	#[msg("Remaining account passed is not a valid pda")]
 	OracleBadRemainingAccountPublicKey,
-
+	#[msg("FailedOpenbookV2CPI")]
+	FailedOpenbookV2CPI,
+	#[msg("InvalidOpenbookV2Program")]
+	InvalidOpenbookV2Program,
+	#[msg("InvalidOpenbookV2Market")]
+	InvalidOpenbookV2Market,
 	#[msg("Non zero transfer fee")]
 	NonZeroTransferFee,
+	#[msg("Liquidation order failed to fill")]
+	LiquidationOrderFailedToFill,
 
 	#[msg("Ed25519 Ix must be before place and make swift order ix")]
 	InvalidVerificationIxIndex,
@@ -445,13 +589,12 @@ pub enum ErrorCode {
 	#[msg("Place and take order success condition failed")]
 	PlaceAndTakeOrderSuccessConditionFailed,
 
-	/// Orca
-
+	// Orca
 	#[msg("Enum value could not be converted")]
 	InvalidEnum, // 0x1770 (6000)
 	#[msg("Invalid start tick index provided.")]
 	InvalidStartTick, // 0x1771 (6001)
-	#[msg("Tick-array already exists in this AMM")]
+	#[msg("Tick-array already exists in this amm")]
 	TickArrayExistInPool, // 0x1772 (6002)
 	#[msg("Attempt to search for a tick-array failed")]
 	TickArrayIndexOutofBounds, // 0x1773 (6003)
@@ -580,7 +723,7 @@ pub enum ErrorCode {
 	#[msg("Same accounts type is provided more than once")]
 	RemainingAccountsDuplicatedAccountsType, // 0x17a5 (6053)
 
-	#[msg("this AMM only supports full-range positions")]
+	#[msg("This amm only supports full-range positions")]
 	FullRangeOnlyPool, // 0x17a6 (6054)
 
 	#[msg("Too many supplemental tick arrays provided")]
@@ -592,28 +735,35 @@ pub enum ErrorCode {
 	PartialFillError, // 0x17a9 (6057)
 }
 
+// Orca
+impl From<TryFromIntError> for ErrorCode {
+	fn from(_: TryFromIntError) -> Self {
+		ErrorCode::NumberCastError
+	}
+}
+
 #[macro_export]
 macro_rules! print_error {
 	($err:expr) => {
-        {
+		{
         || {
             let error_code: ErrorCode = $err;
             msg!("{:?} thrown at {}:{}", error_code, file!(), line!());
             $err
         }
-        }
+		}
 	};
 }
 
 #[macro_export]
 macro_rules! math_error {
 	() => {
-        {
+		{
         || {
             let error_code = $crate::error::ErrorCode::MathError;
             msg!("Error {} thrown at {}:{}", error_code, file!(), line!());
             error_code
         }
-        }
+		}
 	};
 }

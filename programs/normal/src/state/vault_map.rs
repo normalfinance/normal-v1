@@ -87,12 +87,12 @@ impl<'a> VaultMap<'a> {
 	}
 
 	pub fn load<'b, 'c>(
-		writable_markets: &'b MarketSet,
+		writable_vaults: &'b MarketSet,
 		account_info_iter: &'c mut Peekable<Iter<'a, AccountInfo<'a>>>
 	) -> NormalResult<VaultMap<'a>> {
 		let mut vault_map: VaultMap = VaultMap(BTreeMap::new());
 
-		let market_discriminator: [u8; 8] = Vault::discriminator();
+		let vault_discriminator: [u8; 8] = Vault::discriminator();
 		while let Some(account_info) = account_info_iter.peek() {
 			let data = account_info
 				.try_borrow_data()
@@ -104,22 +104,22 @@ impl<'a> VaultMap<'a> {
 			}
 
 			let account_discriminator = array_ref![data, 0, 8];
-			if account_discriminator != &market_discriminator {
+			if account_discriminator != &vault_discriminator {
 				break;
 			}
 
-			// market index 1160 bytes from front of account
+			// vault index 1160 bytes from front of account
 			let vault_index = u16::from_le_bytes(*array_ref![data, 1160, 2]);
 
 			if vault_map.0.contains_key(&vault_index) {
-				msg!("Can not include same market index twice {}", vault_index);
+				msg!("Can not include same vault index twice {}", vault_index);
 				return Err(ErrorCode::InvalidMarketAccount);
 			}
 
 			let account_info = account_info_iter.next().safe_unwrap()?;
 
 			let is_writable = account_info.is_writable;
-			if writable_markets.contains(&vault_index) && !is_writable {
+			if writable_vaults.contains(&vault_index) && !is_writable {
 				return Err(ErrorCode::MarketWrongMutability);
 			}
 
@@ -151,13 +151,13 @@ impl<'a> VaultMap<'a> {
 			return Err(ErrorCode::CouldNotLoadMarketData);
 		}
 
-		let market_discriminator: [u8; 8] = Vault::discriminator();
+		let vault_discriminator: [u8; 8] = Vault::discriminator();
 		let account_discriminator = array_ref![data, 0, 8];
-		if account_discriminator != &market_discriminator {
+		if account_discriminator != &vault_discriminator {
 			return Err(ErrorCode::CouldNotLoadMarketData);
 		}
 
-		// market index 1160 bytes from front of account
+		// vault index 1160 bytes from front of account
 		let vault_index = u16::from_le_bytes(*array_ref![data, 1160, 2]);
 
 		let is_writable = account_info.is_writable;
@@ -194,13 +194,13 @@ impl<'a> VaultMap<'a> {
 				return Err(ErrorCode::CouldNotLoadMarketData);
 			}
 
-			let market_discriminator: [u8; 8] = Vault::discriminator();
+			let vault_discriminator: [u8; 8] = Vault::discriminator();
 			let account_discriminator = array_ref![data, 0, 8];
-			if account_discriminator != &market_discriminator {
+			if account_discriminator != &vault_discriminator {
 				return Err(ErrorCode::CouldNotLoadMarketData);
 			}
 
-			// market index 1160 bytes from front of account
+			// vault index 1160 bytes from front of account
 			let vault_index = u16::from_le_bytes(*array_ref![data, 1160, 2]);
 
 			let is_writable = account_info.is_writable;
@@ -222,26 +222,26 @@ impl<'a> VaultMap<'a> {
 pub(crate) type MarketSet = BTreeSet<u16>;
 
 pub fn get_writable_vault_set(vault_index: u16) -> MarketSet {
-	let mut writable_markets = MarketSet::new();
-	writable_markets.insert(vault_index);
-	writable_markets
+	let mut writable_vaults = MarketSet::new();
+	writable_vaults.insert(vault_index);
+	writable_vaults
 }
 
 pub fn get_writable_vault_set_from_vec(vault_indexes: &[u16]) -> MarketSet {
-	let mut writable_markets = MarketSet::new();
+	let mut writable_vaults = MarketSet::new();
 	for vault_index in vault_indexes.iter() {
-		writable_markets.insert(*vault_index);
+		writable_vaults.insert(*vault_index);
 	}
-	writable_markets
+	writable_vaults
 }
 
 pub fn get_market_set_from_list(vault_indexes: [u16; 5]) -> MarketSet {
-	let mut writable_markets = MarketSet::new();
+	let mut writable_vaults = MarketSet::new();
 	for vault_index in vault_indexes.iter() {
 		if *vault_index == 100 {
 			continue; // todo
 		}
-		writable_markets.insert(*vault_index);
+		writable_vaults.insert(*vault_index);
 	}
-	writable_markets
+	writable_vaults
 }

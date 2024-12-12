@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use super::update_state_initial_pct_to_liquidate::AdminUpdateState;
+use super::AdminUpdateState;
 
 pub fn handle_update_state_admin(
 	ctx: Context<AdminUpdateState>,

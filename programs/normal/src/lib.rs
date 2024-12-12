@@ -28,18 +28,23 @@ pub mod util;
 mod validation;
 
 #[cfg(feature = "mainnet-beta")]
-declare_id!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
+declare_id!("...");
 #[cfg(not(feature = "mainnet-beta"))]
-declare_id!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
+declare_id!("...");
 
 #[program]
 pub mod normal {
+	use instructions::collateral::transfer_collateral::handle_transfer_collateral;
+
 	use super::*;
 
 	// State instructions
 
-	pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-		handle_initialize_state(ctx)
+	pub fn initialize(
+		ctx: Context<Initialize>,
+		total_debt_ceiling: u64
+	) -> Result<()> {
+		handle_initialize_state(ctx, total_debt_ceiling)
 	}
 
 	pub fn update_state_admin(
@@ -96,6 +101,105 @@ pub mod normal {
 		handle_initialize_market(ctx)
 	}
 
+	pub fn freeze_market_oracle(ctx: Context<FreezeMarketOracle>) -> Result<()> {
+		handle_freeze_market_oracle(ctx)
+	}
+
+	pub fn initialize_market_shutdown(
+		ctx: Context<AdminUpdateMarket>
+	) -> Result<()> {
+		handle_initialize_market_shutdown(ctx)
+	}
+
+	pub fn delete_initialized_market(
+		ctx: Context<DeleteInitializedMarket>,
+		market_index: u16
+	) -> Result<()> {
+		handle_delete_initialized_market(ctx, market_index)
+	}
+
+	pub fn update_market_debt_ceiling(
+		ctx: Context<AdminUpdateMarket>,
+		debt_ceiling: u128
+	) -> Result<()> {
+		handle_update_market_debt_celing(ctx, debt_ceiling)
+	}
+
+	pub fn update_market_debt_floor(
+		ctx: Context<AdminUpdateMarket>,
+		debt_floor: u32
+	) -> Result<()> {
+		handle_update_market_debt_celing(ctx, debt_floor)
+	}
+
+	pub fn update_market_imf_factor(
+		ctx: Context<AdminUpdateMarket>,
+		imf_factor: u32
+	) -> Result<()> {
+		handle_update_imf_factor(ctx, imf_factor)
+	}
+
+	pub fn update_market_liquidation_fee(
+		ctx: Context<AdminUpdateMarket>,
+		liquidator_fee: u32,
+		insurance_fund_liquidation_fee: u32
+	) -> Result<()> {
+		handle_update_market_liquidation_fee(
+			ctx,
+			liquidator_fee,
+			insurance_fund_liquidation_fee
+		)
+	}
+
+	pub fn update_market_liquidation_penalty(
+		ctx: Context<AdminUpdateMarket>,
+		liquidator_penalty: u32
+	) -> Result<()> {
+		handle_update_market_liquidation_penalty(ctx, liquidator_penalty)
+	}
+
+	pub fn update_market_margin_ratio(
+		ctx: Context<AdminUpdateMarket>,
+		margin_ratio_initial: u32,
+		margin_ratio_maintenance: u32
+	) -> Result<()> {
+		handle_update_market_margin_ratio(
+			ctx,
+			margin_ratio_initial,
+			margin_ratio_maintenance
+		)
+	}
+
+	pub fn update_market_name(
+		ctx: Context<AdminUpdateMarket>,
+		name: [u8; 32]
+	) -> Result<()> {
+		handle_update_market_name(ctx, name)
+	}
+
+	pub fn update_market_number_of_users(
+		ctx: Context<AdminUpdateMarket>,
+		number_of_users: Option<u32>
+	) -> Result<()> {
+		handle_update_market_number_of_users(ctx, number_of_users)
+	}
+
+	// oracle...
+
+	pub fn update_market_paused_operations(
+		ctx: Context<AdminUpdateMarket>,
+		paused_operations: u8
+	) -> Result<()> {
+		handle_update_market_paused_operations(ctx, paused_operations)
+	}
+
+	pub fn update_market_status(
+		ctx: Context<AdminUpdateMarket>,
+		status: MarketStatus
+	) -> Result<()> {
+		handle_update_market_status(ctx, status)
+	}
+
 	pub fn update_market_synthetic_tier(
 		ctx: Context<AdminUpdateMarket>,
 		synthetic_tier: SyntheticTier
@@ -142,6 +246,12 @@ pub mod normal {
 		handle_update_user_delegate(ctx, _sub_account_id, delegate)
 	}
 
+	pub fn update_user_idle<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, UpdateUserIdle<'info>>
+	) -> Result<()> {
+		handle_update_user_idle(ctx)
+	}
+
 	pub fn update_user_reduce_only(
 		ctx: Context<UpdateUser>,
 		_sub_account_id: u16,
@@ -150,12 +260,12 @@ pub mod normal {
 		handle_update_user_reduce_only(ctx, _sub_account_id, reduce_only)
 	}
 
-	pub fn update_user_advanced_lp(
+	pub fn update_user_custom_margin_ratio(
 		ctx: Context<UpdateUser>,
 		_sub_account_id: u16,
-		advanced_lp: bool
+		margin_ratio: u32
 	) -> Result<()> {
-		handle_update_user_advanced_lp(ctx, _sub_account_id, advanced_lp)
+		handle_update_user_custom_margin_ratio(ctx, _sub_account_id, margin_ratio)
 	}
 
 	pub fn delete_user<'c: 'info, 'info>(
@@ -168,23 +278,73 @@ pub mod normal {
 		handle_reclaim_rent(ctx)
 	}
 
-	// Kepper instructions
+	// Vault Instructions
 
-	pub fn update_user_idle<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, UpdateUserIdle<'info>>
+	pub fn initialize_vault(
+		ctx: Context<InitVault>,
+		vault_index: u16
 	) -> Result<()> {
-		handle_update_user_idle(ctx)
+		handle_initialize_vault(ctx, vault_index)
+	}
+
+	pub fn deposit_collatarel<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, DepositCollateral<'info>>,
+		vault_index: u16,
+		amount: u64,
+		reduce_only: bool
+	) -> Result<()> {
+		handle_deposit_collateral(ctx, vault_index, amount, reduce_only)
+	}
+
+	pub fn lend_collateral(ctx: Context<LendCollateral>) -> Result<()> {
+		handle_lend_collateral(ctx)
+	}
+
+	pub fn unlend_collateral(ctx: Context<UnlendCollateral>) -> Result<()> {
+		handle_unlend_collateral(ctx)
+	}
+
+	pub fn withdraw_collateral(ctx: Context<WithdrawCollateral>) -> Result<()> {
+		handle_withdraw_collateral(ctx)
+	}
+
+	pub fn withdraw_collateral<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, WithdrawCollateral<'info>>,
+		vault_index: u16,
+		amount: u64,
+		reduce_only: bool
+	) -> anchor_lang::Result<()> {
+		handle_withdraw_collateral(ctx, vault_index, amount, reduce_only)
+	}
+
+	pub fn transfer_collateral<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, TransferCollateral<'info>>,
+		vault_index: u16,
+		amount: u64
+	) -> anchor_lang::Result<()> {
+		handle_transfer_collateral(ctx, vault_index, amount)
+	}
+
+	pub fn update_vault_delegate(
+		ctx: Context<UpdateVault>,
+		delegate: Pubkey
+	) -> Result<()> {
+		handle_update_vault_delegate(ctx, delegate)
+	}
+
+	pub fn update_vault_idle(ctx: Context<UpdateVaultIdle>) -> Result<()> {
+		handle_update_vault_idle(ctx)
 	}
 
 	pub fn liquidate_vault<'c: 'info, 'info>(
 		ctx: Context<'_, '_, 'c, 'info, LiquidateVault<'info>>,
-		market_index: u16,
+		vault_index: u16,
 		liquidator_max_base_asset_amount: u64,
 		limit_price: Option<u64>
 	) -> Result<()> {
 		handle_liquidate_vault(
 			ctx,
-			market_index,
+			vault_index,
 			liquidator_max_base_asset_amount,
 			limit_price
 		)
@@ -204,13 +364,15 @@ pub mod normal {
 		handle_resolve_vault_bankruptcy(ctx, quote_spot_market_index, market_index)
 	}
 
+	pub fn delete_vault(ctx: Context<DeleteV>) -> Result<()> {
+		handle_delete_vault(ctx)
+	}
+
 	// AMM instructions
 
 	/// Initializes a market's AMM account.
-	/// Fee rate is set to the default values on the config and supplied fee_tier.
 	///
 	/// ### Parameters
-	/// - `bumps` - The bump value when deriving the PDA of the AMM address.
 	/// - `tick_spacing` - The desired tick spacing for this pool.
 	///
 	/// #### Special Errors
@@ -218,10 +380,20 @@ pub mod normal {
 	///
 	pub fn initialize_amm(
 		ctx: Context<InitializeAMM>,
-		bumps: AMMBumps,
-		tick_spacing: u16
+		tick_spacing: u16,
+		initial_sqrt_price: u128,
+		oracle_source: OracleSource,
+		fee_rate: u16,
+		protocol_fee_rate: u16
 	) -> Result<()> {
-		handle_initialize_amm(ctx, bumps, tick_spacing)
+		handle_initialize_amm(
+			ctx,
+			tick_spacing,
+			initial_sqrt_price,
+			oracle_source,
+			fee_rate,
+			protocol_fee_rate
+		)
 	}
 
 	/// Initializes a tick_array account to represent a tick-range in an AMM.
@@ -323,23 +495,6 @@ pub mod normal {
 		handle_set_amm_protocol_fee_rate(ctx, protocol_fee_rate)
 	}
 
-	/// Set the AMM reward authority at the provided `reward_index`.
-	/// Only the current reward authority for this reward index has permission to invoke this instruction.
-	///
-	/// ### Authority
-	/// - "reward_authority" - Set authority that can control reward emission for this particular reward.
-	///
-	/// #### Special Errors
-	/// - `InvalidRewardIndex` - If the provided reward index doesn't match the lowest uninitialized
-	///                          index in this pool, or exceeds NUM_REWARDS, or
-	///                          all reward slots for this pool has been initialized.
-	pub fn set_amm_reward_authority(
-		ctx: Context<SetAMMRewardAuthority>,
-		reward_index: u8
-	) -> Result<()> {
-		handle_set_amm_reward_authority(ctx, reward_index)
-	}
-
 	/**
 	 *
 	 *
@@ -362,7 +517,7 @@ pub mod normal {
 	/// #### Special Errors
 	/// - `ZeroTradableAmount` - User provided parameter `amount` is 0.
 	/// - `InvalidSqrtPriceLimitDirection` - User provided parameter `sqrt_price_limit` does not match the direction of the trade.
-	/// - `SqrtPriceOutOfBounds` - User provided parameter `sqrt_price_limit` is over Whirlppool's max/min bounds for sqrt-price.
+	/// - `SqrtPriceOutOfBounds` - User provided parameter `sqrt_price_limit` is over AMM's max/min bounds for sqrt-price.
 	/// - `InvalidTickArraySequence` - User provided tick-arrays are not in sequential order required to proceed in this trade direction.
 	/// - `TickArraySequenceInvalidIndex` - The swap loop attempted to access an invalid array index during the query of the next initialized tick.
 	/// - `TickArrayIndexOutofBounds` - The swap loop attempted to access an invalid array index during tick crossing.
@@ -396,18 +551,12 @@ pub mod normal {
 	/// #### Special Errors
 	/// - `InvalidTickIndex` - If a provided tick is out of bounds, out of order or not a multiple of
 	///                        the tick-spacing in this pool.
-	pub fn open_liquidity_position(
-		ctx: Context<OpenLiquidityPosition>,
-		bumps: OpenPositionBumps,
+	pub fn open_lp(
+		ctx: Context<OpenLP>,
 		tick_lower_index: i32,
 		tick_upper_index: i32
 	) -> Result<()> {
-		handle_open_liquidity_position(
-			ctx,
-			bumps,
-			tick_lower_index,
-			tick_upper_index
-		)
+		handle_open_lp(ctx, bumps, tick_lower_index, tick_upper_index)
 	}
 
 	/// Open a position in an AMM. A unique token will be minted to represent the position
@@ -421,18 +570,13 @@ pub mod normal {
 	/// #### Special Errors
 	/// - `InvalidTickIndex` - If a provided tick is out of bounds, out of order or not a multiple of
 	///                        the tick-spacing in this pool.
-	pub fn open_liquidity_position_with_metadata(
+	pub fn open_lp_with_metadata(
 		ctx: Context<OpenPositionWithMetadata>,
-		bumps: OpenPositionWithMetadataBumps,
+		bumps: OpenLPWithMetadataBumps,
 		tick_lower_index: i32,
 		tick_upper_index: i32
 	) -> Result<()> {
-		handle_open_liquidity_position_with_metadata(
-			ctx,
-			bumps,
-			tick_lower_index,
-			tick_upper_index
-		)
+		handle_open_lp_with_metadata(ctx, bumps, tick_lower_index, tick_upper_index)
 	}
 
 	/// Add liquidity to a position in the AMM. This call also updates the position's accrued fees and rewards.
@@ -451,9 +595,15 @@ pub mod normal {
 	pub fn increase_liquidity(
 		ctx: Context<ModifyLiquidity>,
 		liquidity_amount: u128,
+		token_max_synthetic: u64,
 		token_max_quote: u64
 	) -> Result<()> {
-		handle_increase_liquidity(ctx, liquidity_amount, token_max_quote)
+		handle_increase_liquidity(
+			ctx,
+			liquidity_amount,
+			token_max_synthetic,
+			token_max_quote
+		)
 	}
 
 	/// Withdraw liquidity from a position in the AMM. This call also updates the position's accrued fees and rewards.
@@ -492,21 +642,19 @@ pub mod normal {
 	///
 	/// ### Authority
 	/// - `position_authority` - authority that owns the token corresponding to this desired position.
-	pub fn collect_liquidity_position_fees(
-		ctx: Context<CollectLiquidityPositionFees>
-	) -> Result<()> {
-		handle_collect_liquidity_position_fees(ctx)
+	pub fn collect_lp_fees(ctx: Context<CollectLPFees>) -> Result<()> {
+		handle_collect_lp_fees(ctx)
 	}
 
 	/// Collect rewards accrued for this position.
 	///
 	/// ### Authority
 	/// - `position_authority` - authority that owns the token corresponding to this desired position.
-	pub fn collect_liquidity_position_reward(
-		ctx: Context<CollectLiquidityPositionReward>,
+	pub fn collect_lp_reward(
+		ctx: Context<CollectLPReward>,
 		reward_index: u8
 	) -> Result<()> {
-		handle_collect_liquidity_position_reward(ctx, reward_index)
+		handle_collect_lp_reward(ctx, reward_index)
 	}
 
 	/// Close a position in an AMM. Burns the position token in the owner's wallet.
@@ -516,10 +664,8 @@ pub mod normal {
 	///
 	/// #### Special Errors
 	/// - `ClosePositionNotEmpty` - The provided position account is not empty.
-	pub fn close_liquidity_position(
-		ctx: Context<CloseLiquidityPosition>
-	) -> Result<()> {
-		handle_close_liquidity_position(ctx)
+	pub fn close_lp(ctx: Context<CloseLP>) -> Result<()> {
+		handle_close_lp(ctx)
 	}
 
 	/// Open a position in an AMM. A unique token will be minted to represent the position
@@ -535,13 +681,13 @@ pub mod normal {
 	/// #### Special Errors
 	/// - `InvalidTickIndex` - If a provided tick is out of bounds, out of order or not a multiple of
 	///                        the tick-spacing in this pool.
-	pub fn open_liquidity_position_with_token_extensions(
-		ctx: Context<OpenLiquidityPositionWithTokenExtensions>,
+	pub fn open_lp_with_token_extensions(
+		ctx: Context<OpenLPWithTokenExtensions>,
 		tick_lower_index: i32,
 		tick_upper_index: i32,
 		with_token_metadata_extension: bool
 	) -> Result<()> {
-		handle_open_liquidity_position_with_token_extensions(
+		handle_open_lp_with_token_extensions(
 			ctx,
 			tick_lower_index,
 			tick_upper_index,
@@ -557,10 +703,10 @@ pub mod normal {
 	///
 	/// #### Special Errors
 	/// - `ClosePositionNotEmpty` - The provided position account is not empty.
-	pub fn close_liquidity_position_with_token_extensions(
-		ctx: Context<CloseLiquidityPositionWithTokenExtensions>
+	pub fn close_lp_with_token_extensions(
+		ctx: Context<CloseLPWithTokenExtensions>
 	) -> Result<()> {
-		handle_close_liquidity_position_with_token_extensions(ctx)
+		handle_close_lp_with_token_extensions(ctx)
 	}
 
 	/**
@@ -593,37 +739,37 @@ pub mod normal {
 
 	/**
 	 *
-	 * Index Fund instructions
+	 * Index instructions
 	 *
 	 */
 
-	pub fn initialize_index_fund<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, InitializeIndexFund<'info>>,
+	pub fn initialize_index<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, InitializeIndex<'info>>,
 		name: [u8; 32],
 		public: bool
 	) -> Result<()> {
-		handle_initialize_index_fund(ctx, name, public)
+		handle_initialize_index(ctx, name, public)
 	}
 
-	pub fn update_index_fund_visibility<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, UpdateIndexFund<'info>>,
+	pub fn update_index_visibility<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, UpdateIndex<'info>>,
 		public: bool
 	) -> Result<()> {
-		handle_update_index_fund_visibility(ctx, public)
+		handle_update_index_visibility(ctx, public)
 	}
 
-	pub fn update_index_fund_assets<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, UpdateIndexFund<'info>>,
-		assets: IndexFundAssets
+	pub fn update_index_assets<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, UpdateIndex<'info>>,
+		assets: IndexAssets
 	) -> Result<()> {
-		handle_update_index_fund_assets(ctx, assets)
+		handle_update_index_assets(ctx, assets)
 	}
 
-	pub fn rebalance_index_fund<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, RebalanceIndexFund<'info>>,
+	pub fn rebalance_index<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, RebalanceIndex<'info>>,
 		market_index: u16
 	) -> Result<()> {
-		handle_rebalance_index_fund(ctx, market_index)
+		handle_rebalance_index(ctx, market_index)
 	}
 
 	// Oracle instructions
@@ -672,21 +818,32 @@ pub mod normal {
 		handle_initialize_insurance_fund(ctx)
 	}
 
-	pub fn update_insurance_fund_unstaking_period(
+	pub fn update_if_max_insurance(
 		ctx: Context<AdminUpdateInsurnaceFund>,
-		insurance_fund_unstaking_period: i64
+		max_insurance: i64
 	) -> Result<()> {
-		handle_update_insurance_fund_unstaking_period(
-			ctx,
-			insurance_fund_unstaking_period
-		)
+		handle_update_if_max_insuranced(ctx, max_insurance)
 	}
 
-	pub fn settle_revenue_to_insurance_fund<'c: 'info, 'info>(
+	pub fn update_if_paused_operations(
+		ctx: Context<AdminUpdateInsurnaceFund>,
+		paused_operations: u8
+	) -> Result<()> {
+		handle_update_if_paused_operations(ctx, paused_operations)
+	}
+
+	pub fn update_if_unstaking_period(
+		ctx: Context<AdminUpdateInsurnaceFund>,
+		if_unstaking_period: i64
+	) -> Result<()> {
+		handle_update_if_unstaking_period(ctx, if_unstaking_period)
+	}
+
+	pub fn settle_revenue_to_if<'c: 'info, 'info>(
 		ctx: Context<'_, '_, 'c, 'info, SettleRevenueToInsuranceFund<'info>>,
 		market_index: u16
 	) -> Result<()> {
-		handle_settle_revenue_to_insurance_fund(ctx, market_index)
+		handle_settle_revenue_to_if(ctx, market_index)
 	}
 
 	// Insurane Fund Staker instructions

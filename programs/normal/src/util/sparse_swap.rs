@@ -4,11 +4,11 @@ use std::{ cell::{ Ref, RefMut }, collections::VecDeque };
 use crate::{
 	errors::ErrorCode,
 	state::{
+		market::Market,
 		Tick,
 		TickArray,
 		TickArrayType,
 		TickUpdate,
-		amm::AMM,
 		ZeroedTickArray,
 		TICK_ARRAY_SIZE,
 	},
@@ -41,7 +41,9 @@ impl<'a> ProxiedTickArray<'a> {
 		tick_spacing: u16,
 		synthetic_to_quote: bool
 	) -> Result<Option<i32>> {
-		self.as_ref().get_next_init_tick_index(tick_index, tick_spacing, synthetic_to_quote)
+		self
+			.as_ref()
+			.get_next_init_tick_index(tick_index, tick_spacing, synthetic_to_quote)
 	}
 
 	pub fn get_tick(&self, tick_index: i32, tick_spacing: u16) -> Result<&Tick> {
@@ -94,7 +96,7 @@ impl<'a> AsMut<dyn TickArrayType + 'a> for ProxiedTickArray<'a> {
 
 enum TickArrayAccount<'info> {
 	Initialized {
-		tick_array_amm: Pubkey,
+		tick_array_market: Pubkey,
 		start_tick_index: i32,
 		account_info: AccountInfo<'info>,
 	},
@@ -133,7 +135,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 	/// - `AccountDiscriminatorNotFound` - If the provided TickArray account does not have a discriminator
 	/// - `AccountDiscriminatorMismatch` - If the provided TickArray account has a mismatched discriminator
 	pub fn try_from(
-		amm: &Account<'info, AMM>,
+		market: &Account<'info, Market>,
 		synthetic_to_quote: bool,
 		static_tick_array_account_infos: Vec<AccountInfo<'info>>,
 		supplemental_tick_array_account_infos: Option<Vec<AccountInfo<'info>>>
@@ -157,12 +159,12 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 
 			match &state {
 				TickArrayAccount::Initialized {
-					tick_array_amm,
+					tick_array_market,
 					start_tick_index,
 					..
 				} => {
 					// has_one constraint equivalent check
-					if *tick_array_amm != amm.key() {
+					if *tick_array_market != market.key() {
 						return Err(ErrorCode::DifferentAMMTickArrayAccount.into());
 					}
 
@@ -186,7 +188,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 			}
 		}
 
-		let start_tick_indexes = get_start_tick_indexes(amm, synthetic_to_quote);
+		let start_tick_indexes = get_start_tick_indexes(market, synthetic_to_quote);
 
 		let mut tick_array_accounts: Vec<TickArrayAccount> = vec![];
 		for start_tick_index in start_tick_indexes.iter() {
@@ -322,20 +324,23 @@ fn peek_tick_array(
 	});
 
 	let start_tick_index = tick_array.start_tick_index;
-	let amm = tick_array.amm;
+	let market = tick_array.market;
 	drop(tick_array);
 
 	Ok(TickArrayAccount::Initialized {
-		tick_array_amm: amm,
+		tick_array_market: market,
 		start_tick_index,
 		account_info,
 	})
 }
 
-fn get_start_tick_indexes(amm: &Account<AMM>, synthetic_to_quote: bool) -> Vec<i32> {
-	let tick_current_index = amm.tick_current_index;
-	let tick_spacing_u16 = amm.tick_spacing;
-	let tick_spacing_i32 = amm.tick_spacing as i32;
+fn get_start_tick_indexes(
+	market: &Account<Market>,
+	synthetic_to_quote: bool
+) -> Vec<i32> {
+	let tick_current_index = market.amm.tick_current_index;
+	let tick_spacing_u16 = market.amm.tick_spacing;
+	let tick_spacing_i32 = market.amm.tick_spacing as i32;
 	let ticks_in_array = TICK_ARRAY_SIZE * tick_spacing_i32;
 
 	let start_tick_index_base =
@@ -377,11 +382,14 @@ fn floor_division(dividend: i32, divisor: i32) -> i32 {
 	}
 }
 
-fn derive_tick_array_pda(amm: &Account<AMM>, start_tick_index: i32) -> Pubkey {
+fn derive_tick_array_pda(
+	market: &Account<Market>,
+	start_tick_index: i32
+) -> Pubkey {
 	Pubkey::find_program_address(
 		&[
 			b"tick_array",
-			amm.key().as_ref(),
+			market.key().as_ref(),
 			start_tick_index.to_string().as_bytes(),
 		],
 		&TickArray::owner()

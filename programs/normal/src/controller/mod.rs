@@ -9,3 +9,4 @@ pub mod swap;
 pub mod tick;
 pub mod token;
 pub mod vault;
+pub mod vp;

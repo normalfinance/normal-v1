@@ -6,6 +6,11 @@ pub mod pyth_program {
     declare_id!("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s");
 }
 
+pub mod kamino_program {
+    use solana_program::declare_id;
+    declare_id!("");
+}
+
 pub mod wormhole_program {
     use solana_program::declare_id;
     declare_id!("HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ");

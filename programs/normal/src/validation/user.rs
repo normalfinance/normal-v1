@@ -16,12 +16,24 @@ pub fn validate_user_deletion(
 		"user id 0 cant be deleted if user is a referrer"
 	)?;
 
-	for position in &user.positions {
+	validate!(
+		!user.is_bankrupt(),
+		ErrorCode::UserCantBeDeleted,
+		"user bankrupt"
+	)?;
+
+	validate!(
+		!user.is_being_liquidated(),
+		ErrorCode::UserCantBeDeleted,
+		"user being liquidated"
+	)?;
+
+	for perp_position in &user.perp_positions {
 		validate!(
-			position.is_available(),
+			perp_position.is_available(),
 			ErrorCode::UserCantBeDeleted,
-			"user has position for market {}",
-			position.market_index
+			"user has perp position for market {}",
+			perp_position.market_index
 		)?;
 	}
 
@@ -71,12 +83,18 @@ pub fn validate_user_is_idle(
 
 	validate!(!user.is_bankrupt(), ErrorCode::UserNotInactive, "user bankrupt")?;
 
-	for position in &user.positions {
+	validate!(
+		!user.is_being_liquidated(),
+		ErrorCode::UserNotInactive,
+		"user being liquidated"
+	)?;
+
+	for perp_position in &user.perp_positions {
 		validate!(
-			position.is_available(),
+			perp_position.is_available(),
 			ErrorCode::UserNotInactive,
-			"user has position for market {}",
-			position.market_index
+			"user has perp position for market {}",
+			perp_position.market_index
 		)?;
 	}
 

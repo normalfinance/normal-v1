@@ -1,16 +1,27 @@
 use anchor_lang::prelude::*;
 
-use crate::state::*;
-
-#[derive(Accounts)]
-#[instruction(feed_id : [u8; 32])]
-pub struct AdminUpdateVaultConfig<'info> {
-	pub vaults_config: Account<'info, VaultsConfig>,
-}
+use super::AdminUpdateMarket;
 
 pub fn handle_set_liquidation_penalty(
-	ctx: Context<AdminUpdateVaultConfig>,
-	new_liquidation_penalty: u64
+	ctx: Context<AdminUpdateMarket>,
+	liquidation_penalty: u64
 ) -> Result<()> {
-	ctx.accounts.vaults_config.update_liquidation_penalty(new_liquidation_penalty)
+	let market = &mut load_mut!(ctx.accounts.market)?;
+
+	msg!("updating market {} liquidation penalty", market.market_index);
+
+	// validate_margin(
+	// 	margin_ratio_initial,
+	// 	margin_ratio_maintenance,
+	// 	market.liquidator_fee,
+	// )?;
+
+	msg!(
+		"market.liquidation_penalty: {:?} -> {:?}",
+		market.liquidation_penalty,
+		liquidation_penalty
+	);
+
+	market.liquidation_penalty = liquidation_penalty;
+	Ok(())
 }
