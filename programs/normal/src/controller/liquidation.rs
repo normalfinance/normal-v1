@@ -42,7 +42,7 @@ use crate::math::margin::{
 	meets_initial_margin_requirement,
 	MarginRequirementType,
 };
-use crate::math::oracle::DriftAction;
+use crate::math::oracle::NormalAction;
 use crate::math::orders::{
 	get_position_delta_for_fill,
 	is_multiple_of_step_size,
@@ -188,7 +188,7 @@ pub fn liquidate_vault(
 		state,
 		now,
 		slot,
-		Some(DriftAction::Liquidate)
+		Some(NormalAction::Liquidate)
 	)?;
 
 	let oracle_price = if market.status == MarketStatus::Settlement {
@@ -741,7 +741,7 @@ pub fn calculate_margin_freed(
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32,
 	initial_margin_shortage: u128
-) -> DriftResult<(u64, MarginCalculation)> {
+) -> NormalResult<(u64, MarginCalculation)> {
 	let margin_calculation_after =
 		calculate_margin_requirement_and_total_collateral_and_liability_info(
 			user,

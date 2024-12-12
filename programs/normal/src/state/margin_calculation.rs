@@ -203,7 +203,7 @@ impl MarginCalculation {
 		Ok(())
 	}
 
-	#[cfg(feature = "drift-rs")]
+	#[cfg(feature = "normal-rs")]
 	pub fn add_spot_asset_value(
 		&mut self,
 		spot_asset_value: i128
@@ -213,7 +213,7 @@ impl MarginCalculation {
 		Ok(())
 	}
 
-	#[cfg(feature = "drift-rs")]
+	#[cfg(feature = "normal-rs")]
 	pub fn add_vault_liability_value(
 		&mut self,
 		vault_liability_value: u128

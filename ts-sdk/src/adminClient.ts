@@ -12,24 +12,16 @@ import {
 	ExchangeStatus,
 	MarketStatus,
 	ContractTier,
-	AssetTier,
-	SpotFulfillmentConfigStatus,
 } from './types';
 import { DEFAULT_MARKET_NAME, encodeName } from './userName';
 import { BN } from '@coral-xyz/anchor';
 import * as anchor from '@coral-xyz/anchor';
 import {
-	getDriftStateAccountPublicKeyAndNonce,
-	getSpotMarketPublicKey,
-	getSpotMarketVaultPublicKey,
-	getPerpMarketPublicKey,
+	getNormalStateAccountPublicKeyAndNonce,
+	getVaultPublicKey,
+	getMarketPublicKey,
 	getInsuranceFundVaultPublicKey,
-	getSerumOpenOrdersPublicKey,
-	getSerumFulfillmentConfigPublicKey,
-	getPhoenixFulfillmentConfigPublicKey,
 	getProtocolIfSharesTransferConfigPublicKey,
-	getPrelaunchOraclePublicKey,
-	getOpenbookV2FulfillmentConfigPublicKey,
 	getPythPullOraclePublicKey,
 	getUserStatsAccountPublicKey,
 } from './addresses/pda';
@@ -46,7 +38,6 @@ import {
 } from './constants/numericConstants';
 import { calculateTargetPriceTrade } from './math/trade';
 import { calculateAmmReservesAfterSwap, getSwapDirection } from './math/amm';
-import { PROGRAM_ID as PHOENIX_PROGRAM_ID } from '@ellipsis-labs/phoenix-sdk';
 import { NORMAL_ORACLE_RECEIVER_ID } from './config';
 import { getFeedIdUint8Array } from './util/pythPullOracleUtils';
 
@@ -66,7 +57,7 @@ export class AdminClient extends NormalClient {
 			throw new Error('Clearing house already initialized');
 		}
 
-		const [driftStatePublicKey] = await getDriftStateAccountPublicKeyAndNonce(
+		const [normalStatePublicKey] = await getNormalStateAccountPublicKeyAndNonce(
 			this.program.programId
 		);
 
@@ -75,10 +66,10 @@ export class AdminClient extends NormalClient {
 				admin: this.isSubscribed
 					? this.getStateAccount().admin
 					: this.wallet.publicKey,
-				state: driftStatePublicKey,
+				state: normalStatePublicKey,
 				quoteAssetMint: usdcMint,
 				rent: SYSVAR_RENT_PUBKEY,
-				driftSigner: this.getSignerPublicKey(),
+				normalSigner: this.getSignerPublicKey(),
 				systemProgram: anchor.web3.SystemProgram.programId,
 				tokenProgram: TOKEN_PROGRAM_ID,
 			},
@@ -91,7 +82,193 @@ export class AdminClient extends NormalClient {
 		return [txSig];
 	}
 
-	public async initializeSpotMarket(
+	public async initializeMarket(
+		marketIndex: number,
+		priceOracle: PublicKey,
+		baseAssetReserve: BN,
+		quoteAssetReserve: BN,
+		periodicity: BN,
+		pegMultiplier: BN = PEG_PRECISION,
+		oracleSource: OracleSource = OracleSource.PYTH,
+		contractTier: ContractTier = ContractTier.SPECULATIVE,
+		marginRatioInitial = 2000,
+		marginRatioMaintenance = 500,
+		liquidatorFee = 0,
+		ifLiquidatorFee = 10000,
+		imfFactor = 0,
+		activeStatus = true,
+		baseSpread = 0,
+		maxSpread = 142500,
+		maxOpenInterest = ZERO,
+		maxRevenueWithdrawPerPeriod = ZERO,
+		quoteMaxInsurance = ZERO,
+		orderStepSize = BASE_PRECISION.divn(10000),
+		orderTickSize = PRICE_PRECISION.divn(100000),
+		minOrderSize = BASE_PRECISION.divn(10000),
+		concentrationCoefScale = ONE,
+		curveUpdateIntensity = 0,
+		ammJitIntensity = 0,
+		name = DEFAULT_MARKET_NAME
+	): Promise<TransactionSignature> {
+		const currentMarketIndex = this.getStateAccount().numberOfMarkets;
+
+		const initializeMarketIx = await this.getInitializeMarketIx(
+			marketIndex,
+			priceOracle,
+			baseAssetReserve,
+			quoteAssetReserve,
+			periodicity,
+			pegMultiplier,
+			oracleSource,
+			contractTier,
+			marginRatioInitial,
+			marginRatioMaintenance,
+			liquidatorFee,
+			ifLiquidatorFee,
+			imfFactor,
+			activeStatus,
+			baseSpread,
+			maxSpread,
+			maxOpenInterest,
+			maxRevenueWithdrawPerPeriod,
+			quoteMaxInsurance,
+			orderStepSize,
+			orderTickSize,
+			minOrderSize,
+			concentrationCoefScale,
+			curveUpdateIntensity,
+			ammJitIntensity,
+			name
+		);
+		const tx = await this.buildTransaction(initializeMarketIx);
+
+		const { txSig } = await this.sendTransaction(tx, [], this.opts);
+
+		while (this.getStateAccount().numberOfMarkets <= currentMarketIndex) {
+			await this.fetchAccounts();
+		}
+
+		await this.accountSubscriber.addMarket(marketIndex);
+		await this.accountSubscriber.addOracle({
+			source: oracleSource,
+			publicKey: priceOracle,
+		});
+		await this.accountSubscriber.setOracleMap();
+
+		return txSig;
+	}
+
+	public async getInitializeMarketIx(
+		marketIndex: number,
+		priceOracle: PublicKey,
+		baseAssetReserve: BN,
+		quoteAssetReserve: BN,
+		periodicity: BN,
+		pegMultiplier: BN = PEG_PRECISION,
+		oracleSource: OracleSource = OracleSource.PYTH,
+		contractTier: ContractTier = ContractTier.SPECULATIVE,
+		marginRatioInitial = 2000,
+		marginRatioMaintenance = 500,
+		liquidatorFee = 0,
+		ifLiquidatorFee = 10000,
+		imfFactor = 0,
+		activeStatus = true,
+		baseSpread = 0,
+		maxSpread = 142500,
+		maxOpenInterest = ZERO,
+		maxRevenueWithdrawPerPeriod = ZERO,
+		quoteMaxInsurance = ZERO,
+		orderStepSize = BASE_PRECISION.divn(10000),
+		orderTickSize = PRICE_PRECISION.divn(100000),
+		minOrderSize = BASE_PRECISION.divn(10000),
+		concentrationCoefScale = ONE,
+		curveUpdateIntensity = 0,
+		ammJitIntensity = 0,
+		name = DEFAULT_MARKET_NAME
+	): Promise<TransactionInstruction> {
+		const marketPublicKey = await getMarketPublicKey(
+			this.program.programId,
+			marketIndex
+		);
+
+		const nameBuffer = encodeName(name);
+		return await this.program.instruction.initializeMarket(
+			marketIndex,
+			baseAssetReserve,
+			quoteAssetReserve,
+			periodicity,
+			pegMultiplier,
+			oracleSource,
+			contractTier,
+			marginRatioInitial,
+			marginRatioMaintenance,
+			liquidatorFee,
+			ifLiquidatorFee,
+			imfFactor,
+			activeStatus,
+			baseSpread,
+			maxSpread,
+			maxOpenInterest,
+			maxRevenueWithdrawPerPeriod,
+			quoteMaxInsurance,
+			orderStepSize,
+			orderTickSize,
+			minOrderSize,
+			concentrationCoefScale,
+			curveUpdateIntensity,
+			ammJitIntensity,
+			nameBuffer,
+			{
+				accounts: {
+					state: await this.getStatePublicKey(),
+					admin: this.isSubscribed
+						? this.getStateAccount().admin
+						: this.wallet.publicKey,
+					oracle: priceOracle,
+					market: marketPublicKey,
+					rent: SYSVAR_RENT_PUBKEY,
+					systemProgram: anchor.web3.SystemProgram.programId,
+				},
+			}
+		);
+	}
+
+	public async deleteInitializedMarket(
+		marketIndex: number
+	): Promise<TransactionSignature> {
+		const deleteInitializeMarketIx = await this.getDeleteInitializedMarketIx(
+			marketIndex
+		);
+
+		const tx = await this.buildTransaction(deleteInitializeMarketIx);
+
+		const { txSig } = await this.sendTransaction(tx, [], this.opts);
+
+		return txSig;
+	}
+
+	public async getDeleteInitializedMarketIx(
+		marketIndex: number
+	): Promise<TransactionInstruction> {
+		const marketPublicKey = await getMarketPublicKey(
+			this.program.programId,
+			marketIndex
+		);
+
+		return await this.program.instruction.deleteInitializedMarket(marketIndex, {
+			accounts: {
+				state: await this.getStatePublicKey(),
+				admin: this.isSubscribed
+					? this.getStateAccount().admin
+					: this.wallet.publicKey,
+				market: marketPublicKey,
+			},
+		});
+	}
+
+	// Vault
+
+	public async initializeVault(
 		mint: PublicKey,
 		optimalUtilization: number,
 		optimalRate: number,
@@ -230,7 +407,7 @@ export class AdminClient extends NormalClient {
 					spotMarket,
 					spotMarketVault,
 					insuranceFundVault,
-					driftSigner: this.getSignerPublicKey(),
+					normalSigner: this.getSignerPublicKey(),
 					spotMarketMint: mint,
 					oracle,
 					rent: SYSVAR_RENT_PUBKEY,
@@ -285,384 +462,23 @@ export class AdminClient extends NormalClient {
 					spotMarket: spotMarketPublicKey,
 					spotMarketVault: spotMarketVaultPublicKey,
 					insuranceFundVault: insuranceFundVaultPublicKey,
-					driftSigner: this.getSignerPublicKey(),
+					normalSigner: this.getSignerPublicKey(),
 					tokenProgram: TOKEN_PROGRAM_ID,
 				},
 			}
 		);
 	}
 
-	public async initializeSerumFulfillmentConfig(
-		marketIndex: number,
-		serumMarket: PublicKey,
-		serumProgram: PublicKey
-	): Promise<TransactionSignature> {
-		const initializeIx = await this.getInitializeSerumFulfillmentConfigIx(
-			marketIndex,
-			serumMarket,
-			serumProgram
-		);
-
-		const tx = await this.buildTransaction(initializeIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getInitializeSerumFulfillmentConfigIx(
-		marketIndex: number,
-		serumMarket: PublicKey,
-		serumProgram: PublicKey
-	): Promise<TransactionInstruction> {
-		const serumOpenOrders = getSerumOpenOrdersPublicKey(
-			this.program.programId,
-			serumMarket
-		);
-
-		const serumFulfillmentConfig = getSerumFulfillmentConfigPublicKey(
-			this.program.programId,
-			serumMarket
-		);
-
-		return await this.program.instruction.initializeSerumFulfillmentConfig(
-			marketIndex,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					baseSpotMarket: this.getSpotMarketAccount(marketIndex).pubkey,
-					quoteSpotMarket: this.getQuoteSpotMarketAccount().pubkey,
-					driftSigner: this.getSignerPublicKey(),
-					serumProgram,
-					serumMarket,
-					serumOpenOrders,
-					rent: SYSVAR_RENT_PUBKEY,
-					systemProgram: anchor.web3.SystemProgram.programId,
-					serumFulfillmentConfig,
-				},
-			}
-		);
-	}
-
-	public async initializePhoenixFulfillmentConfig(
-		marketIndex: number,
-		phoenixMarket: PublicKey
-	): Promise<TransactionSignature> {
-		const initializeIx = await this.getInitializePhoenixFulfillmentConfigIx(
-			marketIndex,
-			phoenixMarket
-		);
-
-		const tx = await this.buildTransaction(initializeIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getInitializePhoenixFulfillmentConfigIx(
-		marketIndex: number,
-		phoenixMarket: PublicKey
-	): Promise<TransactionInstruction> {
-		const phoenixFulfillmentConfig = getPhoenixFulfillmentConfigPublicKey(
-			this.program.programId,
-			phoenixMarket
-		);
-
-		return await this.program.instruction.initializePhoenixFulfillmentConfig(
-			marketIndex,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					baseSpotMarket: this.getSpotMarketAccount(marketIndex).pubkey,
-					quoteSpotMarket: this.getQuoteSpotMarketAccount().pubkey,
-					driftSigner: this.getSignerPublicKey(),
-					phoenixMarket: phoenixMarket,
-					phoenixProgram: PHOENIX_PROGRAM_ID,
-					rent: SYSVAR_RENT_PUBKEY,
-					systemProgram: anchor.web3.SystemProgram.programId,
-					phoenixFulfillmentConfig,
-				},
-			}
-		);
-	}
-
-	public async initializeOpenbookV2FulfillmentConfig(
-		marketIndex: number,
-		openbookMarket: PublicKey
-	): Promise<TransactionSignature> {
-		const initializeIx = await this.getInitializeOpenbookV2FulfillmentConfigIx(
-			marketIndex,
-			openbookMarket
-		);
-
-		const tx = await this.buildTransaction(initializeIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getInitializeOpenbookV2FulfillmentConfigIx(
-		marketIndex: number,
-		openbookMarket: PublicKey
-	): Promise<TransactionInstruction> {
-		const openbookFulfillmentConfig = getOpenbookV2FulfillmentConfigPublicKey(
-			this.program.programId,
-			openbookMarket
-		);
-
-		return this.program.instruction.initializeOpenbookV2FulfillmentConfig(
-			marketIndex,
-			{
-				accounts: {
-					baseSpotMarket: this.getSpotMarketAccount(marketIndex).pubkey,
-					quoteSpotMarket: this.getQuoteSpotMarketAccount().pubkey,
-					state: await this.getStatePublicKey(),
-					openbookV2Program: OPENBOOK_PROGRAM_ID,
-					openbookV2Market: openbookMarket,
-					driftSigner: this.getSignerPublicKey(),
-					openbookV2FulfillmentConfig: openbookFulfillmentConfig,
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					rent: SYSVAR_RENT_PUBKEY,
-					systemProgram: anchor.web3.SystemProgram.programId,
-				},
-			}
-		);
-	}
-
-	public async initializePerpMarket(
-		marketIndex: number,
-		priceOracle: PublicKey,
-		baseAssetReserve: BN,
-		quoteAssetReserve: BN,
-		periodicity: BN,
-		pegMultiplier: BN = PEG_PRECISION,
-		oracleSource: OracleSource = OracleSource.PYTH,
-		contractTier: ContractTier = ContractTier.SPECULATIVE,
-		marginRatioInitial = 2000,
-		marginRatioMaintenance = 500,
-		liquidatorFee = 0,
-		ifLiquidatorFee = 10000,
-		imfFactor = 0,
-		activeStatus = true,
-		baseSpread = 0,
-		maxSpread = 142500,
-		maxOpenInterest = ZERO,
-		maxRevenueWithdrawPerPeriod = ZERO,
-		quoteMaxInsurance = ZERO,
-		orderStepSize = BASE_PRECISION.divn(10000),
-		orderTickSize = PRICE_PRECISION.divn(100000),
-		minOrderSize = BASE_PRECISION.divn(10000),
-		concentrationCoefScale = ONE,
-		curveUpdateIntensity = 0,
-		ammJitIntensity = 0,
-		name = DEFAULT_MARKET_NAME
-	): Promise<TransactionSignature> {
-		const currentPerpMarketIndex = this.getStateAccount().numberOfMarkets;
-
-		const initializeMarketIx = await this.getInitializePerpMarketIx(
-			marketIndex,
-			priceOracle,
-			baseAssetReserve,
-			quoteAssetReserve,
-			periodicity,
-			pegMultiplier,
-			oracleSource,
-			contractTier,
-			marginRatioInitial,
-			marginRatioMaintenance,
-			liquidatorFee,
-			ifLiquidatorFee,
-			imfFactor,
-			activeStatus,
-			baseSpread,
-			maxSpread,
-			maxOpenInterest,
-			maxRevenueWithdrawPerPeriod,
-			quoteMaxInsurance,
-			orderStepSize,
-			orderTickSize,
-			minOrderSize,
-			concentrationCoefScale,
-			curveUpdateIntensity,
-			ammJitIntensity,
-			name
-		);
-		const tx = await this.buildTransaction(initializeMarketIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		while (this.getStateAccount().numberOfMarkets <= currentPerpMarketIndex) {
-			await this.fetchAccounts();
-		}
-
-		await this.accountSubscriber.addPerpMarket(marketIndex);
-		await this.accountSubscriber.addOracle({
-			source: oracleSource,
-			publicKey: priceOracle,
-		});
-		await this.accountSubscriber.setPerpOracleMap();
-
-		return txSig;
-	}
-
-	public async getInitializePerpMarketIx(
-		marketIndex: number,
-		priceOracle: PublicKey,
-		baseAssetReserve: BN,
-		quoteAssetReserve: BN,
-		periodicity: BN,
-		pegMultiplier: BN = PEG_PRECISION,
-		oracleSource: OracleSource = OracleSource.PYTH,
-		contractTier: ContractTier = ContractTier.SPECULATIVE,
-		marginRatioInitial = 2000,
-		marginRatioMaintenance = 500,
-		liquidatorFee = 0,
-		ifLiquidatorFee = 10000,
-		imfFactor = 0,
-		activeStatus = true,
-		baseSpread = 0,
-		maxSpread = 142500,
-		maxOpenInterest = ZERO,
-		maxRevenueWithdrawPerPeriod = ZERO,
-		quoteMaxInsurance = ZERO,
-		orderStepSize = BASE_PRECISION.divn(10000),
-		orderTickSize = PRICE_PRECISION.divn(100000),
-		minOrderSize = BASE_PRECISION.divn(10000),
-		concentrationCoefScale = ONE,
-		curveUpdateIntensity = 0,
-		ammJitIntensity = 0,
-		name = DEFAULT_MARKET_NAME
-	): Promise<TransactionInstruction> {
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
-			this.program.programId,
-			marketIndex
-		);
-
-		const nameBuffer = encodeName(name);
-		return await this.program.instruction.initializePerpMarket(
-			marketIndex,
-			baseAssetReserve,
-			quoteAssetReserve,
-			periodicity,
-			pegMultiplier,
-			oracleSource,
-			contractTier,
-			marginRatioInitial,
-			marginRatioMaintenance,
-			liquidatorFee,
-			ifLiquidatorFee,
-			imfFactor,
-			activeStatus,
-			baseSpread,
-			maxSpread,
-			maxOpenInterest,
-			maxRevenueWithdrawPerPeriod,
-			quoteMaxInsurance,
-			orderStepSize,
-			orderTickSize,
-			minOrderSize,
-			concentrationCoefScale,
-			curveUpdateIntensity,
-			ammJitIntensity,
-			nameBuffer,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					oracle: priceOracle,
-					perpMarket: perpMarketPublicKey,
-					rent: SYSVAR_RENT_PUBKEY,
-					systemProgram: anchor.web3.SystemProgram.programId,
-				},
-			}
-		);
-	}
-
-	public async initializePredictionMarket(
-		perpMarketIndex: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketConcentrationCoefIx =
-			await this.getInitializePredictionMarketIx(perpMarketIndex);
-
-		const tx = await this.buildTransaction(updatePerpMarketConcentrationCoefIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getInitializePredictionMarketIx(
-		perpMarketIndex: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.initializePredictionMarket({
-			accounts: {
-				state: await this.getStatePublicKey(),
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				perpMarket: await getPerpMarketPublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
-			},
-		});
-	}
-
-	public async deleteInitializedPerpMarket(
-		marketIndex: number
-	): Promise<TransactionSignature> {
-		const deleteInitializeMarketIx =
-			await this.getDeleteInitializedPerpMarketIx(marketIndex);
-
-		const tx = await this.buildTransaction(deleteInitializeMarketIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getDeleteInitializedPerpMarketIx(
-		marketIndex: number
-	): Promise<TransactionInstruction> {
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
-			this.program.programId,
-			marketIndex
-		);
-
-		return await this.program.instruction.deleteInitializedPerpMarket(
-			marketIndex,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					perpMarket: perpMarketPublicKey,
-				},
-			}
-		);
-	}
+	// ----
 
 	public async moveAmmPrice(
-		perpMarketIndex: number,
+		marketIndex: number,
 		baseAssetReserve: BN,
 		quoteAssetReserve: BN,
 		sqrtK?: BN
 	): Promise<TransactionSignature> {
 		const moveAmmPriceIx = await this.getMoveAmmPriceIx(
-			perpMarketIndex,
+			marketIndex,
 			baseAssetReserve,
 			quoteAssetReserve,
 			sqrtK
@@ -676,14 +492,14 @@ export class AdminClient extends NormalClient {
 	}
 
 	public async getMoveAmmPriceIx(
-		perpMarketIndex: number,
+		marketIndex: number,
 		baseAssetReserve: BN,
 		quoteAssetReserve: BN,
 		sqrtK?: BN
 	): Promise<TransactionInstruction> {
-		const marketPublicKey = await getPerpMarketPublicKey(
+		const marketPublicKey = await getMarketPublicKey(
 			this.program.programId,
-			perpMarketIndex
+			marketIndex
 		);
 
 		if (sqrtK == undefined) {
@@ -700,73 +516,41 @@ export class AdminClient extends NormalClient {
 					admin: this.isSubscribed
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
-					perpMarket: marketPublicKey,
+					market: marketPublicKey,
 				},
 			}
 		);
 	}
 
-	public async updateK(
-		perpMarketIndex: number,
-		sqrtK: BN
-	): Promise<TransactionSignature> {
-		const updateKIx = await this.getUpdateKIx(perpMarketIndex, sqrtK);
-
-		const tx = await this.buildTransaction(updateKIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateKIx(
-		perpMarketIndex: number,
-		sqrtK: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateK(sqrtK, {
-			accounts: {
-				state: await this.getStatePublicKey(),
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				perpMarket: await getPerpMarketPublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
-				oracle: this.getPerpMarketAccount(perpMarketIndex).amm.oracle,
-			},
-		});
-	}
-
-	public async recenterPerpMarketAmm(
-		perpMarketIndex: number,
+	public async recenterMarketAmm(
+		marketIndex: number,
 		pegMultiplier: BN,
 		sqrtK: BN
 	): Promise<TransactionSignature> {
-		const recenterPerpMarketAmmIx = await this.getRecenterPerpMarketAmmIx(
-			perpMarketIndex,
+		const recenterMarketAmmIx = await this.getRecenterMarketAmmIx(
+			marketIndex,
 			pegMultiplier,
 			sqrtK
 		);
 
-		const tx = await this.buildTransaction(recenterPerpMarketAmmIx);
+		const tx = await this.buildTransaction(recenterMarketAmmIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getRecenterPerpMarketAmmIx(
-		perpMarketIndex: number,
+	public async getRecenterMarketAmmIx(
+		marketIndex: number,
 		pegMultiplier: BN,
 		sqrtK: BN
 	): Promise<TransactionInstruction> {
-		const marketPublicKey = await getPerpMarketPublicKey(
+		const marketPublicKey = await getMarketPublicKey(
 			this.program.programId,
-			perpMarketIndex
+			marketIndex
 		);
 
-		return await this.program.instruction.recenterPerpMarketAmm(
+		return await this.program.instruction.recenterMarketAmm(
 			pegMultiplier,
 			sqrtK,
 			{
@@ -775,56 +559,18 @@ export class AdminClient extends NormalClient {
 					admin: this.isSubscribed
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
-					perpMarket: marketPublicKey,
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketConcentrationScale(
-		perpMarketIndex: number,
-		concentrationScale: BN
-	): Promise<TransactionSignature> {
-		const updatePerpMarketConcentrationCoefIx =
-			await this.getUpdatePerpMarketConcentrationScaleIx(
-				perpMarketIndex,
-				concentrationScale
-			);
-
-		const tx = await this.buildTransaction(updatePerpMarketConcentrationCoefIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketConcentrationScaleIx(
-		perpMarketIndex: number,
-		concentrationScale: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketConcentrationCoef(
-			concentrationScale,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
+					market: marketPublicKey,
 				},
 			}
 		);
 	}
 
 	public async moveAmmToPrice(
-		perpMarketIndex: number,
+		marketIndex: number,
 		targetPrice: BN
 	): Promise<TransactionSignature> {
 		const moveAmmPriceIx = await this.getMoveAmmToPriceIx(
-			perpMarketIndex,
+			marketIndex,
 			targetPrice
 		);
 
@@ -836,13 +582,13 @@ export class AdminClient extends NormalClient {
 	}
 
 	public async getMoveAmmToPriceIx(
-		perpMarketIndex: number,
+		marketIndex: number,
 		targetPrice: BN
 	): Promise<TransactionInstruction> {
-		const perpMarket = this.getPerpMarketAccount(perpMarketIndex);
+		const market = this.getMarketAccount(marketIndex);
 
 		const [direction, tradeSize, _] = calculateTargetPriceTrade(
-			perpMarket,
+			market,
 			targetPrice,
 			new BN(1000),
 			'quote',
@@ -851,197 +597,160 @@ export class AdminClient extends NormalClient {
 
 		const [newQuoteAssetAmount, newBaseAssetAmount] =
 			calculateAmmReservesAfterSwap(
-				perpMarket.amm,
+				market.amm,
 				'quote',
 				tradeSize,
 				getSwapDirection('quote', direction)
 			);
 
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
+		const marketPublicKey = await getMarketPublicKey(
 			this.program.programId,
-			perpMarketIndex
+			marketIndex
 		);
 
 		return await this.program.instruction.moveAmmPrice(
 			newBaseAssetAmount,
 			newQuoteAssetAmount,
-			perpMarket.amm.sqrtK,
+			market.amm.sqrtK,
 			{
 				accounts: {
 					state: await this.getStatePublicKey(),
 					admin: this.isSubscribed
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
-					perpMarket: perpMarketPublicKey,
+					market: marketPublicKey,
 				},
 			}
 		);
 	}
 
-	public async repegAmmCurve(
-		newPeg: BN,
-		perpMarketIndex: number
+	public async updateMarketAmmOracleTwap(
+		marketIndex: number
 	): Promise<TransactionSignature> {
-		const repegAmmCurveIx = await this.getRepegAmmCurveIx(
-			newPeg,
-			perpMarketIndex
-		);
+		const updateMarketAmmOracleTwapIx =
+			await this.getUpdateMarketAmmOracleTwapIx(marketIndex);
 
-		const tx = await this.buildTransaction(repegAmmCurveIx);
+		const tx = await this.buildTransaction(updateMarketAmmOracleTwapIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getRepegAmmCurveIx(
-		newPeg: BN,
-		perpMarketIndex: number
+	public async getUpdateMarketAmmOracleTwapIx(
+		marketIndex: number
 	): Promise<TransactionInstruction> {
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
+		const ammData = this.getMarketAccount(marketIndex).amm;
+		const marketPublicKey = await getMarketPublicKey(
 			this.program.programId,
-			perpMarketIndex
+			marketIndex
 		);
-		const ammData = this.getPerpMarketAccount(perpMarketIndex).amm;
 
-		return await this.program.instruction.repegAmmCurve(newPeg, {
+		return await this.program.instruction.updateMarketAmmOracleTwap({
 			accounts: {
 				state: await this.getStatePublicKey(),
 				admin: this.isSubscribed
 					? this.getStateAccount().admin
 					: this.wallet.publicKey,
 				oracle: ammData.oracle,
-				perpMarket: perpMarketPublicKey,
+				market: marketPublicKey,
 			},
 		});
 	}
 
-	public async updatePerpMarketAmmOracleTwap(
-		perpMarketIndex: number
+	public async resetMarketAmmOracleTwap(
+		marketIndex: number
 	): Promise<TransactionSignature> {
-		const updatePerpMarketAmmOracleTwapIx =
-			await this.getUpdatePerpMarketAmmOracleTwapIx(perpMarketIndex);
+		const resetMarketAmmOracleTwapIx = await this.getResetMarketAmmOracleTwapIx(
+			marketIndex
+		);
 
-		const tx = await this.buildTransaction(updatePerpMarketAmmOracleTwapIx);
+		const tx = await this.buildTransaction(resetMarketAmmOracleTwapIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketAmmOracleTwapIx(
-		perpMarketIndex: number
+	public async getResetMarketAmmOracleTwapIx(
+		marketIndex: number
 	): Promise<TransactionInstruction> {
-		const ammData = this.getPerpMarketAccount(perpMarketIndex).amm;
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
+		const ammData = this.getMarketAccount(marketIndex).amm;
+		const marketPublicKey = await getMarketPublicKey(
 			this.program.programId,
-			perpMarketIndex
+			marketIndex
 		);
 
-		return await this.program.instruction.updatePerpMarketAmmOracleTwap({
+		return await this.program.instruction.resetMarketAmmOracleTwap({
 			accounts: {
 				state: await this.getStatePublicKey(),
 				admin: this.isSubscribed
 					? this.getStateAccount().admin
 					: this.wallet.publicKey,
 				oracle: ammData.oracle,
-				perpMarket: perpMarketPublicKey,
+				market: marketPublicKey,
 			},
 		});
 	}
 
-	public async resetPerpMarketAmmOracleTwap(
-		perpMarketIndex: number
-	): Promise<TransactionSignature> {
-		const resetPerpMarketAmmOracleTwapIx =
-			await this.getResetPerpMarketAmmOracleTwapIx(perpMarketIndex);
+	// public async depositIntoMarketFeePool(
+	// 	marketIndex: number,
+	// 	amount: BN,
+	// 	sourceVault: PublicKey
+	// ): Promise<TransactionSignature> {
+	// 	const depositIntoMarketFeePoolIx =
+	// 		await this.getDepositIntoMarketFeePoolIx(
+	// 			marketIndex,
+	// 			amount,
+	// 			sourceVault
+	// 		);
 
-		const tx = await this.buildTransaction(resetPerpMarketAmmOracleTwapIx);
+	// 	const tx = await this.buildTransaction(depositIntoMarketFeePoolIx);
 
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
+	// 	const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
-		return txSig;
-	}
+	// 	return txSig;
+	// }
 
-	public async getResetPerpMarketAmmOracleTwapIx(
-		perpMarketIndex: number
-	): Promise<TransactionInstruction> {
-		const ammData = this.getPerpMarketAccount(perpMarketIndex).amm;
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
-			this.program.programId,
-			perpMarketIndex
-		);
+	// public async getDepositIntoMarketFeePoolIx(
+	// 	marketIndex: number,
+	// 	amount: BN,
+	// 	sourceVault: PublicKey
+	// ): Promise<TransactionInstruction> {
+	// 	const spotMarket = this.getQuoteSpotMarketAccount();
 
-		return await this.program.instruction.resetPerpMarketAmmOracleTwap({
-			accounts: {
-				state: await this.getStatePublicKey(),
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				oracle: ammData.oracle,
-				perpMarket: perpMarketPublicKey,
-			},
-		});
-	}
-
-	public async depositIntoPerpMarketFeePool(
-		perpMarketIndex: number,
-		amount: BN,
-		sourceVault: PublicKey
-	): Promise<TransactionSignature> {
-		const depositIntoPerpMarketFeePoolIx =
-			await this.getDepositIntoPerpMarketFeePoolIx(
-				perpMarketIndex,
-				amount,
-				sourceVault
-			);
-
-		const tx = await this.buildTransaction(depositIntoPerpMarketFeePoolIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getDepositIntoPerpMarketFeePoolIx(
-		perpMarketIndex: number,
-		amount: BN,
-		sourceVault: PublicKey
-	): Promise<TransactionInstruction> {
-		const spotMarket = this.getQuoteSpotMarketAccount();
-
-		return await this.program.instruction.depositIntoPerpMarketFeePool(amount, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				perpMarket: await getPerpMarketPublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
-				sourceVault,
-				driftSigner: this.getSignerPublicKey(),
-				quoteSpotMarket: spotMarket.pubkey,
-				spotMarketVault: spotMarket.vault,
-				tokenProgram: TOKEN_PROGRAM_ID,
-			},
-		});
-	}
+	// 	return await this.program.instruction.depositIntoMarketFeePool(amount, {
+	// 		accounts: {
+	// 			admin: this.isSubscribed
+	// 				? this.getStateAccount().admin
+	// 				: this.wallet.publicKey,
+	// 			state: await this.getStatePublicKey(),
+	// 			market: await getMarketPublicKey(
+	// 				this.program.programId,
+	// 				marketIndex
+	// 			),
+	// 			sourceVault,
+	// 			normalSigner: this.getSignerPublicKey(),
+	// 			quoteSpotMarket: spotMarket.pubkey,
+	// 			spotMarketVault: spotMarket.vault,
+	// 			tokenProgram: TOKEN_PROGRAM_ID,
+	// 		},
+	// 	});
+	// }
 
 	public async depositIntoSpotMarketVault(
 		spotMarketIndex: number,
 		amount: BN,
 		sourceVault: PublicKey
 	): Promise<TransactionSignature> {
-		const depositIntoPerpMarketFeePoolIx =
+		const depositIntoMarketFeePoolIx =
 			await this.getDepositIntoSpotMarketVaultIx(
 				spotMarketIndex,
 				amount,
 				sourceVault
 			);
 
-		const tx = await this.buildTransaction(depositIntoPerpMarketFeePoolIx);
+		const tx = await this.buildTransaction(depositIntoMarketFeePoolIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
@@ -1094,163 +803,30 @@ export class AdminClient extends NormalClient {
 		});
 	}
 
-	public async updatePerpMarketCurveUpdateIntensity(
-		perpMarketIndex: number,
-		curveUpdateIntensity: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketCurveUpdateIntensityIx =
-			await this.getUpdatePerpMarketCurveUpdateIntensityIx(
-				perpMarketIndex,
-				curveUpdateIntensity
-			);
-
-		const tx = await this.buildTransaction(
-			updatePerpMarketCurveUpdateIntensityIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketCurveUpdateIntensityIx(
-		perpMarketIndex: number,
-		curveUpdateIntensity: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketCurveUpdateIntensity(
-			curveUpdateIntensity,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketTargetBaseAssetAmountPerLp(
-		perpMarketIndex: number,
-		targetBaseAssetAmountPerLP: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketTargetBaseAssetAmountPerLpIx =
-			await this.getUpdatePerpMarketTargetBaseAssetAmountPerLpIx(
-				perpMarketIndex,
-				targetBaseAssetAmountPerLP
-			);
-
-		const tx = await this.buildTransaction(
-			updatePerpMarketTargetBaseAssetAmountPerLpIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async updatePerpMarketAmmSummaryStats(
-		perpMarketIndex: number,
-		updateAmmSummaryStats?: boolean,
-		quoteAssetAmountWithUnsettledLp?: BN,
-		netUnsettledFundingPnl?: BN
-	): Promise<TransactionSignature> {
-		const updatePerpMarketMarginRatioIx =
-			await this.getUpdatePerpMarketAmmSummaryStatsIx(
-				perpMarketIndex,
-				updateAmmSummaryStats,
-				quoteAssetAmountWithUnsettledLp,
-				netUnsettledFundingPnl
-			);
-
-		const tx = await this.buildTransaction(updatePerpMarketMarginRatioIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketAmmSummaryStatsIx(
-		perpMarketIndex: number,
-		updateAmmSummaryStats?: boolean,
-		quoteAssetAmountWithUnsettledLp?: BN,
-		netUnsettledFundingPnl?: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketAmmSummaryStats(
-			{
-				updateAmmSummaryStats: updateAmmSummaryStats ?? null,
-				quoteAssetAmountWithUnsettledLp:
-					quoteAssetAmountWithUnsettledLp ?? null,
-				netUnsettledFundingPnl: netUnsettledFundingPnl ?? null,
-			},
-			{
-				accounts: {
-					admin: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						QUOTE_SPOT_MARKET_INDEX
-					),
-					oracle: this.getPerpMarketAccount(perpMarketIndex).amm.oracle,
-				},
-			}
-		);
-	}
-
-	public async getUpdatePerpMarketTargetBaseAssetAmountPerLpIx(
-		perpMarketIndex: number,
-		targetBaseAssetAmountPerLP: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketTargetBaseAssetAmountPerLp(
-			targetBaseAssetAmountPerLP,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketMarginRatio(
-		perpMarketIndex: number,
+	public async updateMarketMarginRatio(
+		marketIndex: number,
 		marginRatioInitial: number,
 		marginRatioMaintenance: number
 	): Promise<TransactionSignature> {
-		const updatePerpMarketMarginRatioIx =
-			await this.getUpdatePerpMarketMarginRatioIx(
-				perpMarketIndex,
-				marginRatioInitial,
-				marginRatioMaintenance
-			);
+		const updateMarketMarginRatioIx = await this.getUpdateMarketMarginRatioIx(
+			marketIndex,
+			marginRatioInitial,
+			marginRatioMaintenance
+		);
 
-		const tx = await this.buildTransaction(updatePerpMarketMarginRatioIx);
+		const tx = await this.buildTransaction(updateMarketMarginRatioIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketMarginRatioIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketMarginRatioIx(
+		marketIndex: number,
 		marginRatioInitial: number,
 		marginRatioMaintenance: number
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketMarginRatio(
+		return await this.program.instruction.updateMarketMarginRatio(
 			marginRatioInitial,
 			marginRatioMaintenance,
 			{
@@ -1259,40 +835,36 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
+					market: await getMarketPublicKey(this.program.programId, marketIndex),
 				},
 			}
 		);
 	}
 
-	public async updatePerpMarketImfFactor(
-		perpMarketIndex: number,
+	public async updateMarketImfFactor(
+		marketIndex: number,
 		imfFactor: number,
 		unrealizedPnlImfFactor: number
 	): Promise<TransactionSignature> {
-		const updatePerpMarketImfFactorIx =
-			await this.getUpdatePerpMarketImfFactorIx(
-				perpMarketIndex,
-				imfFactor,
-				unrealizedPnlImfFactor
-			);
+		const updateMarketImfFactorIx = await this.getUpdateMarketImfFactorIx(
+			marketIndex,
+			imfFactor,
+			unrealizedPnlImfFactor
+		);
 
-		const tx = await this.buildTransaction(updatePerpMarketImfFactorIx);
+		const tx = await this.buildTransaction(updateMarketImfFactorIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketImfFactorIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketImfFactorIx(
+		marketIndex: number,
 		imfFactor: number,
 		unrealizedPnlImfFactor: number
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketImfFactor(
+		return await this.program.instruction.updateMarketImfFactor(
 			imfFactor,
 			unrealizedPnlImfFactor,
 			{
@@ -1301,221 +873,40 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
+					market: await getMarketPublicKey(this.program.programId, marketIndex),
 				},
 			}
 		);
 	}
 
-	public async updatePerpMarketBaseSpread(
-		perpMarketIndex: number,
-		baseSpread: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketBaseSpreadIx =
-			await this.getUpdatePerpMarketBaseSpreadIx(perpMarketIndex, baseSpread);
-
-		const tx = await this.buildTransaction(updatePerpMarketBaseSpreadIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketBaseSpreadIx(
-		perpMarketIndex: number,
-		baseSpread: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketBaseSpread(
-			baseSpread,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateAmmJitIntensity(
-		perpMarketIndex: number,
-		ammJitIntensity: number
-	): Promise<TransactionSignature> {
-		const updateAmmJitIntensityIx = await this.getUpdateAmmJitIntensityIx(
-			perpMarketIndex,
-			ammJitIntensity
-		);
-
-		const tx = await this.buildTransaction(updateAmmJitIntensityIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateAmmJitIntensityIx(
-		perpMarketIndex: number,
-		ammJitIntensity: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateAmmJitIntensity(
-			ammJitIntensity,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketName(
-		perpMarketIndex: number,
+	public async updateMarketName(
+		marketIndex: number,
 		name: string
 	): Promise<TransactionSignature> {
-		const updatePerpMarketNameIx = await this.getUpdatePerpMarketNameIx(
-			perpMarketIndex,
+		const updateMarketNameIx = await this.getUpdateMarketNameIx(
+			marketIndex,
 			name
 		);
 
-		const tx = await this.buildTransaction(updatePerpMarketNameIx);
+		const tx = await this.buildTransaction(updateMarketNameIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketNameIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketNameIx(
+		marketIndex: number,
 		name: string
 	): Promise<TransactionInstruction> {
 		const nameBuffer = encodeName(name);
-		return await this.program.instruction.updatePerpMarketName(nameBuffer, {
+		return await this.program.instruction.updateMarketName(nameBuffer, {
 			accounts: {
 				admin: this.isSubscribed
 					? this.getStateAccount().admin
 					: this.wallet.publicKey,
 				state: await this.getStatePublicKey(),
-				perpMarket: await getPerpMarketPublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
-			},
-		});
-	}
-
-	public async updateSpotMarketName(
-		spotMarketIndex: number,
-		name: string
-	): Promise<TransactionSignature> {
-		const updateSpotMarketNameIx = await this.getUpdateSpotMarketNameIx(
-			spotMarketIndex,
-			name
-		);
-
-		const tx = await this.buildTransaction(updateSpotMarketNameIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketNameIx(
-		spotMarketIndex: number,
-		name: string
-	): Promise<TransactionInstruction> {
-		const nameBuffer = encodeName(name);
-		return await this.program.instruction.updateSpotMarketName(nameBuffer, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				spotMarket: await getSpotMarketPublicKey(
-					this.program.programId,
-					spotMarketIndex
-				),
-			},
-		});
-	}
-
-	public async updatePerpMarketPerLpBase(
-		perpMarketIndex: number,
-		perLpBase: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketPerLpBaseIx =
-			await this.getUpdatePerpMarketPerLpBaseIx(perpMarketIndex, perLpBase);
-
-		const tx = await this.buildTransaction(updatePerpMarketPerLpBaseIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketPerLpBaseIx(
-		perpMarketIndex: number,
-		perLpBase: number
-	): Promise<TransactionInstruction> {
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
-			this.program.programId,
-			perpMarketIndex
-		);
-
-		return await this.program.instruction.updatePerpMarketPerLpBase(perLpBase, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				perpMarket: perpMarketPublicKey,
-			},
-		});
-	}
-
-	public async updatePerpMarketMaxSpread(
-		perpMarketIndex: number,
-		maxSpread: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketMaxSpreadIx =
-			await this.getUpdatePerpMarketMaxSpreadIx(perpMarketIndex, maxSpread);
-
-		const tx = await this.buildTransaction(updatePerpMarketMaxSpreadIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketMaxSpreadIx(
-		perpMarketIndex: number,
-		maxSpread: number
-	): Promise<TransactionInstruction> {
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
-			this.program.programId,
-			perpMarketIndex
-		);
-
-		return await this.program.instruction.updatePerpMarketMaxSpread(maxSpread, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				perpMarket: perpMarketPublicKey,
+				market: await getMarketPublicKey(this.program.programId, marketIndex),
 			},
 		});
 	}
@@ -1538,33 +929,6 @@ export class AdminClient extends NormalClient {
 		feeStructure: FeeStructure
 	): Promise<TransactionInstruction> {
 		return this.program.instruction.updatePerpFeeStructure(feeStructure, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-			},
-		});
-	}
-
-	public async updateSpotFeeStructure(
-		feeStructure: FeeStructure
-	): Promise<TransactionSignature> {
-		const updateSpotFeeStructureIx = await this.getUpdateSpotFeeStructureIx(
-			feeStructure
-		);
-
-		const tx = await this.buildTransaction(updateSpotFeeStructureIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotFeeStructureIx(
-		feeStructure: FeeStructure
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotFeeStructure(feeStructure, {
 			accounts: {
 				admin: this.isSubscribed
 					? this.getStateAccount().admin
@@ -1782,86 +1146,6 @@ export class AdminClient extends NormalClient {
 		);
 	}
 
-	public async updateWithdrawGuardThreshold(
-		spotMarketIndex: number,
-		withdrawGuardThreshold: BN
-	): Promise<TransactionSignature> {
-		const updateWithdrawGuardThresholdIx =
-			await this.getUpdateWithdrawGuardThresholdIx(
-				spotMarketIndex,
-				withdrawGuardThreshold
-			);
-
-		const tx = await this.buildTransaction(updateWithdrawGuardThresholdIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateWithdrawGuardThresholdIx(
-		spotMarketIndex: number,
-		withdrawGuardThreshold: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateWithdrawGuardThreshold(
-			withdrawGuardThreshold,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateSpotMarketIfFactor(
-		spotMarketIndex: number,
-		userIfFactor: BN,
-		totalIfFactor: BN
-	): Promise<TransactionSignature> {
-		const updateSpotMarketIfFactorIx = await this.getUpdateSpotMarketIfFactorIx(
-			spotMarketIndex,
-			userIfFactor,
-			totalIfFactor
-		);
-
-		const tx = await this.buildTransaction(updateSpotMarketIfFactorIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketIfFactorIx(
-		spotMarketIndex: number,
-		userIfFactor: BN,
-		totalIfFactor: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketIfFactor(
-			spotMarketIndex,
-			userIfFactor,
-			totalIfFactor,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
 	public async updateSpotMarketRevenueSettlePeriod(
 		spotMarketIndex: number,
 		revenueSettlePeriod: BN
@@ -1978,46 +1262,6 @@ export class AdminClient extends NormalClient {
 		);
 	}
 
-	public async updateSpotMarketScaleInitialAssetWeightStart(
-		spotMarketIndex: number,
-		scaleInitialAssetWeightStart: BN
-	): Promise<TransactionSignature> {
-		const updateSpotMarketScaleInitialAssetWeightStartIx =
-			await this.getUpdateSpotMarketScaleInitialAssetWeightStartIx(
-				spotMarketIndex,
-				scaleInitialAssetWeightStart
-			);
-
-		const tx = await this.buildTransaction(
-			updateSpotMarketScaleInitialAssetWeightStartIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketScaleInitialAssetWeightStartIx(
-		spotMarketIndex: number,
-		scaleInitialAssetWeightStart: BN
-	): Promise<TransactionInstruction> {
-		return this.program.instruction.updateSpotMarketScaleInitialAssetWeightStart(
-			scaleInitialAssetWeightStart,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
 	public async updateInsuranceFundUnstakingPeriod(
 		spotMarketIndex: number,
 		insuranceWithdrawEscrowPeriod: BN
@@ -2085,30 +1329,30 @@ export class AdminClient extends NormalClient {
 		});
 	}
 
-	public async updatePerpMarketOracle(
-		perpMarketIndex: number,
+	public async updateMarketOracle(
+		marketIndex: number,
 		oracle: PublicKey,
 		oracleSource: OracleSource
 	): Promise<TransactionSignature> {
-		const updatePerpMarketOracleIx = await this.getUpdatePerpMarketOracleIx(
-			perpMarketIndex,
+		const updateMarketOracleIx = await this.getUpdateMarketOracleIx(
+			marketIndex,
 			oracle,
 			oracleSource
 		);
 
-		const tx = await this.buildTransaction(updatePerpMarketOracleIx);
+		const tx = await this.buildTransaction(updateMarketOracleIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketOracleIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketOracleIx(
+		marketIndex: number,
 		oracle: PublicKey,
 		oracleSource: OracleSource
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketOracle(
+		return await this.program.instruction.updateMarketOracle(
 			oracle,
 			oracleSource,
 			{
@@ -2117,242 +1361,67 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
+					market: await getMarketPublicKey(this.program.programId, marketIndex),
 					oracle: oracle,
 				},
 			}
 		);
 	}
 
-	public async updatePerpMarketStepSizeAndTickSize(
-		perpMarketIndex: number,
-		stepSize: BN,
-		tickSize: BN
-	): Promise<TransactionSignature> {
-		const updatePerpMarketStepSizeAndTickSizeIx =
-			await this.getUpdatePerpMarketStepSizeAndTickSizeIx(
-				perpMarketIndex,
-				stepSize,
-				tickSize
-			);
-
-		const tx = await this.buildTransaction(
-			updatePerpMarketStepSizeAndTickSizeIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketStepSizeAndTickSizeIx(
-		perpMarketIndex: number,
-		stepSize: BN,
-		tickSize: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketStepSizeAndTickSize(
-			stepSize,
-			tickSize,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketMinOrderSize(
-		perpMarketIndex: number,
-		orderSize: BN
-	): Promise<TransactionSignature> {
-		const updatePerpMarketMinOrderSizeIx =
-			await this.getUpdatePerpMarketMinOrderSizeIx(perpMarketIndex, orderSize);
-
-		const tx = await this.buildTransaction(updatePerpMarketMinOrderSizeIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketMinOrderSizeIx(
-		perpMarketIndex: number,
-		orderSize: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketMinOrderSize(
-			orderSize,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateSpotMarketStepSizeAndTickSize(
-		spotMarketIndex: number,
-		stepSize: BN,
-		tickSize: BN
-	): Promise<TransactionSignature> {
-		const updateSpotMarketStepSizeAndTickSizeIx =
-			await this.getUpdateSpotMarketStepSizeAndTickSizeIx(
-				spotMarketIndex,
-				stepSize,
-				tickSize
-			);
-
-		const tx = await this.buildTransaction(
-			updateSpotMarketStepSizeAndTickSizeIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketStepSizeAndTickSizeIx(
-		spotMarketIndex: number,
-		stepSize: BN,
-		tickSize: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketStepSizeAndTickSize(
-			stepSize,
-			tickSize,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateSpotMarketMinOrderSize(
-		spotMarketIndex: number,
-		orderSize: BN
-	): Promise<TransactionSignature> {
-		const updateSpotMarketMinOrderSizeIx =
-			await this.program.instruction.updateSpotMarketMinOrderSize(orderSize, {
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			});
-
-		const tx = await this.buildTransaction(updateSpotMarketMinOrderSizeIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketMinOrderSizeIx(
-		spotMarketIndex: number,
-		orderSize: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketMinOrderSize(
-			orderSize,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketExpiry(
-		perpMarketIndex: number,
+	public async updateMarketExpiry(
+		marketIndex: number,
 		expiryTs: BN
 	): Promise<TransactionSignature> {
-		const updatePerpMarketExpiryIx = await this.getUpdatePerpMarketExpiryIx(
-			perpMarketIndex,
+		const updateMarketExpiryIx = await this.getUpdateMarketExpiryIx(
+			marketIndex,
 			expiryTs
 		);
-		const tx = await this.buildTransaction(updatePerpMarketExpiryIx);
+		const tx = await this.buildTransaction(updateMarketExpiryIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketExpiryIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketExpiryIx(
+		marketIndex: number,
 		expiryTs: BN
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketExpiry(expiryTs, {
+		return await this.program.instruction.updateMarketExpiry(expiryTs, {
 			accounts: {
 				admin: this.isSubscribed
 					? this.getStateAccount().admin
 					: this.wallet.publicKey,
 				state: await this.getStatePublicKey(),
-				perpMarket: await getPerpMarketPublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
+				market: await getMarketPublicKey(this.program.programId, marketIndex),
 			},
 		});
 	}
 
-	public async updateSpotMarketOracle(
-		spotMarketIndex: number,
+	public async updateVaultOracle(
+		vaultIndex: number,
 		oracle: PublicKey,
 		oracleSource: OracleSource
 	): Promise<TransactionSignature> {
-		const updateSpotMarketOracleIx = await this.getUpdateSpotMarketOracleIx(
-			spotMarketIndex,
+		const updateVaultOracleIx = await this.getUpdateVaultOracleIx(
+			vaultIndex,
 			oracle,
 			oracleSource
 		);
 
-		const tx = await this.buildTransaction(updateSpotMarketOracleIx);
+		const tx = await this.buildTransaction(updateVaultOracleIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdateSpotMarketOracleIx(
-		spotMarketIndex: number,
+	public async getUpdateVaultOracleIx(
+		vaultIndex: number,
 		oracle: PublicKey,
 		oracleSource: OracleSource
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketOracle(
+		return await this.program.instruction.updateVaultOracle(
 			oracle,
 			oracleSource,
 			{
@@ -2361,10 +1430,7 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
+					vault: await getVaultPublicKey(this.program.programId, vaultIndex),
 					oracle: oracle,
 				},
 			}
@@ -2409,28 +1475,24 @@ export class AdminClient extends NormalClient {
 		);
 	}
 
-	public async updateSpotMarketIfPausedOperations(
-		spotMarketIndex: number,
+	public async updateIfPausedOperations(
 		pausedOperations: number
 	): Promise<TransactionSignature> {
-		const updateSpotMarketIfStakingDisabledIx =
-			await this.getUpdateSpotMarketIfPausedOperationsIx(
-				spotMarketIndex,
-				pausedOperations
-			);
+		const updateIfStakingDisabledIx = await this.getUpdateIfPausedOperationsIx(
+			pausedOperations
+		);
 
-		const tx = await this.buildTransaction(updateSpotMarketIfStakingDisabledIx);
+		const tx = await this.buildTransaction(updateIfStakingDisabledIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdateSpotMarketIfPausedOperationsIx(
-		spotMarketIndex: number,
+	public async getUpdateIfPausedOperationsIx(
 		pausedOperations: number
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketIfPausedOperations(
+		return await this.program.instruction.updateIfPausedOperations(
 			pausedOperations,
 			{
 				accounts: {
@@ -2438,231 +1500,6 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateSerumFulfillmentConfigStatus(
-		serumFulfillmentConfig: PublicKey,
-		status: SpotFulfillmentConfigStatus
-	): Promise<TransactionSignature> {
-		const updateSerumFulfillmentConfigStatusIx =
-			await this.getUpdateSerumFulfillmentConfigStatusIx(
-				serumFulfillmentConfig,
-				status
-			);
-
-		const tx = await this.buildTransaction(
-			updateSerumFulfillmentConfigStatusIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSerumFulfillmentConfigStatusIx(
-		serumFulfillmentConfig: PublicKey,
-		status: SpotFulfillmentConfigStatus
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSerumFulfillmentConfigStatus(
-			status,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					serumFulfillmentConfig,
-				},
-			}
-		);
-	}
-
-	public async updatePhoenixFulfillmentConfigStatus(
-		phoenixFulfillmentConfig: PublicKey,
-		status: SpotFulfillmentConfigStatus
-	): Promise<TransactionSignature> {
-		const updatePhoenixFulfillmentConfigStatusIx =
-			await this.program.instruction.phoenixFulfillmentConfigStatus(status, {
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					phoenixFulfillmentConfig,
-				},
-			});
-
-		const tx = await this.buildTransaction(
-			updatePhoenixFulfillmentConfigStatusIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePhoenixFulfillmentConfigStatusIx(
-		phoenixFulfillmentConfig: PublicKey,
-		status: SpotFulfillmentConfigStatus
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.phoenixFulfillmentConfigStatus(
-			status,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					phoenixFulfillmentConfig,
-				},
-			}
-		);
-	}
-
-	public async updateSpotMarketExpiry(
-		spotMarketIndex: number,
-		expiryTs: BN
-	): Promise<TransactionSignature> {
-		const updateSpotMarketExpiryIx = await this.getUpdateSpotMarketExpiryIx(
-			spotMarketIndex,
-			expiryTs
-		);
-
-		const tx = await this.buildTransaction(updateSpotMarketExpiryIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketExpiryIx(
-		spotMarketIndex: number,
-		expiryTs: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketExpiry(expiryTs, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				spotMarket: await getSpotMarketPublicKey(
-					this.program.programId,
-					spotMarketIndex
-				),
-			},
-		});
-	}
-
-	public async updateWhitelistMint(
-		whitelistMint?: PublicKey
-	): Promise<TransactionSignature> {
-		const updateWhitelistMintIx = await this.getUpdateWhitelistMintIx(
-			whitelistMint
-		);
-
-		const tx = await this.buildTransaction(updateWhitelistMintIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateWhitelistMintIx(
-		whitelistMint?: PublicKey
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateWhitelistMint(whitelistMint, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-			},
-		});
-	}
-
-	public async updateDiscountMint(
-		discountMint: PublicKey
-	): Promise<TransactionSignature> {
-		const updateDiscountMintIx = await this.getUpdateDiscountMintIx(
-			discountMint
-		);
-
-		const tx = await this.buildTransaction(updateDiscountMintIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateDiscountMintIx(
-		discountMint: PublicKey
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateDiscountMint(discountMint, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-			},
-		});
-	}
-
-	public async updateSpotMarketMarginWeights(
-		spotMarketIndex: number,
-		initialAssetWeight: number,
-		maintenanceAssetWeight: number,
-		initialLiabilityWeight: number,
-		maintenanceLiabilityWeight: number,
-		imfFactor = 0
-	): Promise<TransactionSignature> {
-		const updateSpotMarketMarginWeightsIx =
-			await this.getUpdateSpotMarketMarginWeightsIx(
-				spotMarketIndex,
-				initialAssetWeight,
-				maintenanceAssetWeight,
-				initialLiabilityWeight,
-				maintenanceLiabilityWeight,
-				imfFactor
-			);
-
-		const tx = await this.buildTransaction(updateSpotMarketMarginWeightsIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketMarginWeightsIx(
-		spotMarketIndex: number,
-		initialAssetWeight: number,
-		maintenanceAssetWeight: number,
-		initialLiabilityWeight: number,
-		maintenanceLiabilityWeight: number,
-		imfFactor = 0
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketMarginWeights(
-			initialAssetWeight,
-			maintenanceAssetWeight,
-			initialLiabilityWeight,
-			maintenanceLiabilityWeight,
-			imfFactor,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
 				},
 			}
 		);
@@ -2822,62 +1659,59 @@ export class AdminClient extends NormalClient {
 		);
 	}
 
-	public async updatePerpMarketStatus(
-		perpMarketIndex: number,
+	public async updateMarketStatus(
+		marketIndex: number,
 		marketStatus: MarketStatus
 	): Promise<TransactionSignature> {
-		const updatePerpMarketStatusIx = await this.getUpdatePerpMarketStatusIx(
-			perpMarketIndex,
+		const updateMarketStatusIx = await this.getUpdateMarketStatusIx(
+			marketIndex,
 			marketStatus
 		);
 
-		const tx = await this.buildTransaction(updatePerpMarketStatusIx);
+		const tx = await this.buildTransaction(updateMarketStatusIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketStatusIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketStatusIx(
+		marketIndex: number,
 		marketStatus: MarketStatus
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketStatus(marketStatus, {
+		return await this.program.instruction.updateMarketStatus(marketStatus, {
 			accounts: {
 				admin: this.isSubscribed
 					? this.getStateAccount().admin
 					: this.wallet.publicKey,
 				state: await this.getStatePublicKey(),
-				perpMarket: await getPerpMarketPublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
+				market: await getMarketPublicKey(this.program.programId, marketIndex),
 			},
 		});
 	}
 
-	public async updatePerpMarketPausedOperations(
-		perpMarketIndex: number,
+	public async updateMarketPausedOperations(
+		marketIndex: number,
 		pausedOperations: number
 	): Promise<TransactionSignature> {
-		const updatePerpMarketPausedOperationsIx =
-			await this.getUpdatePerpMarketPausedOperationsIx(
-				perpMarketIndex,
+		const updateMarketPausedOperationsIx =
+			await this.getUpdateMarketPausedOperationsIx(
+				marketIndex,
 				pausedOperations
 			);
 
-		const tx = await this.buildTransaction(updatePerpMarketPausedOperationsIx);
+		const tx = await this.buildTransaction(updateMarketPausedOperationsIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketPausedOperationsIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketPausedOperationsIx(
+		marketIndex: number,
 		pausedOperations: number
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketPausedOperations(
+		return await this.program.instruction.updateMarketPausedOperations(
 			pausedOperations,
 			{
 				accounts: {
@@ -2885,37 +1719,33 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
+					market: await getMarketPublicKey(this.program.programId, marketIndex),
 				},
 			}
 		);
 	}
 
-	public async updatePerpMarketContractTier(
-		perpMarketIndex: number,
+	public async updateMarketContractTier(
+		marketIndex: number,
 		contractTier: ContractTier
 	): Promise<TransactionSignature> {
-		const updatePerpMarketContractTierIx =
-			await this.getUpdatePerpMarketContractTierIx(
-				perpMarketIndex,
-				contractTier
-			);
+		const updateMarketContractTierIx = await this.getUpdateMarketContractTierIx(
+			marketIndex,
+			contractTier
+		);
 
-		const tx = await this.buildTransaction(updatePerpMarketContractTierIx);
+		const tx = await this.buildTransaction(updateMarketContractTierIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketContractTierIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketContractTierIx(
+		marketIndex: number,
 		contractTier: ContractTier
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketContractTier(
+		return await this.program.instruction.updateMarketContractTier(
 			contractTier,
 			{
 				accounts: {
@@ -2923,10 +1753,7 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
+					market: await getMarketPublicKey(this.program.programId, marketIndex),
 				},
 			}
 		);
@@ -2959,291 +1786,120 @@ export class AdminClient extends NormalClient {
 		});
 	}
 
-	public async updatePerpAuctionDuration(
-		minDuration: BN | number
-	): Promise<TransactionSignature> {
-		const updatePerpAuctionDurationIx =
-			await this.getUpdatePerpAuctionDurationIx(minDuration);
+	// public async updatePerpAuctionDuration(
+	// 	minDuration: BN | number
+	// ): Promise<TransactionSignature> {
+	// 	const updatePerpAuctionDurationIx =
+	// 		await this.getUpdatePerpAuctionDurationIx(minDuration);
 
-		const tx = await this.buildTransaction(updatePerpAuctionDurationIx);
+	// 	const tx = await this.buildTransaction(updatePerpAuctionDurationIx);
+
+	// 	const { txSig } = await this.sendTransaction(tx, [], this.opts);
+
+	// 	return txSig;
+	// }
+
+	// public async getUpdatePerpAuctionDurationIx(
+	// 	minDuration: BN | number
+	// ): Promise<TransactionInstruction> {
+	// 	return await this.program.instruction.updatePerpAuctionDuration(
+	// 		typeof minDuration === 'number' ? minDuration : minDuration.toNumber(),
+	// 		{
+	// 			accounts: {
+	// 				admin: this.isSubscribed
+	// 					? this.getStateAccount().admin
+	// 					: this.wallet.publicKey,
+	// 				state: await this.getStatePublicKey(),
+	// 			},
+	// 		}
+	// 	);
+	// }
+
+	// public async updateSpotAuctionDuration(
+	// 	defaultAuctionDuration: number
+	// ): Promise<TransactionSignature> {
+	// 	const updateSpotAuctionDurationIx =
+	// 		await this.getUpdateSpotAuctionDurationIx(defaultAuctionDuration);
+
+	// 	const tx = await this.buildTransaction(updateSpotAuctionDurationIx);
+
+	// 	const { txSig } = await this.sendTransaction(tx, [], this.opts);
+
+	// 	return txSig;
+	// }
+
+	// public async getUpdateSpotAuctionDurationIx(
+	// 	defaultAuctionDuration: number
+	// ): Promise<TransactionInstruction> {
+	// 	return await this.program.instruction.updateSpotAuctionDuration(
+	// 		defaultAuctionDuration,
+	// 		{
+	// 			accounts: {
+	// 				admin: this.isSubscribed
+	// 					? this.getStateAccount().admin
+	// 					: this.wallet.publicKey,
+	// 				state: await this.getStatePublicKey(),
+	// 			},
+	// 		}
+	// 	);
+	// }
+
+	public async updateMarketDebtCeiling(
+		marketIndex: number,
+		debtCeiling: BN
+	): Promise<TransactionSignature> {
+		const updateMarketDebtCeilingIx = await this.getUpdateMarketDebtCeilingIx(
+			marketIndex,
+			debtCeiling
+		);
+
+		const tx = await this.buildTransaction(updateMarketDebtCeilingIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpAuctionDurationIx(
-		minDuration: BN | number
+	public async getUpdateMarketDebtCeilingIx(
+		marketIndex: number,
+		debtCeiling: BN
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpAuctionDuration(
-			typeof minDuration === 'number' ? minDuration : minDuration.toNumber(),
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-				},
-			}
-		);
+		return await this.program.instruction.updateMarketDebtCeiling(debtCeiling, {
+			accounts: {
+				admin: this.isSubscribed
+					? this.getStateAccount().admin
+					: this.wallet.publicKey,
+				state: await this.getStatePublicKey(),
+				market: await getMarketPublicKey(this.program.programId, marketIndex),
+			},
+		});
 	}
 
-	public async updateSpotAuctionDuration(
-		defaultAuctionDuration: number
-	): Promise<TransactionSignature> {
-		const updateSpotAuctionDurationIx =
-			await this.getUpdateSpotAuctionDurationIx(defaultAuctionDuration);
-
-		const tx = await this.buildTransaction(updateSpotAuctionDurationIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotAuctionDurationIx(
-		defaultAuctionDuration: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotAuctionDuration(
-			defaultAuctionDuration,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketMaxFillReserveFraction(
-		perpMarketIndex: number,
-		maxBaseAssetAmountRatio: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketMaxFillReserveFractionIx =
-			await this.getUpdatePerpMarketMaxFillReserveFractionIx(
-				perpMarketIndex,
-				maxBaseAssetAmountRatio
-			);
-
-		const tx = await this.buildTransaction(
-			updatePerpMarketMaxFillReserveFractionIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketMaxFillReserveFractionIx(
-		perpMarketIndex: number,
-		maxBaseAssetAmountRatio: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketMaxFillReserveFraction(
-			maxBaseAssetAmountRatio,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateMaxSlippageRatio(
-		perpMarketIndex: number,
-		maxSlippageRatio: number
-	): Promise<TransactionSignature> {
-		const updateMaxSlippageRatioIx = await this.getUpdateMaxSlippageRatioIx(
-			perpMarketIndex,
-			maxSlippageRatio
-		);
-
-		const tx = await this.buildTransaction(updateMaxSlippageRatioIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateMaxSlippageRatioIx(
-		perpMarketIndex: number,
-		maxSlippageRatio: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateMaxSlippageRatio(
-			maxSlippageRatio,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: this.getPerpMarketAccount(perpMarketIndex).pubkey,
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketUnrealizedAssetWeight(
-		perpMarketIndex: number,
-		unrealizedInitialAssetWeight: number,
-		unrealizedMaintenanceAssetWeight: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketUnrealizedAssetWeightIx =
-			await this.getUpdatePerpMarketUnrealizedAssetWeightIx(
-				perpMarketIndex,
-				unrealizedInitialAssetWeight,
-				unrealizedMaintenanceAssetWeight
-			);
-
-		const tx = await this.buildTransaction(
-			updatePerpMarketUnrealizedAssetWeightIx
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketUnrealizedAssetWeightIx(
-		perpMarketIndex: number,
-		unrealizedInitialAssetWeight: number,
-		unrealizedMaintenanceAssetWeight: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketUnrealizedAssetWeight(
-			unrealizedInitialAssetWeight,
-			unrealizedMaintenanceAssetWeight,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketMaxImbalances(
-		perpMarketIndex: number,
-		unrealizedMaxImbalance: BN,
-		maxRevenueWithdrawPerPeriod: BN,
-		quoteMaxInsurance: BN
-	): Promise<TransactionSignature> {
-		const updatePerpMarketMaxImabalancesIx =
-			await this.getUpdatePerpMarketMaxImbalancesIx(
-				perpMarketIndex,
-				unrealizedMaxImbalance,
-				maxRevenueWithdrawPerPeriod,
-				quoteMaxInsurance
-			);
-
-		const tx = await this.buildTransaction(updatePerpMarketMaxImabalancesIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketMaxImbalancesIx(
-		perpMarketIndex: number,
-		unrealizedMaxImbalance: BN,
-		maxRevenueWithdrawPerPeriod: BN,
-		quoteMaxInsurance: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketMaxImbalances(
-			unrealizedMaxImbalance,
-			maxRevenueWithdrawPerPeriod,
-			quoteMaxInsurance,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketMaxOpenInterest(
-		perpMarketIndex: number,
-		maxOpenInterest: BN
-	): Promise<TransactionSignature> {
-		const updatePerpMarketMaxOpenInterestIx =
-			await this.getUpdatePerpMarketMaxOpenInterestIx(
-				perpMarketIndex,
-				maxOpenInterest
-			);
-
-		const tx = await this.buildTransaction(updatePerpMarketMaxOpenInterestIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketMaxOpenInterestIx(
-		perpMarketIndex: number,
-		maxOpenInterest: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketMaxOpenInterest(
-			maxOpenInterest,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketNumberOfUser(
-		perpMarketIndex: number,
+	public async updateMarketNumberOfUser(
+		marketIndex: number,
 		numberOfUsers?: number,
 		numberOfUsersWithBase?: number
 	): Promise<TransactionSignature> {
-		const updatepPerpMarketFeeAdjustmentIx =
-			await this.getUpdatePerpMarketNumberOfUsersIx(
-				perpMarketIndex,
+		const updatepMarketFeeAdjustmentIx =
+			await this.getUpdateMarketNumberOfUsersIx(
+				marketIndex,
 				numberOfUsers,
 				numberOfUsersWithBase
 			);
 
-		const tx = await this.buildTransaction(updatepPerpMarketFeeAdjustmentIx);
+		const tx = await this.buildTransaction(updatepMarketFeeAdjustmentIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketNumberOfUsersIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketNumberOfUsersIx(
+		marketIndex: number,
 		numberOfUsers?: number,
 		numberOfUsersWithBase?: number
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketNumberOfUsers(
+		return await this.program.instruction.updateMarketNumberOfUsers(
 			numberOfUsers,
 			numberOfUsersWithBase,
 			{
@@ -3252,142 +1908,37 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
+					market: await getMarketPublicKey(this.program.programId, marketIndex),
 				},
 			}
 		);
 	}
 
-	public async updatePerpMarketFeeAdjustment(
-		perpMarketIndex: number,
-		feeAdjustment: number
-	): Promise<TransactionSignature> {
-		const updatepPerpMarketFeeAdjustmentIx =
-			await this.getUpdatePerpMarketFeeAdjustmentIx(
-				perpMarketIndex,
-				feeAdjustment
-			);
-
-		const tx = await this.buildTransaction(updatepPerpMarketFeeAdjustmentIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketFeeAdjustmentIx(
-		perpMarketIndex: number,
-		feeAdjustment: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketFeeAdjustment(
-			feeAdjustment,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateSpotMarketFeeAdjustment(
-		perpMarketIndex: number,
-		feeAdjustment: number
-	): Promise<TransactionSignature> {
-		const updateSpotMarketFeeAdjustmentIx =
-			await this.getUpdateSpotMarketFeeAdjustmentIx(
-				perpMarketIndex,
-				feeAdjustment
-			);
-
-		const tx = await this.buildTransaction(updateSpotMarketFeeAdjustmentIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketFeeAdjustmentIx(
-		spotMarketIndex: number,
-		feeAdjustment: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketFeeAdjustment(
-			feeAdjustment,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateSerumVault(
-		srmVault: PublicKey
-	): Promise<TransactionSignature> {
-		const updateSerumVaultIx = await this.getUpdateSerumVaultIx(srmVault);
-
-		const tx = await this.buildTransaction(updateSerumVaultIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSerumVaultIx(
-		srmVault: PublicKey
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSerumVault(srmVault, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				srmVault: srmVault,
-			},
-		});
-	}
-
-	public async updatePerpMarketLiquidationFee(
-		perpMarketIndex: number,
+	public async updateMarketLiquidationFee(
+		marketIndex: number,
 		liquidatorFee: number,
 		ifLiquidationFee: number
 	): Promise<TransactionSignature> {
-		const updatePerpMarketLiquidationFeeIx =
-			await this.getUpdatePerpMarketLiquidationFeeIx(
-				perpMarketIndex,
+		const updateMarketLiquidationFeeIx =
+			await this.getUpdateMarketLiquidationFeeIx(
+				marketIndex,
 				liquidatorFee,
 				ifLiquidationFee
 			);
 
-		const tx = await this.buildTransaction(updatePerpMarketLiquidationFeeIx);
+		const tx = await this.buildTransaction(updateMarketLiquidationFeeIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdatePerpMarketLiquidationFeeIx(
-		perpMarketIndex: number,
+	public async getUpdateMarketLiquidationFeeIx(
+		marketIndex: number,
 		liquidatorFee: number,
 		ifLiquidationFee: number
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updatePerpMarketLiquidationFee(
+		return await this.program.instruction.updateMarketLiquidationFee(
 			liquidatorFee,
 			ifLiquidationFee,
 			{
@@ -3396,52 +1947,7 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					perpMarket: await getPerpMarketPublicKey(
-						this.program.programId,
-						perpMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateSpotMarketLiquidationFee(
-		spotMarketIndex: number,
-		liquidatorFee: number,
-		ifLiquidationFee: number
-	): Promise<TransactionSignature> {
-		const updateSpotMarketLiquidationFeeIx =
-			await this.getUpdateSpotMarketLiquidationFeeIx(
-				spotMarketIndex,
-				liquidatorFee,
-				ifLiquidationFee
-			);
-
-		const tx = await this.buildTransaction(updateSpotMarketLiquidationFeeIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketLiquidationFeeIx(
-		spotMarketIndex: number,
-		liquidatorFee: number,
-		ifLiquidationFee: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketLiquidationFee(
-			liquidatorFee,
-			ifLiquidationFee,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
+					market: await getMarketPublicKey(this.program.programId, marketIndex),
 				},
 			}
 		);
@@ -3511,303 +2017,6 @@ export class AdminClient extends NormalClient {
 					state: await this.getStatePublicKey(),
 					protocolIfSharesTransferConfig:
 						getProtocolIfSharesTransferConfigPublicKey(this.program.programId),
-				},
-			}
-		);
-	}
-
-	public async initializePrelaunchOracle(
-		perpMarketIndex: number,
-		price?: BN,
-		maxPrice?: BN
-	): Promise<TransactionSignature> {
-		const initializePrelaunchOracleIx =
-			await this.getInitializePrelaunchOracleIx(
-				perpMarketIndex,
-				price,
-				maxPrice
-			);
-
-		const tx = await this.buildTransaction(initializePrelaunchOracleIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getInitializePrelaunchOracleIx(
-		perpMarketIndex: number,
-		price?: BN,
-		maxPrice?: BN
-	): Promise<TransactionInstruction> {
-		const params = {
-			perpMarketIndex,
-			price: price || null,
-			maxPrice: maxPrice || null,
-		};
-
-		return await this.program.instruction.initializePrelaunchOracle(params, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				prelaunchOracle: await getPrelaunchOraclePublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
-				rent: SYSVAR_RENT_PUBKEY,
-				systemProgram: anchor.web3.SystemProgram.programId,
-			},
-		});
-	}
-
-	public async updatePrelaunchOracleParams(
-		perpMarketIndex: number,
-		price?: BN,
-		maxPrice?: BN
-	): Promise<TransactionSignature> {
-		const updatePrelaunchOracleParamsIx =
-			await this.getUpdatePrelaunchOracleParamsIx(
-				perpMarketIndex,
-				price,
-				maxPrice
-			);
-
-		const tx = await this.buildTransaction(updatePrelaunchOracleParamsIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePrelaunchOracleParamsIx(
-		perpMarketIndex: number,
-		price?: BN,
-		maxPrice?: BN
-	): Promise<TransactionInstruction> {
-		const params = {
-			perpMarketIndex,
-			price: price || null,
-			maxPrice: maxPrice || null,
-		};
-
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
-			this.program.programId,
-			perpMarketIndex
-		);
-
-		return await this.program.instruction.updatePrelaunchOracleParams(params, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				perpMarket: perpMarketPublicKey,
-				prelaunchOracle: await getPrelaunchOraclePublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
-			},
-		});
-	}
-
-	public async deletePrelaunchOracle(
-		perpMarketIndex: number
-	): Promise<TransactionSignature> {
-		const deletePrelaunchOracleIx = await this.getDeletePrelaunchOracleIx(
-			perpMarketIndex
-		);
-
-		const tx = await this.buildTransaction(deletePrelaunchOracleIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getDeletePrelaunchOracleIx(
-		perpMarketIndex: number,
-		price?: BN,
-		maxPrice?: BN
-	): Promise<TransactionInstruction> {
-		const params = {
-			perpMarketIndex,
-			price: price || null,
-			maxPrice: maxPrice || null,
-		};
-
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
-			this.program.programId,
-			perpMarketIndex
-		);
-
-		return await this.program.instruction.deletePrelaunchOracle(params, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				perpMarket: perpMarketPublicKey,
-				prelaunchOracle: await getPrelaunchOraclePublicKey(
-					this.program.programId,
-					perpMarketIndex
-				),
-			},
-		});
-	}
-
-	public async updateSpotMarketFuel(
-		spotMarketIndex: number,
-		fuelBoostDeposits?: number,
-		fuelBoostBorrows?: number,
-		fuelBoostTaker?: number,
-		fuelBoostMaker?: number,
-		fuelBoostInsurance?: number
-	): Promise<TransactionSignature> {
-		const updateSpotMarketFuelIx = await this.getUpdateSpotMarketFuelIx(
-			spotMarketIndex,
-			fuelBoostDeposits || null,
-			fuelBoostBorrows || null,
-			fuelBoostTaker || null,
-			fuelBoostMaker || null,
-			fuelBoostInsurance || null
-		);
-
-		const tx = await this.buildTransaction(updateSpotMarketFuelIx);
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketFuelIx(
-		spotMarketIndex: number,
-		fuelBoostDeposits?: number,
-		fuelBoostBorrows?: number,
-		fuelBoostTaker?: number,
-		fuelBoostMaker?: number,
-		fuelBoostInsurance?: number
-	): Promise<TransactionInstruction> {
-		const spotMarketPublicKey = await getSpotMarketPublicKey(
-			this.program.programId,
-			spotMarketIndex
-		);
-
-		return await this.program.instruction.updateSpotMarketFuel(
-			fuelBoostDeposits || null,
-			fuelBoostBorrows || null,
-			fuelBoostTaker || null,
-			fuelBoostMaker || null,
-			fuelBoostInsurance || null,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: spotMarketPublicKey,
-				},
-			}
-		);
-	}
-
-	public async updatePerpMarketFuel(
-		perpMarketIndex: number,
-		fuelBoostTaker?: number,
-		fuelBoostMaker?: number,
-		fuelBoostPosition?: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketFuelIx = await this.getUpdatePerpMarketFuelIx(
-			perpMarketIndex,
-			fuelBoostTaker || null,
-			fuelBoostMaker || null,
-			fuelBoostPosition || null
-		);
-
-		const tx = await this.buildTransaction(updatePerpMarketFuelIx);
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpMarketFuelIx(
-		perpMarketIndex: number,
-		fuelBoostTaker?: number,
-		fuelBoostMaker?: number,
-		fuelBoostPosition?: number
-	): Promise<TransactionInstruction> {
-		const perpMarketPublicKey = await getPerpMarketPublicKey(
-			this.program.programId,
-			perpMarketIndex
-		);
-
-		return await this.program.instruction.updatePerpMarketFuel(
-			fuelBoostTaker || null,
-			fuelBoostMaker || null,
-			fuelBoostPosition || null,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					perpMarket: perpMarketPublicKey,
-				},
-			}
-		);
-	}
-
-	public async initUserFuel(
-		user: PublicKey,
-		authority: PublicKey,
-		fuelBonusDeposits?: number,
-		fuelBonusBorrows?: number,
-		fuelBonusTaker?: number,
-		fuelBonusMaker?: number,
-		fuelBonusInsurance?: number
-	): Promise<TransactionSignature> {
-		const updatePerpMarketFuelIx = await this.getInitUserFuelIx(
-			user,
-			authority,
-			fuelBonusDeposits,
-			fuelBonusBorrows,
-			fuelBonusTaker,
-			fuelBonusMaker,
-			fuelBonusInsurance
-		);
-
-		const tx = await this.buildTransaction(updatePerpMarketFuelIx);
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getInitUserFuelIx(
-		user: PublicKey,
-		authority: PublicKey,
-		fuelBonusDeposits?: number,
-		fuelBonusBorrows?: number,
-		fuelBonusTaker?: number,
-		fuelBonusMaker?: number,
-		fuelBonusInsurance?: number
-	): Promise<TransactionInstruction> {
-		const userStats = await getUserStatsAccountPublicKey(
-			this.program.programId,
-			authority
-		);
-
-		return await this.program.instruction.initUserFuel(
-			fuelBonusDeposits || null,
-			fuelBonusBorrows || null,
-			fuelBonusTaker || null,
-			fuelBonusMaker || null,
-			fuelBonusInsurance || null,
-			{
-				accounts: {
-					admin: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					user,
-					userStats,
 				},
 			}
 		);

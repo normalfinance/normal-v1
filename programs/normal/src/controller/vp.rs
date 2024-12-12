@@ -4,7 +4,7 @@ use solana_program::msg;
 
 use crate::controller;
 use crate::controller::amm::SwapDirection;
-use crate::error::{DriftResult, ErrorCode};
+use crate::error::{NormalResult, ErrorCode};
 use crate::math::casting::Cast;
 use crate::math::constants::{MAX_BASE_ASSET_AMOUNT_WITH_AMM, PERP_DECIMALS};
 use crate::math::orders::{
@@ -43,7 +43,7 @@ impl PositionDirection {
 pub fn add_new_position(
     user_positions: &mut PerpPositions,
     market_index: u16,
-) -> DriftResult<usize> {
+) -> NormalResult<usize> {
     let new_position_index = user_positions
         .iter()
         .position(|market_position| market_position.is_available())
@@ -59,7 +59,7 @@ pub fn add_new_position(
     Ok(new_position_index)
 }
 
-pub fn get_position_index(user_positions: &PerpPositions, market_index: u16) -> DriftResult<usize> {
+pub fn get_position_index(user_positions: &PerpPositions, market_index: u16) -> NormalResult<usize> {
     let position_index = user_positions
         .iter()
         .position(|market_position| market_position.is_for(market_index));
@@ -78,7 +78,7 @@ pub struct PositionDelta {
 }
 
 impl PositionDelta {
-    pub fn get_delta_base_with_remainder_abs(&self) -> DriftResult<i128> {
+    pub fn get_delta_base_with_remainder_abs(&self) -> NormalResult<i128> {
         let delta_base_i128 =
             if let Some(remainder_base_asset_amount) = self.remainder_base_asset_amount {
                 self.base_asset_amount
@@ -96,7 +96,7 @@ pub fn update_position_and_market(
     position: &mut PerpPosition,
     market: &mut PerpMarket,
     delta: &PositionDelta,
-) -> DriftResult<i64> {
+) -> NormalResult<i64> {
     if delta.base_asset_amount == 0 && delta.remainder_base_asset_amount.unwrap_or(0) == 0 {
         update_quote_asset_amount(position, market, delta.quote_asset_amount)?;
         return Ok(delta.quote_asset_amount);
@@ -403,7 +403,7 @@ pub fn update_lp_market_position(
     delta: &PositionDelta,
     fee_to_market: i128,
     liquidity_split: AMMLiquiditySplit,
-) -> DriftResult<i128> {
+) -> NormalResult<i128> {
     if market.amm.user_lp_shares == 0 || liquidity_split == AMMLiquiditySplit::ProtocolOwned {
         return Ok(0); // no need to split with LP
     }
@@ -467,7 +467,7 @@ pub fn update_position_with_base_asset_amount(
     user: &mut User,
     position_index: usize,
     fill_price: Option<u64>,
-) -> DriftResult<(u64, i64, i64)> {
+) -> NormalResult<(u64, i64, i64)> {
     let swap_direction = match direction {
         PositionDirection::Long => SwapDirection::Remove,
         PositionDirection::Short => SwapDirection::Add,
@@ -517,7 +517,7 @@ fn calculate_quote_asset_amount_surplus(
     quote_asset_swapped: u64,
     base_asset_amount: u64,
     fill_price: u64,
-) -> DriftResult<(u64, i64)> {
+) -> NormalResult<(u64, i64)> {
     let quote_asset_amount = calculate_quote_asset_amount_for_maker_order(
         base_asset_amount,
         fill_price,
@@ -541,7 +541,7 @@ pub fn update_quote_asset_and_break_even_amount(
     position: &mut PerpPosition,
     market: &mut PerpMarket,
     delta: i64,
-) -> DriftResult {
+) -> NormalResult {
     update_quote_asset_amount(position, market, delta)?;
     update_quote_break_even_amount(position, market, delta)
 }
@@ -550,7 +550,7 @@ pub fn update_quote_asset_amount(
     position: &mut PerpPosition,
     market: &mut PerpMarket,
     delta: i64,
-) -> DriftResult<()> {
+) -> NormalResult<()> {
     if delta == 0 {
         return Ok(());
     }
@@ -580,7 +580,7 @@ pub fn update_quote_break_even_amount(
     position: &mut PerpPosition,
     market: &mut PerpMarket,
     delta: i64,
-) -> DriftResult<()> {
+) -> NormalResult<()> {
     if delta == 0 || position.base_asset_amount == 0 {
         return Ok(());
     }
@@ -604,19 +604,19 @@ pub fn update_quote_break_even_amount(
     Ok(())
 }
 
-pub fn update_settled_pnl(user: &mut User, position_index: usize, delta: i64) -> DriftResult<()> {
+pub fn update_settled_pnl(user: &mut User, position_index: usize, delta: i64) -> NormalResult<()> {
     update_user_settled_pnl(user, delta)?;
     update_position_settled_pnl(&mut user.perp_positions[position_index], delta)?;
     Ok(())
 }
 
-pub fn update_position_settled_pnl(position: &mut PerpPosition, delta: i64) -> DriftResult<()> {
+pub fn update_position_settled_pnl(position: &mut PerpPosition, delta: i64) -> NormalResult<()> {
     position.settled_pnl = position.settled_pnl.safe_add(delta)?;
 
     Ok(())
 }
 
-pub fn update_user_settled_pnl(user: &mut User, delta: i64) -> DriftResult<()> {
+pub fn update_user_settled_pnl(user: &mut User, delta: i64) -> NormalResult<()> {
     safe_increment!(user.settled_perp_pnl, delta);
     Ok(())
 }
@@ -625,7 +625,7 @@ pub fn increase_open_bids_and_asks(
     position: &mut PerpPosition,
     direction: &PositionDirection,
     base_asset_amount_unfilled: u64,
-) -> DriftResult {
+) -> NormalResult {
     match direction {
         PositionDirection::Long => {
             position.open_bids = position
@@ -646,7 +646,7 @@ pub fn decrease_open_bids_and_asks(
     position: &mut PerpPosition,
     direction: &PositionDirection,
     base_asset_amount_unfilled: u64,
-) -> DriftResult {
+) -> NormalResult {
     match direction {
         PositionDirection::Long => {
             position.open_bids = position

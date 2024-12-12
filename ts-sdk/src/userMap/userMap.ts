@@ -2,13 +2,10 @@ import {
 	User,
 	NormalClient,
 	UserAccount,
-	OrderRecord,
 	WrappedEvent,
-	OrderActionRecord,
 	NewUserRecord,
 	LPRecord,
 	StateAccount,
-	DLOB,
 	BN,
 	UserSubscriptionConfig,
 	DataAndSlot,
@@ -56,7 +53,7 @@ export interface UserMapInterface {
 		accountSubscription?: UserSubscriptionConfig
 	): Promise<DataAndSlot<User>>;
 	getUserAuthority(key: string): PublicKey | undefined;
-	updateWithOrderRecord(record: OrderRecord): Promise<void>;
+	// updateWithOrderRecord(record: OrderRecord): Promise<void>;
 	values(): IterableIterator<User>;
 	valuesWithSlot(): IterableIterator<DataAndSlot<User>>;
 	entries(): IterableIterator<[string, User]>;
@@ -135,6 +132,9 @@ export class UserMap implements UserMapInterface {
 			type: 'default',
 		};
 	}
+	// updateWithOrderRecord(record: OrderRecord): Promise<void> {
+	// 	throw new Error('Method not implemented.');
+	// }
 
 	public async subscribe() {
 		if (this.size() > 0) {
@@ -245,37 +245,27 @@ export class UserMap implements UserMapInterface {
 		return user.data.getUserAccount().authority;
 	}
 
-	/**
-	 * implements the {@link DLOBSource} interface
-	 * create a DLOB from all the subscribed users
-	 * @param slot
-	 */
-	public async getDLOB(slot: number): Promise<DLOB> {
-		const dlob = new DLOB();
-		await dlob.initFromUserMap(this, slot);
-		return dlob;
-	}
-
-	public async updateWithOrderRecord(record: OrderRecord) {
-		if (!this.has(record.user.toString())) {
-			await this.addPubkey(record.user);
-		}
-	}
+	// public async updateWithOrderRecord(record: OrderRecord) {
+	// 	if (!this.has(record.user.toString())) {
+	// 		await this.addPubkey(record.user);
+	// 	}
+	// }
 
 	public async updateWithEventRecord(record: WrappedEvent<any>) {
-		if (record.eventType === 'OrderRecord') {
-			const orderRecord = record as OrderRecord;
-			await this.updateWithOrderRecord(orderRecord);
-		} else if (record.eventType === 'OrderActionRecord') {
-			const actionRecord = record as OrderActionRecord;
+		// if (record.eventType === 'OrderRecord') {
+		// 	const orderRecord = record as OrderRecord;
+		// 	await this.updateWithOrderRecord(orderRecord);
+		// } else if (record.eventType === 'OrderActionRecord') {
+		// 	const actionRecord = record as OrderActionRecord;
 
-			if (actionRecord.taker) {
-				await this.mustGet(actionRecord.taker.toString());
-			}
-			if (actionRecord.maker) {
-				await this.mustGet(actionRecord.maker.toString());
-			}
-		} else if (record.eventType === 'NewUserRecord') {
+		// 	if (actionRecord.taker) {
+		// 		await this.mustGet(actionRecord.taker.toString());
+		// 	}
+		// 	if (actionRecord.maker) {
+		// 		await this.mustGet(actionRecord.maker.toString());
+		// 	}
+		// }
+		if (record.eventType === 'NewUserRecord') {
 			const newUserRecord = record as NewUserRecord;
 			await this.mustGet(newUserRecord.user.toString());
 		} else if (record.eventType === 'LPRecord') {

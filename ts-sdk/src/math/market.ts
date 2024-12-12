@@ -23,7 +23,6 @@ import {
 	QUOTE_SPOT_MARKET_INDEX,
 } from '../constants/numericConstants';
 import { getTokenAmount } from './spotBalance';
-import { DLOB } from '../dlob/DLOB';
 import { assert } from '../assert/assert';
 
 /**

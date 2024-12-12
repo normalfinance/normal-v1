@@ -3,13 +3,12 @@ import {
 	AMM_RESERVE_PRECISION,
 	AMM_TIMES_PEG_TO_QUOTE_PRECISION_RATIO,
 	AMM_TO_QUOTE_PRECISION_RATIO,
-	FUNDING_RATE_BUFFER_PRECISION,
 	PRICE_PRECISION,
 	ONE,
 	ZERO,
 } from '../constants/numericConstants';
 import { OraclePriceData } from '../oracles/types';
-import { PerpMarketAccount, PositionDirection, PerpPosition } from '../types';
+import { PerpMarketAccount } from '../types';
 import {
 	calculateUpdatedAMM,
 	calculateUpdatedAMMSpreadReserves,
@@ -83,110 +82,6 @@ export function calculateBaseAssetValue(
 				.div(AMM_TIMES_PEG_TO_QUOTE_PRECISION_RATIO)
 				.add(ONE);
 	}
-}
-
-/**
- * calculatePositionPNL
- * = BaseAssetAmount * (Avg Exit Price - Avg Entry Price)
- * @param market
- * @param PerpPosition
- * @param withFunding (adds unrealized funding payment pnl to result)
- * @param oraclePriceData
- * @returns BaseAssetAmount : Precision QUOTE_PRECISION
- */
-export function calculatePositionPNL(
-	market: PerpMarketAccount,
-	perpPosition: PerpPosition,
-	withFunding = false,
-	oraclePriceData: OraclePriceData
-): BN {
-	if (perpPosition.baseAssetAmount.eq(ZERO)) {
-		return perpPosition.quoteAssetAmount;
-	}
-
-	const baseAssetValue = calculateBaseAssetValueWithOracle(
-		market,
-		perpPosition,
-		oraclePriceData
-	);
-
-	const baseAssetValueSign = perpPosition.baseAssetAmount.isNeg()
-		? new BN(-1)
-		: new BN(1);
-	let pnl = baseAssetValue
-		.mul(baseAssetValueSign)
-		.add(perpPosition.quoteAssetAmount);
-
-	if (withFunding) {
-		const fundingRatePnL = calculatePositionFundingPNL(market, perpPosition);
-
-		pnl = pnl.add(fundingRatePnL);
-	}
-
-	return pnl;
-}
-
-export function calculateClaimablePnl(
-	market: PerpMarketAccount,
-	spotMarket: SpotMarketAccount,
-	perpPosition: PerpPosition,
-	oraclePriceData: OraclePriceData
-): BN {
-	const unrealizedPnl = calculatePositionPNL(
-		market,
-		perpPosition,
-		true,
-		oraclePriceData
-	);
-
-	let unsettledPnl = unrealizedPnl;
-	if (unrealizedPnl.gt(ZERO)) {
-		const excessPnlPool = BN.max(
-			ZERO,
-			calculateNetUserPnlImbalance(market, spotMarket, oraclePriceData).mul(
-				new BN(-1)
-			)
-		);
-
-		const maxPositivePnl = BN.max(
-			perpPosition.quoteAssetAmount.sub(perpPosition.quoteEntryAmount),
-			ZERO
-		).add(excessPnlPool);
-
-		unsettledPnl = BN.min(maxPositivePnl, unrealizedPnl);
-	}
-	return unsettledPnl;
-}
-
-/**
- *
- * @param market
- * @param PerpPosition
- * @returns // QUOTE_PRECISION
- */
-export function calculatePositionFundingPNL(
-	market: PerpMarketAccount,
-	perpPosition: PerpPosition
-): BN {
-	if (perpPosition.baseAssetAmount.eq(ZERO)) {
-		return ZERO;
-	}
-
-	let ammCumulativeFundingRate: BN;
-	if (perpPosition.baseAssetAmount.gt(ZERO)) {
-		ammCumulativeFundingRate = market.amm.cumulativeFundingRateLong;
-	} else {
-		ammCumulativeFundingRate = market.amm.cumulativeFundingRateShort;
-	}
-
-	const perPositionFundingRate = ammCumulativeFundingRate
-		.sub(perpPosition.lastCumulativeFundingRate)
-		.mul(perpPosition.baseAssetAmount)
-		.div(AMM_RESERVE_PRECISION)
-		.div(FUNDING_RATE_BUFFER_PRECISION)
-		.mul(new BN(-1));
-
-	return perPositionFundingRate;
 }
 
 export function positionIsAvailable(position: PerpPosition): boolean {

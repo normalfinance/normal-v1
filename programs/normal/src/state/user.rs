@@ -487,7 +487,7 @@ impl UserStats {
 		&mut self,
 		quote_asset_amount: u64,
 		now: i64
-	) -> DriftResult {
+	) -> NormalResult {
 		let since_last = max(
 			1_i64,
 			now.safe_sub(self.last_collateral_volume_30d_ts)?
@@ -508,7 +508,7 @@ impl UserStats {
 		&mut self,
 		quote_asset_amount: u64,
 		now: i64
-	) -> DriftResult {
+	) -> NormalResult {
 		let since_last = max(1_i64, now.safe_sub(self.last_trade_volume_30d_ts)?);
 
 		self.trade_volume_30d = calculate_rolling_sum(

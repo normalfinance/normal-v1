@@ -1,5 +1,5 @@
 import { ConfirmOptions } from '@solana/web3.js';
-import { MarketAccount, PublicKey } from '.';
+import { MarketAccount, PublicKey, VaultAccount } from '.';
 import {
 	DevnetMarkets,
 	MainnetMarkets,
@@ -93,23 +93,35 @@ export const initialize = (props: {
 	return currentConfig;
 };
 
-export function getMarketsAndOraclesForSubscription(env: NormalEnv): {
+
+export function getMarketsAndOraclesForSubscription(env: DriftEnv): {
 	marketIndexes: number[];
+	spotMarketIndexes: number[];
 	oracleInfos: OracleInfo[];
 } {
-	const marketIndexes = [];
+	const perpMarketIndexes = [];
+	const spotMarketIndexes = [];
 	const oracleInfos = new Map<string, OracleInfo>();
 
-	for (const market of Markets[env]) {
-		marketIndexes.push(market.marketIndex);
+	for (const market of PerpMarkets[env]) {
+		perpMarketIndexes.push(market.marketIndex);
 		oracleInfos.set(market.oracle.toString(), {
 			publicKey: market.oracle,
 			source: market.oracleSource,
 		});
 	}
 
+	for (const spotMarket of SpotMarkets[env]) {
+		spotMarketIndexes.push(spotMarket.marketIndex);
+		oracleInfos.set(spotMarket.oracle.toString(), {
+			publicKey: spotMarket.oracle,
+			source: spotMarket.oracleSource,
+		});
+	}
+
 	return {
-		marketIndexes: marketIndexes,
+		perpMarketIndexes: perpMarketIndexes,
+		spotMarketIndexes: spotMarketIndexes,
 		oracleInfos: Array.from(oracleInfos.values()),
 	};
 }
@@ -117,26 +129,46 @@ export function getMarketsAndOraclesForSubscription(env: NormalEnv): {
 export async function findAllMarketAndOracles(program: Program): Promise<{
 	marketIndexes: number[];
 	marketAccounts: MarketAccount[];
+	vaultIndexes: number[];
 	oracleInfos: OracleInfo[];
+	vaultAccounts: VaultAccount[];
 }> {
-	const marketIndexes = [];
+	const perpMarketIndexes = [];
+	const spotMarketIndexes = [];
 	const oracleInfos = new Map<string, OracleInfo>();
 
-	const marketProgramAccounts =
-		(await program.account.market.all()) as ProgramAccount<MarketAccount>[];
+	const perpMarketProgramAccounts =
+		(await program.account.perpMarket.all()) as ProgramAccount<PerpMarketAccount>[];
+	const spotMarketProgramAccounts =
+		(await program.account.spotMarket.all()) as ProgramAccount<SpotMarketAccount>[];
 
-	for (const marketProgramAccount of marketProgramAccounts) {
-		const market = marketProgramAccount.account as MarketAccount;
-		marketIndexes.push(market.marketIndex);
-		oracleInfos.set(market.amm.oracle.toString(), {
-			publicKey: market.amm.oracle,
-			source: market.amm.oracleSource,
+	for (const perpMarketProgramAccount of perpMarketProgramAccounts) {
+		const perpMarket = perpMarketProgramAccount.account as PerpMarketAccount;
+		perpMarketIndexes.push(perpMarket.marketIndex);
+		oracleInfos.set(perpMarket.amm.oracle.toString(), {
+			publicKey: perpMarket.amm.oracle,
+			source: perpMarket.amm.oracleSource,
+		});
+	}
+
+	for (const spotMarketProgramAccount of spotMarketProgramAccounts) {
+		const spotMarket = spotMarketProgramAccount.account as SpotMarketAccount;
+		spotMarketIndexes.push(spotMarket.marketIndex);
+		oracleInfos.set(spotMarket.oracle.toString(), {
+			publicKey: spotMarket.oracle,
+			source: spotMarket.oracleSource,
 		});
 	}
 
 	return {
-		marketIndexes,
-		marketAccounts: marketProgramAccounts.map((account) => account.account),
+		perpMarketIndexes,
+		perpMarketAccounts: perpMarketProgramAccounts.map(
+			(account) => account.account
+		),
+		spotMarketIndexes,
+		spotMarketAccounts: spotMarketProgramAccounts.map(
+			(account) => account.account
+		),
 		oracleInfos: Array.from(oracleInfos.values()),
 	};
 }

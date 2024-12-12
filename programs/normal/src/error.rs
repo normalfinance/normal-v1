@@ -553,7 +553,7 @@ pub enum ErrorCode {
 	OracleDeserializeMessageFailed,
 	#[msg("Wrong guardian set owner in update price atomic")]
 	OracleWrongGuardianSetOwner,
-	#[msg("Oracle post update atomic price feed account must be drift program")]
+	#[msg("Oracle post update atomic price feed account must be normal program")]
 	OracleWrongWriteAuthority,
 	#[msg("Oracle vaa owner must be wormhole program")]
 	OracleWrongVaaOwner,

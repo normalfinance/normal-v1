@@ -24,17 +24,9 @@ import {
 	MakerInfo,
 	MappedRecord,
 	MarketType,
-	ModifyOrderParams,
-	ModifyOrderPolicy,
-	OptionalOrderParams,
-	Order,
-	OrderParams,
-	OrderTriggerCondition,
-	OrderType,
 	MarketAccount,
 	MarketExtendedInfo,
-	PlaceAndTakeOrderSuccessCondition,
-	OrderSide,
+
 	ReferrerInfo,
 	ReferrerNameAccount,
 	SignedTxData,
@@ -43,8 +35,6 @@ import {
 	// SpotPosition,
 	StateAccount,
 	SwapReduceOnly,
-	SwiftOrderParamsMessage,
-	SwiftServerMessage,
 	TakerInfo,
 	TxParams,
 	UserAccount,
@@ -79,14 +69,9 @@ import {
 	getNormalSignerPublicKey,
 	getNormalStateAccountPublicKey,
 	getInsuranceFundStakeAccountPublicKey,
-	getOpenbookV2FulfillmentConfigPublicKey,
 	getMarketPublicKey,
-	getPhoenixFulfillmentConfigPublicKey,
 	getPythPullOraclePublicKey,
 	getReferrerNamePublicKeySync,
-	getSerumFulfillmentConfigPublicKey,
-	getSerumSignerPublicKey,
-	getSpotMarketPublicKey,
 	getUserAccountPublicKey,
 	getUserAccountPublicKeySync,
 	getUserStatsAccountPublicKey,
@@ -129,16 +114,9 @@ import { isSpotPositionAvailable } from './math/spotPosition';
 import { calculateMarketMaxAvailableInsurance } from './math/market';
 import { fetchUserStatsAccount } from './accounts/fetch';
 import { castNumberToSpotPrecision } from './math/spotMarket';
-import {
-	JupiterClient,
-	QuoteResponse,
-	Route,
-	SwapMode,
-} from './jupiter/jupiterClient';
+
 import { getNonIdleUserFilter } from './memcmp';
 import { UserStatsSubscriptionConfig } from './userStatsConfig';
-import { getMarinadeDepositIx, getMarinadeFinanceProgram } from './marinade';
-import { getOrderParams } from './orderParams';
 import { numberToSafeBN } from './math/utils';
 import { TransactionParamProcessor } from './tx/txParamProcessor';
 import { isOracleValid, trimVaaSignatures } from './math/oracles';
@@ -314,7 +292,7 @@ export class NormalClient {
 
 		if (config.userStats) {
 			this.userStats = new UserStats({
-				driftClient: this,
+				normalClient: this,
 				userStatsAccountPublicKey: getUserStatsAccountPublicKey(
 					this.program.programId,
 					this.authority
@@ -394,7 +372,7 @@ export class NormalClient {
 		);
 
 		return new User({
-			driftClient: this,
+			normalClient: this,
 			userAccountPublicKey,
 			accountSubscription: accountSubscriptionConfig,
 		});
@@ -609,7 +587,7 @@ export class NormalClient {
 		this.userStats = undefined;
 
 		this.userStats = new UserStats({
-			driftClient: this,
+			normalClient: this,
 			userStatsAccountPublicKey: this.getUserStatsAccountPublicKey(),
 			accountSubscription: this.userStatsAccountSubscriptionConfig,
 		});
@@ -654,7 +632,7 @@ export class NormalClient {
 		this.userStats = undefined;
 
 		this.userStats = new UserStats({
-			driftClient: this,
+			normalClient: this,
 			userStatsAccountPublicKey: this.getUserStatsAccountPublicKey(),
 			accountSubscription: this.userStatsAccountSubscriptionConfig,
 		});
@@ -689,7 +667,7 @@ export class NormalClient {
 			}
 
 			this.userStats = new UserStats({
-				driftClient: this,
+				normalClient: this,
 				userStatsAccountPublicKey: this.userStatsAccountPublicKey,
 				accountSubscription: this.userAccountSubscriptionConfig,
 			});
@@ -3936,7 +3914,7 @@ export class NormalClient {
 	}
 
 	public getOracleDataForMarket(marketIndex: number): OraclePriceData {
-		return this.accountSubscriber.getOraclePriceDataAndSlotForPerpMarket(
+		return this.accountSubscriber.getOraclePriceDataAndSlotForMarket(
 			marketIndex
 		).data;
 	}
@@ -4009,7 +3987,7 @@ export class NormalClient {
 					authority: this.wallet.publicKey,
 					spotMarketVault: spotMarket.vault,
 					insuranceFundVault: spotMarket.insuranceFund.vault,
-					driftSigner: this.getSignerPublicKey(),
+					normalSigner: this.getSignerPublicKey(),
 					userTokenAccount: collateralAccountPublicKey,
 					tokenProgram,
 				},
@@ -4246,7 +4224,7 @@ export class NormalClient {
 					userStats: this.getUserStatsAccountPublicKey(),
 					authority: this.wallet.publicKey,
 					insuranceFundVault: spotMarketAccount.insuranceFund.vault,
-					driftSigner: this.getSignerPublicKey(),
+					normalSigner: this.getSignerPublicKey(),
 					userTokenAccount: tokenAccount,
 					tokenProgram,
 				},
@@ -4384,7 +4362,7 @@ export class NormalClient {
 					state: await this.getStatePublicKey(),
 					spotMarket: spotMarketAccount.pubkey,
 					spotMarketVault: spotMarketAccount.vault,
-					driftSigner: this.getSignerPublicKey(),
+					normalSigner: this.getSignerPublicKey(),
 					insuranceFundVault: spotMarketAccount.insuranceFund.vault,
 					tokenProgram: TOKEN_PROGRAM_ID,
 				},

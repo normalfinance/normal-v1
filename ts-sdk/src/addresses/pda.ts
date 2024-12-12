@@ -99,18 +99,31 @@ export function getMarketPublicKeySync(
 	)[0];
 }
 
-export async function getMarketVaultPublicKey(
+export async function getVaultPublicKey(
 	programId: PublicKey,
-	marketIndex: number
+	vaultIndex: number
 ): Promise<PublicKey> {
 	return (
 		await PublicKey.findProgramAddress(
 			[
-				Buffer.from(anchor.utils.bytes.utf8.encode('market_vault')),
-				new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
+				Buffer.from(anchor.utils.bytes.utf8.encode('vault')),
+				new anchor.BN(vaultIndex).toArrayLike(Buffer, 'le', 2),
 			],
 			programId
 		)
+	)[0];
+}
+
+export function getVaultPublicKeySync(
+	programId: PublicKey,
+	vaultIndex: number
+): PublicKey {
+	return PublicKey.findProgramAddressSync(
+		[
+			Buffer.from(anchor.utils.bytes.utf8.encode('vault')),
+			new anchor.BN(vaultIndex).toArrayLike(Buffer, 'le', 2),
+		],
+		programId
 	)[0];
 }
 
@@ -185,10 +198,10 @@ export function getPythPullOraclePublicKey(
 		progarmId
 	)[0];
 }
-export function getTokenProgramForSpotMarket(
-	spotMarketAccount: SpotMarketAccount
+export function getTokenProgramForMarket(
+	marketAccount: SpotMarketAccount
 ): PublicKey {
-	if (spotMarketAccount.tokenProgram === 1) {
+	if (marketAccount.tokenProgram === 1) {
 		return TOKEN_2022_PROGRAM_ID;
 	}
 	return TOKEN_PROGRAM_ID;

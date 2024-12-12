@@ -1,11 +1,9 @@
 import {
 	NormalClient,
 	getUserStatsAccountPublicKey,
-	OrderRecord,
 	UserStatsAccount,
 	UserStats,
 	WrappedEvent,
-	OrderActionRecord,
 	NewUserRecord,
 	LPRecord,
 	InsuranceFundStakeRecord,
@@ -87,38 +85,39 @@ export class UserStatsMap {
 		this.userStatsMap.set(authority.toString(), userStat);
 	}
 
-	public async updateWithOrderRecord(record: OrderRecord, userMap: UserMap) {
-		const user = await userMap.mustGet(record.user.toString());
-		if (!this.has(user.getUserAccount().authority.toString())) {
-			await this.addUserStat(user.getUserAccount().authority, undefined, false);
-		}
-	}
+	// public async updateWithOrderRecord(record: OrderRecord, userMap: UserMap) {
+	// 	const user = await userMap.mustGet(record.user.toString());
+	// 	if (!this.has(user.getUserAccount().authority.toString())) {
+	// 		await this.addUserStat(user.getUserAccount().authority, undefined, false);
+	// 	}
+	// }
 
 	public async updateWithEventRecord(
 		record: WrappedEvent<any>,
 		userMap?: UserMap
 	) {
-		if (record.eventType === 'OrderRecord') {
-			if (!userMap) {
-				return;
-			}
-			const orderRecord = record as OrderRecord;
-			await userMap.updateWithOrderRecord(orderRecord);
-		} else if (record.eventType === 'OrderActionRecord') {
-			if (!userMap) {
-				return;
-			}
-			const actionRecord = record as OrderActionRecord;
+		// if (record.eventType === 'OrderRecord') {
+		// 	if (!userMap) {
+		// 		return;
+		// 	}
+		// 	const orderRecord = record as OrderRecord;
+		// 	await userMap.updateWithOrderRecord(orderRecord);
+		// } else if (record.eventType === 'OrderActionRecord') {
+		// 	if (!userMap) {
+		// 		return;
+		// 	}
+		// 	const actionRecord = record as OrderActionRecord;
 
-			if (actionRecord.taker) {
-				const taker = await userMap.mustGet(actionRecord.taker.toString());
-				await this.mustGet(taker.getUserAccount().authority.toString());
-			}
-			if (actionRecord.maker) {
-				const maker = await userMap.mustGet(actionRecord.maker.toString());
-				await this.mustGet(maker.getUserAccount().authority.toString());
-			}
-		} else if (record.eventType === 'NewUserRecord') {
+		// 	if (actionRecord.taker) {
+		// 		const taker = await userMap.mustGet(actionRecord.taker.toString());
+		// 		await this.mustGet(taker.getUserAccount().authority.toString());
+		// 	}
+		// 	if (actionRecord.maker) {
+		// 		const maker = await userMap.mustGet(actionRecord.maker.toString());
+		// 		await this.mustGet(maker.getUserAccount().authority.toString());
+		// 	}
+		// }
+		if (record.eventType === 'NewUserRecord') {
 			const newUserRecord = record as NewUserRecord;
 			await this.mustGet(newUserRecord.userAuthority.toString());
 		} else if (record.eventType === 'LPRecord') {

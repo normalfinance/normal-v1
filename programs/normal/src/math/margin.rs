@@ -14,7 +14,7 @@ use crate::{ validate, PRICE_PRECISION_I128 };
 use crate::{ validation, PRICE_PRECISION_I64 };
 
 use crate::math::casting::Cast;
-use crate::math::oracle::{ is_oracle_valid_for_action, DriftAction };
+use crate::math::oracle::{ is_oracle_valid_for_action, NormalAction };
 
 use crate::math::spot_balance::{ get_strict_token_value, get_token_value };
 
@@ -110,7 +110,7 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 		calculation.update_all_oracles_valid(
 			is_oracle_valid_for_action(
 				oracle_validity,
-				Some(DriftAction::MarginCalc)
+				Some(NormalAction::MarginCalc)
 			)?
 		);
 
@@ -233,7 +233,7 @@ pub fn calculate_user_equity(
 
 		all_oracles_valid &= is_oracle_valid_for_action(
 			oracle_validity,
-			Some(DriftAction::MarginCalc)
+			Some(NormalAction::MarginCalc)
 		)?;
 
 		let token_amount = spot_position.get_signed_token_amount(&spot_market)?;
