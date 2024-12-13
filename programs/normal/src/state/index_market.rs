@@ -21,9 +21,6 @@ use crate::state::market::Market;
 use crate::state::traits::Size;
 use crate::validate;
 
-// #[cfg(test)]
-// mod tests;
-
 #[derive(
 	Clone,
 	Copy,
@@ -34,7 +31,7 @@ use crate::validate;
 	Eq,
 	Default
 )]
-pub enum WeightingMethod {
+pub enum IndexWeighting {
 	///
 	#[default]
 	Equal,
@@ -56,49 +53,185 @@ pub enum WeightingMethod {
 	Eq,
 	Default
 )]
-pub enum IndexFundVisibility {
+pub enum IndexVisibility {
 	#[default]
 	Private, // mutable
 	Public, // immutable
 }
 
 #[derive(Default, PartialEq, Debug)]
-pub struct IndexFundAsset {
-	pub asset: [u8; 6],
-	pub oracle: Pubkey,
+pub struct IndexAsset {
+	pub mint: Pubkey,
+	pub vault: Pubkey,
+	pub market_index: u16,
 	/// The asset's allocation in basis points
 	pub weight: u16,
+	pub last_updated_ts: i64,
 }
 
-pub(crate) type IndexFundAssets = BTreeMap<Pubkey, IndexFundAsset>;
+pub(crate) type IndexAssets = BTreeMap<Pubkey, IndexAsset>;
 
-#[derive(Default, Clone, Copy, Debug)]
-pub struct Index {
-	/// The address of the fund. It is a pda of the market index
+#[account]
+pub struct IndexMarket {
+	/// The index market's address. It is a pda of the market index
 	pub pubkey: Pubkey,
-	pub admin: Pubkey,
-	pub vault: Pubkey,
-	pub amm: Pubkey,
-	/// The encoded display name for the index fund e.g. Top 10 Index
+	/// The owner/authority of the account
+	pub authority: Pubkey,
+	/// An addresses that can control the account on the authority's behalf. Has limited power, cant withdraw
+	pub delegate: Pubkey,
+
+	// TODO: move these to the AMM
+	pub fee_authority: Pubkey,
+	pub whitelist_authority: Pubkey,
+	pub rebalance_authority: Pubkey,
+
+	pub market_index: u16,
+	/// Encoded display name for the market e.g. BTC-SOL
 	pub name: [u8; 32],
-	pub weighting_method: WeightingMethod,
-	pub assets: IndexFundAssets,
+	/// Whether a market is active, reduce only, expired, etc
+	/// Affects whether users can open/close positions
+	pub status: MarketStatus,
+	pub paused_operations: u8,
+	pub number_of_users: u32,
+
+	// Oracle
+	//
+	pub oracle: Pubkey,
+	pub oracle_source: OracleSource,
+
+	/// Index
+	///
+	pub weighting: IndexWeighting,
+	pub assets: IndexAssets,
 	/// The visibility of the index fund
-	pub visbility: IndexFundVisibility,
+	pub visibility: IndexVisibility,
+	/// List of accounts allowed to purchase the index
+	pub whitelist: Vec<Pubkey>,
+	pub blacklist: Vec<Pubkey>,
+
+	/// Fees
+	/// 
 	/// Total taker fee paid in basis points
-	/// precision: QUOTE_PRECISION
-	pub manager_fee: u64,
-	/// Total manager fee paid
-	/// precision: QUOTE_PRECISION
-	pub total_manager_fees: u64,
-	pub min_rebalance_ts: i64,
+	pub expense_ratio: u64,
+	///
+	pub revenue_share: u64,
+	pub protocol_fee_owed: u64,
+	pub manager_fee_owed: u64,
+	pub referral_fee_owed: u64,
+	pub total_fees: u64,
+
+	// AMM
+	//
+	pub amm: AMM,
+
+	// Insurance
+	//
+	/// The market's claim on the insurance fund
+	pub insurance_claim: InsuranceClaim,
+
+	// Metrics
+	//
+	
+
+	// Shutdown
+	//
+	/// The ts when the market will be expired. Only set if market is in reduce only mode
+	pub expiry_ts: i64,
+	/// The price at which positions will be settled. Only set if market is expired
+	/// precision = PRICE_PRECISION
+	pub expiry_price: i64,
+
+	// Timestamps
 	pub rebalanced_ts: i64,
 	pub updated_ts: i64,
 
-	pub padding: [u8; 41],
+	pub padding: [u8; 43],
 }
 
-impl Fund {
+impl Default for IndexMarket {
+	fn default() -> Self {
+		IndexMarket {
+			pubkey: Pubkey::default(),
+			authority: Pubkey::default(),
+			delegate: Pubkey::default(),
+			market_index: 0,
+			name: [0; 32],
+			status: MarketStatus::default(),
+			paused_operations: 0,
+			number_of_users: 0,
+
+			oracle: Pubkey::default(),
+			oracle_source: OracleSource::default(),
+
+			weighting: IndexWeighting::default(),
+			assets: IndexAssets::default(),
+			visibility: IndexVisibility::default(),
+			whitelist: [],
+			manager_fee: 0,
+			total_manager_fees: 0,
+			min_rebalance_ts: 0,
+			rebalanced_ts: 0,
+			updated_ts: 0,
+
+			token_mint_collateral: Pubkey::default(),
+			token_vault_synthetic: Pubkey::default(),
+			token_vault_collateral: Pubkey::default(),
+
+			amm: AMM {
+				oracle: 0,
+				oracle_source,
+				historical_oracle_data: HistoricalOracleData::default(),
+				last_oracle_conf_pct: 0,
+				last_oracle_valid: false,
+				last_oracle_normalised_price: 0,
+				last_oracle_reserve_price_spread_pct: 0,
+				oracle_std: 0,
+
+				tick_spacing,
+				tick_spacing_seed: tick_spacing.to_le_bytes(),
+
+				liquidity: 0,
+				sqrt_price,
+				tick_current_index: tick_index_from_sqrt_price(&sqrt_price),
+
+				fee_rate: 0,
+				protocol_fee_rate: 0,
+
+				protocol_fee_owed_synthetic: 0,
+				protocol_fee_owed_quote: 0,
+
+				token_mint_synthetic,
+				token_vault_synthetic,
+				fee_growth_global_synthetic: 0,
+
+				token_mint_quote,
+				token_vault_quote,
+				fee_growth_global_quote: 0,
+
+				reward_infos: [],
+			},
+
+			insurance_claim: InsuranceClaim::default(),
+
+			outstanding_debt: 0,
+
+			expiry_ts: 0,
+			expiry_price: 0,
+
+			padding: [0; 43],
+		}
+	}
+}
+
+impl Size for IndexMarket {
+	const SIZE: usize = 1216; // TODO:
+}
+
+impl IndexMarket {
+	pub fn can_invest(&self, account: Pubkey) -> bool {
+		self.whitelist.contains(&account)
+	}
+
 	pub fn can_rebalance(&self) -> bool {
 		self.rebalanced_ts > self.min_rebalance_ts
 	}

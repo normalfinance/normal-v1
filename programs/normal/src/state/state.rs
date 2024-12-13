@@ -43,6 +43,11 @@ pub struct State {
 	// the total number of vaults live on the protocol
 	pub number_of_vaults: u16,
 
+	// Index
+	//
+	pub protocol_index_fee: u16,
+	pub protocol_index_fee_vault: Pubkey,
+
 	// Insurance Fund
 	//
 	pub insurance_fund: Pubkey,

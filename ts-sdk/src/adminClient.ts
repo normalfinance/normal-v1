@@ -11,7 +11,7 @@ import {
 	OracleSource,
 	ExchangeStatus,
 	MarketStatus,
-	ContractTier,
+	SyntheticTier,
 } from './types';
 import { DEFAULT_MARKET_NAME, encodeName } from './userName';
 import { BN } from '@coral-xyz/anchor';
@@ -24,6 +24,7 @@ import {
 	getProtocolIfSharesTransferConfigPublicKey,
 	getPythPullOraclePublicKey,
 	getUserStatsAccountPublicKey,
+	getInsuranceFundPublicKey,
 } from './addresses/pda';
 import { squareRootBN } from './math/utils';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
@@ -40,10 +41,6 @@ import { calculateTargetPriceTrade } from './math/trade';
 import { calculateAmmReservesAfterSwap, getSwapDirection } from './math/amm';
 import { NORMAL_ORACLE_RECEIVER_ID } from './config';
 import { getFeedIdUint8Array } from './util/pythPullOracleUtils';
-
-const OPENBOOK_PROGRAM_ID = new PublicKey(
-	'opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb'
-);
 
 export class AdminClient extends NormalClient {
 	public async initialize(
@@ -82,43 +79,43 @@ export class AdminClient extends NormalClient {
 		return [txSig];
 	}
 
+	//    ________  ___  ___  _____  ___  ___________  __    __
+	//   /"       )|"  \/"  |(\"   \|"  \("     _   ")/" |  | "\
+	//  (:   \___/  \   \  / |.\\   \    |)__/  \\__/(:  (__)  :)
+	//   \___  \     \\  \/  |: \.   \\  |   \\_ /    \/      \/
+	//    __/  \\    /   /   |.  \    \. |   |.  |    //  __  \\
+	//   /" \   :)  /   /    |    \    \ |   \:  |   (:  (  )  :)
+	//  (_______/  |___/      \___|\____\)    \__|    \__|  |__/
+	//
+
 	public async initializeMarket(
 		marketIndex: number,
 		priceOracle: PublicKey,
-		baseAssetReserve: BN,
-		quoteAssetReserve: BN,
-		periodicity: BN,
-		pegMultiplier: BN = PEG_PRECISION,
+
 		oracleSource: OracleSource = OracleSource.PYTH,
-		contractTier: ContractTier = ContractTier.SPECULATIVE,
+		syntheticTier: SyntheticTier = SyntheticTier.SPECULATIVE,
 		marginRatioInitial = 2000,
 		marginRatioMaintenance = 500,
 		liquidatorFee = 0,
 		ifLiquidatorFee = 10000,
 		imfFactor = 0,
-		activeStatus = true,
-		baseSpread = 0,
-		maxSpread = 142500,
-		maxOpenInterest = ZERO,
+
 		maxRevenueWithdrawPerPeriod = ZERO,
 		quoteMaxInsurance = ZERO,
-		orderStepSize = BASE_PRECISION.divn(10000),
-		orderTickSize = PRICE_PRECISION.divn(100000),
-		minOrderSize = BASE_PRECISION.divn(10000),
-		concentrationCoefScale = ONE,
-		curveUpdateIntensity = 0,
-		ammJitIntensity = 0,
-		name = DEFAULT_MARKET_NAME
+
+		name = DEFAULT_MARKET_NAME,
+
+		// AMM
+		tickSpacing = 0,
+		initialSqrtPrice = 0,
+		feeRate = 0,
+		protocolFeeRate = 0
 	): Promise<TransactionSignature> {
 		const currentMarketIndex = this.getStateAccount().numberOfMarkets;
 
 		const initializeMarketIx = await this.getInitializeMarketIx(
 			marketIndex,
 			priceOracle,
-			baseAssetReserve,
-			quoteAssetReserve,
-			periodicity,
-			pegMultiplier,
 			oracleSource,
 			contractTier,
 			marginRatioInitial,
@@ -126,19 +123,14 @@ export class AdminClient extends NormalClient {
 			liquidatorFee,
 			ifLiquidatorFee,
 			imfFactor,
-			activeStatus,
-			baseSpread,
-			maxSpread,
-			maxOpenInterest,
 			maxRevenueWithdrawPerPeriod,
 			quoteMaxInsurance,
-			orderStepSize,
-			orderTickSize,
-			minOrderSize,
-			concentrationCoefScale,
-			curveUpdateIntensity,
-			ammJitIntensity,
-			name
+			name,
+
+			tickSpacing,
+			initialSqrtPrice,
+			feeRate,
+			protocolFeeRate
 		);
 		const tx = await this.buildTransaction(initializeMarketIx);
 
@@ -161,29 +153,21 @@ export class AdminClient extends NormalClient {
 	public async getInitializeMarketIx(
 		marketIndex: number,
 		priceOracle: PublicKey,
-		baseAssetReserve: BN,
-		quoteAssetReserve: BN,
-		periodicity: BN,
-		pegMultiplier: BN = PEG_PRECISION,
 		oracleSource: OracleSource = OracleSource.PYTH,
-		contractTier: ContractTier = ContractTier.SPECULATIVE,
+		syntheticTier: SyntheticTier = SyntheticTier.SPECULATIVE,
 		marginRatioInitial = 2000,
 		marginRatioMaintenance = 500,
 		liquidatorFee = 0,
 		ifLiquidatorFee = 10000,
 		imfFactor = 0,
 		activeStatus = true,
-		baseSpread = 0,
-		maxSpread = 142500,
-		maxOpenInterest = ZERO,
 		maxRevenueWithdrawPerPeriod = ZERO,
 		quoteMaxInsurance = ZERO,
-		orderStepSize = BASE_PRECISION.divn(10000),
-		orderTickSize = PRICE_PRECISION.divn(100000),
-		minOrderSize = BASE_PRECISION.divn(10000),
-		concentrationCoefScale = ONE,
-		curveUpdateIntensity = 0,
-		ammJitIntensity = 0,
+
+		ifLiquidationFee = 0,
+
+		ifTotalFactor = 0,
+
 		name = DEFAULT_MARKET_NAME
 	): Promise<TransactionInstruction> {
 		const marketPublicKey = await getMarketPublicKey(
@@ -194,10 +178,6 @@ export class AdminClient extends NormalClient {
 		const nameBuffer = encodeName(name);
 		return await this.program.instruction.initializeMarket(
 			marketIndex,
-			baseAssetReserve,
-			quoteAssetReserve,
-			periodicity,
-			pegMultiplier,
 			oracleSource,
 			contractTier,
 			marginRatioInitial,
@@ -206,17 +186,10 @@ export class AdminClient extends NormalClient {
 			ifLiquidatorFee,
 			imfFactor,
 			activeStatus,
-			baseSpread,
-			maxSpread,
-			maxOpenInterest,
+
 			maxRevenueWithdrawPerPeriod,
 			quoteMaxInsurance,
-			orderStepSize,
-			orderTickSize,
-			minOrderSize,
-			concentrationCoefScale,
-			curveUpdateIntensity,
-			ammJitIntensity,
+
 			nameBuffer,
 			{
 				accounts: {
@@ -232,6 +205,45 @@ export class AdminClient extends NormalClient {
 			}
 		);
 	}
+
+	// Market shutdown
+	public async initializedMarketShutdown(
+		marketIndex: number
+	): Promise<TransactionSignature> {
+		const initializeMarketShutdownIx = await this.getInitializeMarketShutdownIx(
+			marketIndex
+		);
+
+		const tx = await this.buildTransaction(initializeMarketShutdownIx);
+
+		const { txSig } = await this.sendTransaction(tx, [], this.opts);
+
+		return txSig;
+	}
+
+	public async getInitializeMarketShutdownIx(
+		marketIndex: number
+	): Promise<TransactionInstruction> {
+		const marketPublicKey = await getMarketPublicKey(
+			this.program.programId,
+			marketIndex
+		);
+
+		return await this.program.instruction.initializeMarketShutdown(
+			marketIndex,
+			{
+				accounts: {
+					state: await this.getStatePublicKey(),
+					admin: this.isSubscribed
+						? this.getStateAccount().admin
+						: this.wallet.publicKey,
+					market: marketPublicKey,
+				},
+			}
+		);
+	}
+
+	// Delete Market
 
 	public async deleteInitializedMarket(
 		marketIndex: number
@@ -371,8 +383,7 @@ export class AdminClient extends NormalClient {
 		);
 
 		const insuranceFundVault = await getInsuranceFundVaultPublicKey(
-			this.program.programId,
-			spotMarketIndex
+			this.program.programId
 		);
 
 		const tokenProgram = (await this.connection.getAccountInfo(mint)).owner;
@@ -911,33 +922,6 @@ export class AdminClient extends NormalClient {
 		});
 	}
 
-	public async updatePerpFeeStructure(
-		feeStructure: FeeStructure
-	): Promise<TransactionSignature> {
-		const updatePerpFeeStructureIx = await this.getUpdatePerpFeeStructureIx(
-			feeStructure
-		);
-
-		const tx = await this.buildTransaction(updatePerpFeeStructureIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdatePerpFeeStructureIx(
-		feeStructure: FeeStructure
-	): Promise<TransactionInstruction> {
-		return this.program.instruction.updatePerpFeeStructure(feeStructure, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-			},
-		});
-	}
-
 	public async updateInitialPctToLiquidate(
 		initialPctToLiquidate: number
 	): Promise<TransactionSignature> {
@@ -1018,6 +1002,36 @@ export class AdminClient extends NormalClient {
 	): Promise<TransactionInstruction> {
 		return await this.program.instruction.updateLiquidationMarginBufferRatio(
 			updateLiquidationMarginBufferRatio,
+			{
+				accounts: {
+					admin: this.isSubscribed
+						? this.getStateAccount().admin
+						: this.wallet.publicKey,
+					state: await this.getStatePublicKey(),
+				},
+			}
+		);
+	}
+
+	public async updateProtocolIndexFee(
+		protocolIndexFee: number
+	): Promise<TransactionSignature> {
+		const updateProtocolIndexFeeIx = await this.getUpdateProtocolIndexFeeIx(
+			protocolIndexFee
+		);
+
+		const tx = await this.buildTransaction(updateProtocolIndexFeeIx);
+
+		const { txSig } = await this.sendTransaction(tx, [], this.opts);
+
+		return txSig;
+	}
+
+	public async getUpdateProtocolIndexFeeIx(
+		protocolIndexFee: number
+	): Promise<TransactionInstruction> {
+		return await this.program.instruction.updateProtocolIndexFee(
+			protocolIndexFee,
 			{
 				accounts: {
 					admin: this.isSubscribed
@@ -1263,12 +1277,10 @@ export class AdminClient extends NormalClient {
 	}
 
 	public async updateInsuranceFundUnstakingPeriod(
-		spotMarketIndex: number,
 		insuranceWithdrawEscrowPeriod: BN
 	): Promise<TransactionSignature> {
 		const updateInsuranceFundUnstakingPeriodIx =
 			await this.getUpdateInsuranceFundUnstakingPeriodIx(
-				spotMarketIndex,
 				insuranceWithdrawEscrowPeriod
 			);
 
@@ -1282,7 +1294,6 @@ export class AdminClient extends NormalClient {
 	}
 
 	public async getUpdateInsuranceFundUnstakingPeriodIx(
-		spotMarketIndex: number,
 		insuranceWithdrawEscrowPeriod: BN
 	): Promise<TransactionInstruction> {
 		return await this.program.instruction.updateInsuranceFundUnstakingPeriod(
@@ -1293,40 +1304,12 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
+					insuranceFund: await getInsuranceFundPublicKey(
+						this.program.programId
 					),
 				},
 			}
 		);
-	}
-
-	public async updateLpCooldownTime(
-		cooldownTime: BN
-	): Promise<TransactionSignature> {
-		const updateLpCooldownTimeIx = await this.getUpdateLpCooldownTimeIx(
-			cooldownTime
-		);
-
-		const tx = await this.buildTransaction(updateLpCooldownTimeIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateLpCooldownTimeIx(
-		cooldownTime: BN
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateLpCooldownTime(cooldownTime, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-			},
-		});
 	}
 
 	public async updateMarketOracle(
@@ -1437,44 +1420,6 @@ export class AdminClient extends NormalClient {
 		);
 	}
 
-	public async updateSpotMarketOrdersEnabled(
-		spotMarketIndex: number,
-		ordersEnabled: boolean
-	): Promise<TransactionSignature> {
-		const updateSpotMarketOrdersEnabledIx =
-			await this.getUpdateSpotMarketOrdersEnabledIx(
-				spotMarketIndex,
-				ordersEnabled
-			);
-
-		const tx = await this.buildTransaction(updateSpotMarketOrdersEnabledIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketOrdersEnabledIx(
-		spotMarketIndex: number,
-		ordersEnabled: boolean
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketOrdersEnabled(
-			ordersEnabled,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
 	public async updateIfPausedOperations(
 		pausedOperations: number
 	): Promise<TransactionSignature> {
@@ -1500,160 +1445,6 @@ export class AdminClient extends NormalClient {
 						? this.getStateAccount().admin
 						: this.wallet.publicKey,
 					state: await this.getStatePublicKey(),
-				},
-			}
-		);
-	}
-
-	public async updateSpotMarketBorrowRate(
-		spotMarketIndex: number,
-		optimalUtilization: number,
-		optimalBorrowRate: number,
-		optimalMaxRate: number,
-		minBorrowRate?: number | undefined
-	): Promise<TransactionSignature> {
-		const updateSpotMarketBorrowRateIx =
-			await this.getUpdateSpotMarketBorrowRateIx(
-				spotMarketIndex,
-				optimalUtilization,
-				optimalBorrowRate,
-				optimalMaxRate,
-				minBorrowRate
-			);
-
-		const tx = await this.buildTransaction(updateSpotMarketBorrowRateIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketBorrowRateIx(
-		spotMarketIndex: number,
-		optimalUtilization: number,
-		optimalBorrowRate: number,
-		optimalMaxRate: number,
-		minBorrowRate?: number | undefined
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketBorrowRate(
-			optimalUtilization,
-			optimalBorrowRate,
-			optimalMaxRate,
-			minBorrowRate,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
-				},
-			}
-		);
-	}
-
-	public async updateSpotMarketAssetTier(
-		spotMarketIndex: number,
-		assetTier: AssetTier
-	): Promise<TransactionSignature> {
-		const updateSpotMarketAssetTierIx =
-			await this.getUpdateSpotMarketAssetTierIx(spotMarketIndex, assetTier);
-
-		const tx = await this.buildTransaction(updateSpotMarketAssetTierIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketAssetTierIx(
-		spotMarketIndex: number,
-		assetTier: AssetTier
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketAssetTier(assetTier, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				spotMarket: await getSpotMarketPublicKey(
-					this.program.programId,
-					spotMarketIndex
-				),
-			},
-		});
-	}
-
-	public async updateSpotMarketStatus(
-		spotMarketIndex: number,
-		marketStatus: MarketStatus
-	): Promise<TransactionSignature> {
-		const updateSpotMarketStatusIx = await this.getUpdateSpotMarketStatusIx(
-			spotMarketIndex,
-			marketStatus
-		);
-
-		const tx = await this.buildTransaction(updateSpotMarketStatusIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketStatusIx(
-		spotMarketIndex: number,
-		marketStatus: MarketStatus
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketStatus(marketStatus, {
-			accounts: {
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				state: await this.getStatePublicKey(),
-				spotMarket: await getSpotMarketPublicKey(
-					this.program.programId,
-					spotMarketIndex
-				),
-			},
-		});
-	}
-
-	public async updateSpotMarketPausedOperations(
-		spotMarketIndex: number,
-		pausedOperations: number
-	): Promise<TransactionSignature> {
-		const updateSpotMarketPausedOperationsIx =
-			await this.getUpdateSpotMarketPausedOperationsIx(
-				spotMarketIndex,
-				pausedOperations
-			);
-
-		const tx = await this.buildTransaction(updateSpotMarketPausedOperationsIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getUpdateSpotMarketPausedOperationsIx(
-		spotMarketIndex: number,
-		pausedOperations: number
-	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateSpotMarketPausedOperations(
-			pausedOperations,
-			{
-				accounts: {
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					state: await this.getStatePublicKey(),
-					spotMarket: await getSpotMarketPublicKey(
-						this.program.programId,
-						spotMarketIndex
-					),
 				},
 			}
 		);
@@ -1725,28 +1516,26 @@ export class AdminClient extends NormalClient {
 		);
 	}
 
-	public async updateMarketContractTier(
+	public async updateMarketSyntheticTier(
 		marketIndex: number,
-		contractTier: ContractTier
+		syntheticTier: SyntheticTier
 	): Promise<TransactionSignature> {
-		const updateMarketContractTierIx = await this.getUpdateMarketContractTierIx(
-			marketIndex,
-			contractTier
-		);
+		const updateMarketSyntheticTierIx =
+			await this.getUpdateMarketSyntheticTierIx(marketIndex, syntheticTier);
 
-		const tx = await this.buildTransaction(updateMarketContractTierIx);
+		const tx = await this.buildTransaction(updateMarketSyntheticTierIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdateMarketContractTierIx(
+	public async getUpdateMarketSyntheticTierIx(
 		marketIndex: number,
-		contractTier: ContractTier
+		syntheticTier: SyntheticTier
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateMarketContractTier(
-			contractTier,
+		return await this.program.instruction.updateMarketSyntheticTier(
+			syntheticTier,
 			{
 				accounts: {
 					admin: this.isSubscribed
@@ -1785,64 +1574,6 @@ export class AdminClient extends NormalClient {
 			},
 		});
 	}
-
-	// public async updatePerpAuctionDuration(
-	// 	minDuration: BN | number
-	// ): Promise<TransactionSignature> {
-	// 	const updatePerpAuctionDurationIx =
-	// 		await this.getUpdatePerpAuctionDurationIx(minDuration);
-
-	// 	const tx = await this.buildTransaction(updatePerpAuctionDurationIx);
-
-	// 	const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-	// 	return txSig;
-	// }
-
-	// public async getUpdatePerpAuctionDurationIx(
-	// 	minDuration: BN | number
-	// ): Promise<TransactionInstruction> {
-	// 	return await this.program.instruction.updatePerpAuctionDuration(
-	// 		typeof minDuration === 'number' ? minDuration : minDuration.toNumber(),
-	// 		{
-	// 			accounts: {
-	// 				admin: this.isSubscribed
-	// 					? this.getStateAccount().admin
-	// 					: this.wallet.publicKey,
-	// 				state: await this.getStatePublicKey(),
-	// 			},
-	// 		}
-	// 	);
-	// }
-
-	// public async updateSpotAuctionDuration(
-	// 	defaultAuctionDuration: number
-	// ): Promise<TransactionSignature> {
-	// 	const updateSpotAuctionDurationIx =
-	// 		await this.getUpdateSpotAuctionDurationIx(defaultAuctionDuration);
-
-	// 	const tx = await this.buildTransaction(updateSpotAuctionDurationIx);
-
-	// 	const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-	// 	return txSig;
-	// }
-
-	// public async getUpdateSpotAuctionDurationIx(
-	// 	defaultAuctionDuration: number
-	// ): Promise<TransactionInstruction> {
-	// 	return await this.program.instruction.updateSpotAuctionDuration(
-	// 		defaultAuctionDuration,
-	// 		{
-	// 			accounts: {
-	// 				admin: this.isSubscribed
-	// 					? this.getStateAccount().admin
-	// 					: this.wallet.publicKey,
-	// 				state: await this.getStatePublicKey(),
-	// 			},
-	// 		}
-	// 	);
-	// }
 
 	public async updateMarketDebtCeiling(
 		marketIndex: number,

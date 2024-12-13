@@ -1,6 +1,7 @@
 pub mod amm;
 pub mod events;
-pub mod index;
+pub mod index_market_map;
+pub mod index_market;
 pub mod insurance;
 pub mod load_ref;
 pub mod oracle;

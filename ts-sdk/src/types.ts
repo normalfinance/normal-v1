@@ -60,10 +60,16 @@ export enum UserStatus {
 	REDUCE_ONLY = 4,
 }
 
-export class SyntheticType {
-	static readonly ASSET = { asset: {} };
-	static readonly INDEX = { index: {} };
-	static readonly YIELID = { yield: {} };
+export enum IndexVisibility {
+	PRIVATE = 0,
+	PUBLIC = 1,
+}
+
+export enum IndexWeighting {
+	EQUAL = 0,
+	CUSTOM = 1,
+	MARKET_CAP = 2,
+	SQRT_MARKET_CAP = 3,
 }
 
 export class SyntheticTier {
@@ -104,9 +110,10 @@ export class OracleSource {
 	static readonly SWITCHBOARD_ON_DEMAND = { switchboardOnDemand: {} };
 }
 
-export declare type MarketTypeStr = 'synth';
+export declare type MarketTypeStr = 'synth' | 'index';
 export class MarketType {
 	static readonly SYNTH = { synth: {} };
+	static readonly INDEX = { index: {} };
 }
 
 export class DepositExplanation {
@@ -339,12 +346,11 @@ export type InsuranceFundAccount = {
 	pausedOperations: number;
 };
 
-export type MarketAccount = {
+export type SynthMarketAccount = {
 	pubkey: PublicKey;
 	marketIndex: number;
 	name: number[];
 	status: MarketStatus;
-	syntheticType: SyntheticType;
 	syntheticTier: SyntheticTier;
 	pausedOperations: number;
 	numberOfUsers: number;
@@ -387,6 +393,62 @@ export type MarketAccount = {
 
 	expiryTs: BN;
 	expiryPrice: BN;
+};
+
+export type IndexAsset = {
+	mint: PublicKey;
+	vault: PublicKey;
+	marketIndex: number;
+	weight: number;
+	lastUpdatedTs: BN;
+};
+
+export type IndexAssets = BTreeMap<PublicKey, IndexAsset>;
+
+export type IndexMarketAccount = {
+	pubkey: PublicKey;
+	marketIndex: number;
+	name: number[];
+	status: MarketStatus;
+	syntheticTier: SyntheticTier;
+	pausedOperations: number;
+	numberOfUsers: number;
+
+	oracle: PublicKey;
+	oracleSource: OracleSource;
+	historicalOracleData: HistoricalOracleData;
+
+	token_mint_collateral: PublicKey;
+	token_vault_synthetic: PublicKey;
+	token_vault_collateral: PublicKey;
+
+	weighting: IndexWeighting;
+	assets: IndexAssets;
+	visibility: IndexVisibility;
+	whitelist: PublicKey[];
+
+	expense_ratio: number;
+	revenue_share: number;
+	protocol_fee_owed: number;
+	manager_fee_owed: number;
+	referral_fee_owed: number;
+	total_fees: number;
+
+	amm: AMM;
+
+	insuranceClaim: {
+		revenueWithdrawSinceLastSettle: BN;
+		maxRevenueWithdrawPerPeriod: BN;
+		lastRevenueWithdrawTs: BN;
+		quoteSettledInsurance: BN;
+		quoteMaxInsurance: BN;
+	};
+
+	expiryTs: BN;
+	expiryPrice: BN;
+
+	rebalancedTs: BN;
+	updatedTs: BN;
 };
 
 export type VaultAccount = {
@@ -467,9 +529,7 @@ export type AMM = {
 	rewardInfos: AMMRewardInfo[];
 };
 
-export type Index = {
-	
-}
+export type Index = {};
 
 // # User Account Types
 export type VaultPosition = {

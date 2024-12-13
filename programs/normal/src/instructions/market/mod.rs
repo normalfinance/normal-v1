@@ -16,7 +16,6 @@ pub mod update_market_imf_factor;
 pub mod update_market_oracle;
 pub mod freeze_market_oracle;
 pub mod update_market_number_of_users;
-pub mod amm;
 
 #[derive(Accounts)]
 pub struct AdminUpdateMarket<'info> {

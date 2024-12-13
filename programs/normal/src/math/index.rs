@@ -11,8 +11,15 @@ use crate::state::market::Market;
 use std::cmp::min;
 use std::collections::BTreeMap;
 
-// #[cfg(test)]
-// mod tests;
+pub fn calculate_total_weight(index_assets: IndexAssets) -> NormalResult<u64> {
+	// assumes that missing times are zeros (e.g. handle NaN as 0)
+	let prev_twap_99 = data1
+		.cast::<u128>()?
+		.safe_mul(max(0, weight1_denom.safe_sub(weight1_numer)?).cast::<u128>()?)?
+		.safe_div(weight1_denom.cast::<u128>()?)?;
+
+	prev_twap_99.cast::<u64>()?.safe_add(data2)
+}
 
 pub fn generate_weights(
 	method: WeightingMethod

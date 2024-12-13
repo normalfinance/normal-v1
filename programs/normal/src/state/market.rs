@@ -44,23 +44,6 @@ pub enum MarketStatus {
 	PartialEq,
 	Debug,
 	Eq,
-	Default
-)]
-pub enum SyntheticType {
-	#[default]
-	Asset,
-	Index,
-	Yield,
-}
-
-#[derive(
-	Clone,
-	Copy,
-	BorshSerialize,
-	BorshDeserialize,
-	PartialEq,
-	Debug,
-	Eq,
 	PartialOrd,
 	Ord,
 	Default
@@ -147,9 +130,8 @@ pub struct Market {
 	/// Whether a market is active, reduce only, expired, etc
 	/// Affects whether users can open/close positions
 	pub status: MarketStatus,
-	pub synthetic_type: SyntheticType,
 	/// The contract tier determines how much insurance a market can receive, with more speculative markets receiving less insurance
-	/// It also influences the order perp markets can be liquidated, with less speculative markets being liquidated first
+	/// It also influences the order markets can be liquidated, with less speculative markets being liquidated first
 	pub synthetic_tier: SyntheticTier,
 	pub paused_operations: u8,
 	pub number_of_users: u32,
@@ -236,7 +218,6 @@ impl Default for Market {
 			market_index: 0,
 			name: [0; 32],
 			status: MarketStatus::default(),
-			synthetic_type: SyntheticType::default(),
 			synthetic_tier: SyntheticTier::default(),
 			paused_operations: 0,
 			number_of_users: 0,
@@ -250,7 +231,7 @@ impl Default for Market {
 
 			liquidation_penalty: 0,
 			liquidator_fee: 0,
-			insurance_fund_liquidation_fee: 0,
+			if_liquidation_fee: 0,
 			margin_ratio_initial: 0,
 			margin_ratio_maintenance: 0,
 			imf_factor: 0,
@@ -290,6 +271,7 @@ impl Default for Market {
 				token_vault_quote,
 				fee_growth_global_quote: 0,
 
+				reward_authority: Pubkey::default(),
 				reward_infos: [],
 			},
 

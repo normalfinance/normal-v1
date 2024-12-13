@@ -841,6 +841,23 @@ export class NormalClient {
 		return result;
 	}
 
+	// __   __  _______  _______  ______
+	// |  | |  ||       ||       ||    _ |
+	// |  | |  ||  _____||    ___||   | ||
+	// |  |_|  || |_____ |   |___ |   |_||_
+	// |       ||_____  ||    ___||    __  |
+	// |       | _____| ||   |___ |   |  | |
+	// |_______||_______||_______||___|  |_|
+
+	//  ___      ___  __       ____  ____  ___  ___________
+	// |"  \    /"  |/""\     ("  _||_ " ||"  |("     _   ")
+	//  \   \  //  //    \    |   (  ) : |||  | )__/  \\__/
+	//   \\  \/. .//' /\  \   (:  |  | . )|:  |    \\_ /
+	//    \.    ////  __'  \   \\ \__/ //  \  |___ |.  |
+	// 	   \\   //   /  \\  \  /\\ __ //\ ( \_|:  \\:  |
+	// 	    \__/(___/    \___)(__________) \_______)\__|
+	//
+
 	public async initializeUserAccount(
 		subAccountId = 0,
 		name?: string,
@@ -3801,48 +3818,137 @@ export class NormalClient {
 		).data;
 	}
 
-	/**
-		__    _____  ___   ________    _______  ___  ___  
-		|" \  (\"   \|"  \ |"      "\  /"     "||"  \/"  | 
-		||  | |.\\   \    |(.  ___  :)(: ______) \   \  /  
-		|:  | |: \.   \\  ||: \   ) || \/    |    \\  \/   
-		|.  | |.  \    \. |(| (___\ || // ___)_   /\.  \   
-		/\  |\|    \    \ ||:       :)(:      "| /  \   \  
-		(__\_|_)\___|\____\)(________/  \_______)|___/\___|                                                    
+	//   __    _____  ___   ________    _______  ___  ___
+	//  |" \  (\"   \|"  \ |"      "\  /"     "||"  \/"  |
+	//  ||  | |.\\   \    |(.  ___  :)(: ______) \   \  /
+	//  |:  | |: \.   \\  ||: \   ) || \/    |    \\  \/
+	//  |.  | |.  \    \. |(| (___\ || // ___)_   /\.  \
+	//  /\  |\|    \    \ ||:       :)(:      "| /  \   \
+	// (__\_|_)\___|\____\)(________/  \_______)|___/\___|
+	//
 
-	 */
+	public async initializeIndexMarket(
+		marketIndex: number,
+		priceOracle: PublicKey,
 
-	public async initializeIndex(
-		txParams?: TxParams
+		oracleSource: OracleSource = OracleSource.PYTH,
+
+		maxRevenueWithdrawPerPeriod = ZERO,
+		quoteMaxInsurance = ZERO,
+
+		name = DEFAULT_MARKET_NAME
 	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getInitializeInsuranceFundStakeIx(),
-				txParams
-			),
-			[],
-			this.opts
+		const currentMarketIndex = this.getStateAccount().numberOfMarkets;
+
+		const initializeMarketIx = await this.getInitializeIndexMarketIx(
+			marketIndex,
+			priceOracle,
+			oracleSource,
+
+			maxRevenueWithdrawPerPeriod,
+			quoteMaxInsurance,
+			name
 		);
+		const tx = await this.buildTransaction(initializeMarketIx);
+
+		const { txSig } = await this.sendTransaction(tx, [], this.opts);
+
+		while (this.getStateAccount().numberOfMarkets <= currentMarketIndex) {
+			await this.fetchAccounts();
+		}
+
+		await this.accountSubscriber.addMarket(marketIndex);
+		await this.accountSubscriber.addOracle({
+			source: oracleSource,
+			publicKey: priceOracle,
+		});
+		await this.accountSubscriber.setOracleMap();
+
 		return txSig;
 	}
 
-	public async getInitializeIndexIx(): Promise<TransactionInstruction> {
-		const ifStakeAccountPublicKey = getInsuranceFundStakeAccountPublicKey(
+	public async getInitializeIndexMarketIx(
+		marketIndex: number,
+		priceOracle: PublicKey,
+		oracleSource: OracleSource = OracleSource.PYTH,
+
+		activeStatus = true,
+		maxRevenueWithdrawPerPeriod = ZERO,
+		quoteMaxInsurance = ZERO,
+
+		name = DEFAULT_MARKET_NAME
+	): Promise<TransactionInstruction> {
+		const marketPublicKey = await getMarketPublicKey(
 			this.program.programId,
-			this.wallet.publicKey
+			marketIndex
 		);
 
-		return await this.program.instruction.initializeInsuranceFundStake({
-			accounts: {
-				insuranceFundStake: ifStakeAccountPublicKey,
-				userStats: this.getUserStatsAccountPublicKey(),
-				authority: this.wallet.publicKey,
-				payer: this.wallet.publicKey,
-				rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-				systemProgram: anchor.web3.SystemProgram.programId,
-				state: await this.getStatePublicKey(),
-			},
-		});
+		const nameBuffer = encodeName(name);
+		return await this.program.instruction.initializeIndexMarket(
+			marketIndex,
+			oracleSource,
+
+			activeStatus,
+
+			maxRevenueWithdrawPerPeriod,
+			quoteMaxInsurance,
+
+			nameBuffer,
+			{
+				accounts: {
+					state: await this.getStatePublicKey(),
+					admin: this.isSubscribed
+						? this.getStateAccount().admin
+						: this.wallet.publicKey,
+					oracle: priceOracle,
+					market: marketPublicKey,
+					rent: SYSVAR_RENT_PUBKEY,
+					systemProgram: anchor.web3.SystemProgram.programId,
+				},
+			}
+		);
+	}
+
+	public async updateIndexExpenseRatio(
+		marketIndex: number,
+		expenseRatio: number
+	): Promise<TransactionSignature> {
+		const updateIndexExpenseRatioIx = await this.getIndexExpenseRatioIx(
+			marketIndex,
+			expenseRatio
+		);
+
+		const tx = await this.buildTransaction(updateIndexExpenseRatioIx);
+
+		const { txSig } = await this.sendTransaction(tx, [], this.opts);
+
+		return txSig;
+	}
+
+	public async getIndexExpenseRatioIx(
+		marketIndex: number,
+		expenseRatio: number
+	): Promise<TransactionInstruction> {
+		const userAccountPublicKey = getUserAccountPublicKeySync(
+			this.program.programId,
+			this.wallet.publicKey,
+			subAccountId
+		);
+
+		return await this.program.instruction.updateIndexExpenseRatio(
+			marketIndex,
+			expenseRatio,
+			{
+				accounts: {
+					state: await this.getStatePublicKey(),
+					admin: this.isSubscribed
+						? this.getStateAccount().admin
+						: this.wallet.publicKey,
+					authority: userAccountPublicKey,
+					market: await getMarketPublicKey(this.program.programId, marketIndex),
+				},
+			}
+		);
 	}
 
 	/**

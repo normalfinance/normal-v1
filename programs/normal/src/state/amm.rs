@@ -56,6 +56,7 @@ pub struct AMM {
 
 	/// Peg
 	///
+	pub fee_authority: Pubkey,
 	/// the maximum percent the pool price can deviate above or below the oracle twap
 	pub max_price_deviance: u16,
 	/// volume divided by synthetic token market cap (how much volume is created per $1 of liquidity)
@@ -90,6 +91,7 @@ pub struct AMM {
 
 	/// Rewards
 	///
+	pub reward_authority: Pubkey,
 	pub reward_last_updated_timestamp: u64,
 	pub reward_infos: [AMMRewardInfo; NUM_REWARDS], // 384
 }
@@ -105,6 +107,11 @@ impl Default for AMM {
 			oracle_std: 0,
 			oracle_source: OracleSource::default(),
 			last_oracle_valid: false,
+
+			fee_authority: Pubkey::default(),
+
+
+			reward_authority: Pubkey::default(),
 		}
 	}
 }
@@ -395,14 +402,6 @@ impl AMM {
 		}
 
 		Ok(true)
-	}
-
-	pub fn is_index_fund_market(&self) -> bool {
-		self.SyntheticType == SyntheticType::IndexFund
-	}
-
-	pub fn is_yield_market(&self) -> bool {
-		self.SyntheticType == SyntheticType::Yield
 	}
 
 	pub fn get_max_confidence_interval_multiplier(self) -> NormalResult<u64> {

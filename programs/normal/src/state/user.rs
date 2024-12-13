@@ -78,6 +78,8 @@ pub struct User {
 	pub name: [u8; 32],
 	/// The user's vault positions
 	pub vault_positions: [VaultPosition; 8],
+	/// The user's indexes (market_index)
+	pub indexes: [u16; 8],
 	/// The total values of deposits the user has made
 	/// precision: QUOTE_PRECISION
 	pub total_deposits: u64,
@@ -428,6 +430,7 @@ pub struct UserFees {
 pub enum MarketType {
 	#[default]
 	Synth,
+	Index,
 }
 
 impl fmt::Display for MarketType {

@@ -148,9 +148,6 @@ pub enum OracleSource {
 	Pyth1MPull,
 	PythStableCoinPull,
 	SwitchboardOnDemand,
-	// custom
-	IndexFund,
-	Yield,
 }
 
 #[derive(Default, Clone, Copy, Debug)]

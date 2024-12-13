@@ -10,19 +10,21 @@ use anchor_lang::Discriminator;
 use arrayref::array_ref;
 
 use crate::error::{ NormalResult, ErrorCode };
-use crate::state::pmarket::Market;
+use crate::state::index_market::IndexMarket;
 
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
 use solana_program::msg;
 use std::panic::Location;
 
-pub struct SynthMarketMap<'a>(pub BTreeMap<u16, AccountLoader<'a, Market>>);
+pub struct IndexMarketMap<'a>(
+	pub BTreeMap<u16, AccountLoader<'a, IndexMarket>>,
+);
 
-impl<'a> MarketMap<'a> {
+impl<'a> IndexMarketMap<'a> {
 	#[track_caller]
 	#[inline(always)]
-	pub fn get_ref(&self, market_index: &u16) -> NormalResult<Ref<Market>> {
+	pub fn get_ref(&self, market_index: &u16) -> NormalResult<Ref<IndexMarket>> {
 		let loader = match self.0.get(market_index) {
 			Some(loader) => loader,
 			None => {
@@ -58,7 +60,7 @@ impl<'a> MarketMap<'a> {
 	pub fn get_ref_mut(
 		&self,
 		market_index: &u16
-	) -> NormalResult<RefMut<Market>> {
+	) -> NormalResult<RefMut<IndexMarket>> {
 		let loader = match self.0.get(market_index) {
 			Some(loader) => loader,
 			None => {
@@ -92,8 +94,8 @@ impl<'a> MarketMap<'a> {
 	pub fn load<'b, 'c>(
 		writable_markets: &'b MarketSet,
 		account_info_iter: &'c mut Peekable<Iter<'a, AccountInfo<'a>>>
-	) -> NormalResult<MarketMap<'a>> {
-		let mut market_map: MarketMap = MarketMap(BTreeMap::new());
+	) -> NormalResult<IndexMarketMap<'a>> {
+		let mut market_map: IndexMarketMap = IndexMarketMap(BTreeMap::new());
 
 		let market_discriminator: [u8; 8] = Market::discriminator();
 		while let Some(account_info) = account_info_iter.peek() {
@@ -126,7 +128,7 @@ impl<'a> MarketMap<'a> {
 				return Err(ErrorCode::MarketWrongMutability);
 			}
 
-			let account_loader: AccountLoader<Market> = AccountLoader::try_from(
+			let account_loader: AccountLoader<IndexMarket> = AccountLoader::try_from(
 				account_info
 			).or(Err(ErrorCode::InvalidMarketAccount))?;
 
@@ -138,12 +140,12 @@ impl<'a> MarketMap<'a> {
 }
 
 #[cfg(test)]
-impl<'a> MarketMap<'a> {
+impl<'a> IndexMarketMap<'a> {
 	pub fn load_one<'c: 'a>(
 		account_info: &'c AccountInfo<'a>,
 		must_be_writable: bool
-	) -> NormalResult<MarketMap<'a>> {
-		let mut market_map: MarketMap = MarketMap(BTreeMap::new());
+	) -> NormalResult<IndexMarketMap<'a>> {
+		let mut market_map: IndexMarketMap = IndexMarketMap(BTreeMap::new());
 
 		let data = account_info
 			.try_borrow_data()
@@ -164,7 +166,7 @@ impl<'a> MarketMap<'a> {
 		let market_index = u16::from_le_bytes(*array_ref![data, 1160, 2]);
 
 		let is_writable = account_info.is_writable;
-		let account_loader: AccountLoader<Market> = AccountLoader::try_from(
+		let account_loader: AccountLoader<IndexMarket> = AccountLoader::try_from(
 			account_info
 		).or(Err(ErrorCode::InvalidMarketAccount))?;
 
@@ -178,14 +180,14 @@ impl<'a> MarketMap<'a> {
 	}
 
 	pub fn empty() -> Self {
-		MarketMap(BTreeMap::new())
+		IndexMarketMap(BTreeMap::new())
 	}
 
 	pub fn load_multiple<'c: 'a>(
 		account_infos: Vec<&'c AccountInfo<'a>>,
 		must_be_writable: bool
-	) -> NormalResult<MarketMap<'a>> {
-		let mut market_map: MarketMap = MarketMap(BTreeMap::new());
+	) -> NormalResult<IndexMarketMap<'a>> {
+		let mut market_map: IndexMarketMap = IndexMarketMap(BTreeMap::new());
 
 		for account_info in account_infos {
 			let data = account_info
@@ -207,7 +209,7 @@ impl<'a> MarketMap<'a> {
 			let market_index = u16::from_le_bytes(*array_ref![data, 1160, 2]);
 
 			let is_writable = account_info.is_writable;
-			let account_loader: AccountLoader<Market> = AccountLoader::try_from(
+			let account_loader: AccountLoader<IndexMarket> = AccountLoader::try_from(
 				account_info
 			).or(Err(ErrorCode::InvalidMarketAccount))?;
 

@@ -9,7 +9,7 @@ use crate::{ validate, BID_ASK_SPREAD_PRECISION };
 use solana_program::msg;
 
 #[allow(clippy::comparison_chain)]
-pub fn validate_market(market: &Market) -> NormalResult {
+pub fn validate_synth_market(market: &Market) -> NormalResult {
 	// let (_, remainder_base_asset_amount_long) =
 	// 	crate::math::orders::standardize_base_asset_amount_with_remainder_i128(
 	// 		market.amm.base_asset_amount_long,

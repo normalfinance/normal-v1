@@ -34,7 +34,11 @@ declare_id!("...");
 
 #[program]
 pub mod normal {
-	use instructions::collateral::transfer_collateral::handle_transfer_collateral;
+	use instructions::{
+		collateral::transfer_collateral::handle_transfer_collateral,
+		UpdateIndexMarket,
+	};
+	use state::index_market::{ IndexVisibility, IndexWeightingMethod };
 
 	use super::*;
 
@@ -737,39 +741,78 @@ pub mod normal {
 		handle_reset_amm_oracle_twap(ctx)
 	}
 
-	/**
-	 *
-	 * Index instructions
-	 *
-	 */
+	// Index Market instructions
 
-	pub fn initialize_index<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, InitializeIndex<'info>>,
+	pub fn initialize_index_market(
+		ctx: Context<InitializeIndexMarket>,
 		name: [u8; 32],
-		public: bool
+		weighting: IndexWeightingMethod,
+		visibility: IndexVisibility
 	) -> Result<()> {
-		handle_initialize_index(ctx, name, public)
+		handle_initialize_index_market(ctx, name, weighting, visibility)
 	}
 
-	pub fn update_index_visibility<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, UpdateIndex<'info>>,
-		public: bool
+	pub fn update_index_market_expense_ratio(
+		ctx: Context<UpdateIndexMarket>,
+		expense_ratio: u64
 	) -> Result<()> {
-		handle_update_index_visibility(ctx, public)
+		handle_update_index_market_expense_ratio(ctx, expense_ratio)
 	}
 
-	pub fn update_index_assets<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, UpdateIndex<'info>>,
-		assets: IndexAssets
+	pub fn update_index_market_revenue_share(
+		ctx: Context<UpdateIndexMarket>,
+		revenue_share: u64
 	) -> Result<()> {
-		handle_update_index_assets(ctx, assets)
+		handle_update_index_market_revenue_share(ctx, revenue_share)
 	}
 
-	pub fn rebalance_index<'c: 'info, 'info>(
-		ctx: Context<'_, '_, 'c, 'info, RebalanceIndex<'info>>,
+	pub fn update_index_market_visibility(
+		ctx: Context<UpdateIndexMarket>,
+		visibility: IndexVisibility
+	) -> Result<()> {
+		handle_update_index_market_visibility(ctx, visibility)
+	}
+
+	pub fn update_index_market_weighting(
+		ctx: Context<UpdateIndexMarket>,
+		weighting: IndexWeighting
+	) -> Result<()> {
+		handle_update_index_market_weighting(ctx, weighting)
+	}
+
+	pub fn update_index_market_whitelist(
+		ctx: Context<UpdateIndexMarket>,
+		whitelist: Vec<Pubkey>
+	) -> Result<()> {
+		handle_update_index_market_whitelist(ctx, whitelist)
+	}
+
+	pub fn settle_index_market_fees_to_treasury<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, SettleRevenueToInsuranceFund<'info>>,
 		market_index: u16
 	) -> Result<()> {
-		handle_rebalance_index(ctx, market_index)
+		handle_settle_index_market_fees_to_treasury(ctx, market_index)
+	}
+
+	// pub fn update_index_assets(
+	// 	ctx: Context<UpdateIndex<'info>>,
+	// 	assets: IndexAssets
+	// ) -> Result<()> {
+	// 	handle_update_index_assets(ctx, assets)
+	// }
+
+	// pub fn rebalance_index(
+	// 	ctx: Context<RebalanceIndex<'info>>,
+	// 	market_index: u16
+	// ) -> Result<()> {
+	// 	handle_rebalance_index(ctx, market_index)
+	// }
+
+	pub fn delete_initialized_index_market(
+		ctx: Context<DeleteInitializedMarket>,
+		market_index: u16
+	) -> Result<()> {
+		handle_delete_initialized_market(ctx, market_index)
 	}
 
 	// Oracle instructions

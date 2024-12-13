@@ -1,5 +1,5 @@
 import { ConfirmOptions } from '@solana/web3.js';
-import { MarketAccount, PublicKey, VaultAccount } from '.';
+import { SynthMarketAccount, PublicKey, VaultAccount } from '.';
 import {
 	DevnetMarkets,
 	MainnetMarkets,
@@ -17,7 +17,6 @@ type NormalConfig = {
 	ENV: NormalEnv;
 	PYTH_ORACLE_MAPPING_ADDRESS: string;
 	NORMAL_PROGRAM_ID: string;
-	JIT_PROXY_PROGRAM_ID?: string;
 	NORMAL_ORACLE_RECEIVER_ID: string;
 	USDC_MINT_ADDRESS: string;
 	V2_ALPHA_TICKET_MINT_ADDRESS: string;
@@ -32,7 +31,6 @@ export type NormalEnv = 'devnet' | 'mainnet-beta';
 export const NORMAL_PROGRAM_ID = 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
 export const NORMAL_ORACLE_RECEIVER_ID =
 	'G6EoTTTgpkNBtVXo96EQp2m6uwwVh2Kt6YidjkmQqoha';
-export const SWIFT_ID = 'SW1fThqrxLzVprnCMpiybiqYQfoNCdduC5uWsSUKChS';
 
 export const DEFAULT_CONFIRMATION_OPTS: ConfirmOptions = {
 	preflightCommitment: 'confirmed',
@@ -44,7 +42,6 @@ export const configs: { [key in NormalEnv]: NormalConfig } = {
 		ENV: 'devnet',
 		PYTH_ORACLE_MAPPING_ADDRESS: 'BmA9Z6FjioHJPpjT39QazZyhDRUdZy2ezwx4GiDdE2u2',
 		NORMAL_PROGRAM_ID,
-		JIT_PROXY_PROGRAM_ID: 'J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP',
 		USDC_MINT_ADDRESS: '8zGuJQqwhZafTah7Uc7Z4tXRnguqkn5KLFAP8oV6PHe2',
 
 		V2_ALPHA_TICKET_MINT_ADDRESS:
@@ -58,7 +55,6 @@ export const configs: { [key in NormalEnv]: NormalConfig } = {
 		ENV: 'mainnet-beta',
 		PYTH_ORACLE_MAPPING_ADDRESS: 'AHtgzX45WTKfkPG53L6WYhGEXwQkN1BVknET3sVsLL8J',
 		NORMAL_PROGRAM_ID,
-		JIT_PROXY_PROGRAM_ID: 'J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP',
 		USDC_MINT_ADDRESS: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
 		V2_ALPHA_TICKET_MINT_ADDRESS:
 			'Cmvhycb6LQvvzaShGw4iDHRLzeSSryioAsU98DSSkMNa',
@@ -94,17 +90,17 @@ export const initialize = (props: {
 };
 
 
-export function getMarketsAndOraclesForSubscription(env: DriftEnv): {
+export function getMarketsAndOraclesForSubscription(env: NormalEnv): {
 	marketIndexes: number[];
-	spotMarketIndexes: number[];
+	indexMarketIndexes: number[];
 	oracleInfos: OracleInfo[];
 } {
-	const perpMarketIndexes = [];
-	const spotMarketIndexes = [];
+	const synthMarketIndexes = [];
+	const indexMarketIndexes = [];
 	const oracleInfos = new Map<string, OracleInfo>();
 
-	for (const market of PerpMarkets[env]) {
-		perpMarketIndexes.push(market.marketIndex);
+	for (const market of Markets[env]) {
+		synthMarketIndexes.push(market.marketIndex);
 		oracleInfos.set(market.oracle.toString(), {
 			publicKey: market.oracle,
 			source: market.oracleSource,
@@ -112,7 +108,7 @@ export function getMarketsAndOraclesForSubscription(env: DriftEnv): {
 	}
 
 	for (const spotMarket of SpotMarkets[env]) {
-		spotMarketIndexes.push(spotMarket.marketIndex);
+		indexMarketIndexes.push(spotMarket.marketIndex);
 		oracleInfos.set(spotMarket.oracle.toString(), {
 			publicKey: spotMarket.oracle,
 			source: spotMarket.oracleSource,
@@ -120,15 +116,15 @@ export function getMarketsAndOraclesForSubscription(env: DriftEnv): {
 	}
 
 	return {
-		perpMarketIndexes: perpMarketIndexes,
-		spotMarketIndexes: spotMarketIndexes,
+		synthMarketIndexes: synthMarketIndexes,
+		indexMarketIndexes: indexMarketIndexes,
 		oracleInfos: Array.from(oracleInfos.values()),
 	};
 }
 
 export async function findAllMarketAndOracles(program: Program): Promise<{
 	marketIndexes: number[];
-	marketAccounts: MarketAccount[];
+	marketAccounts: SynthMarketAccount[];
 	vaultIndexes: number[];
 	oracleInfos: OracleInfo[];
 	vaultAccounts: VaultAccount[];

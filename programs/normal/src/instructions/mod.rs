@@ -1,16 +1,18 @@
+pub use amm::*;
 pub use constraints::*;
 pub use oracle::*;
-pub use index::*;
+pub use index_market::*;
 pub use insurance::*;
 pub use state::*;
 pub use market::*;
 pub use vault::*;
 pub use user;
 
+mod amm;
 mod constraints;
 pub mod optional_accounts;
 mod oracle;
-mod index;
+mod index_market;
 mod insurance;
 mod state;
 mod market;

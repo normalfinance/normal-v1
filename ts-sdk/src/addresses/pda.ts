@@ -71,14 +71,14 @@ export function getUserStatsAccountPublicKey(
 	)[0];
 }
 
-export async function getMarketPublicKey(
+export async function getSynthMarketPublicKey(
 	programId: PublicKey,
 	marketIndex: number
 ): Promise<PublicKey> {
 	return (
 		await PublicKey.findProgramAddress(
 			[
-				Buffer.from(anchor.utils.bytes.utf8.encode('market')),
+				Buffer.from(anchor.utils.bytes.utf8.encode('synth_market')),
 				new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
 			],
 			programId
@@ -86,13 +86,41 @@ export async function getMarketPublicKey(
 	)[0];
 }
 
-export function getMarketPublicKeySync(
+export function getSynthMarketPublicKeySync(
 	programId: PublicKey,
 	marketIndex: number
 ): PublicKey {
 	return PublicKey.findProgramAddressSync(
 		[
-			Buffer.from(anchor.utils.bytes.utf8.encode('market')),
+			Buffer.from(anchor.utils.bytes.utf8.encode('synth_market')),
+			new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
+		],
+		programId
+	)[0];
+}
+
+export async function getIndexMarketPublicKey(
+	programId: PublicKey,
+	marketIndex: number
+): Promise<PublicKey> {
+	return (
+		await PublicKey.findProgramAddress(
+			[
+				Buffer.from(anchor.utils.bytes.utf8.encode('index_market')),
+				new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
+			],
+			programId
+		)
+	)[0];
+}
+
+export function getIndexMarketPublicKeySync(
+	programId: PublicKey,
+	marketIndex: number
+): PublicKey {
+	return PublicKey.findProgramAddressSync(
+		[
+			Buffer.from(anchor.utils.bytes.utf8.encode('index_market')),
 			new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
 		],
 		programId
@@ -124,6 +152,17 @@ export function getVaultPublicKeySync(
 			new anchor.BN(vaultIndex).toArrayLike(Buffer, 'le', 2),
 		],
 		programId
+	)[0];
+}
+
+export async function getInsuranceFundPublicKey(
+	programId: PublicKey
+): Promise<PublicKey> {
+	return (
+		await PublicKey.findProgramAddress(
+			[Buffer.from(anchor.utils.bytes.utf8.encode('insurance_fund'))],
+			programId
+		)
 	)[0];
 }
 
