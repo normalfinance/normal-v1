@@ -6,6 +6,8 @@ use super::paused_operations::InsuranceFundOperation;
 
 #[account]
 pub struct InsuranceFund {
+	/// The insurance fund's address.
+	pub pubkey: Pubkey,
 	pub authority: Pubkey,
 	pub vault: Pubkey,
 	pub total_shares: u128,

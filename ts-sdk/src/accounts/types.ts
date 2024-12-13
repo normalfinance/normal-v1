@@ -11,7 +11,7 @@ import StrictEventEmitter from 'strict-event-emitter-types';
 import { EventEmitter } from 'events';
 import { Context, PublicKey } from '@solana/web3.js';
 import { Account } from '@solana/spl-token';
-import { OracleInfo, OraclePriceData } from '..';
+import { InsuranceFundAccount, OracleInfo, OraclePriceData } from '..';
 
 export interface AccountSubscriber<T> {
 	dataAndSlot?: DataAndSlot<T>;
@@ -40,6 +40,7 @@ export class NotSubscribedError extends Error {
 
 export interface NormalClientAccountEvents {
 	stateAccountUpdate: (payload: StateAccount) => void;
+	insurnaceFundAccountUpdate: (payload: InsuranceFundAccount) => void;
 	marketAccountUpdate: (payload: MarketAccount) => void;
 	vaultAccountUpdate: (payload: VaultAccount) => void;
 	oraclePriceUpdate: (publicKey: PublicKey, data: OraclePriceData) => void;
@@ -63,6 +64,7 @@ export interface NormalClientAccountSubscriber {
 	setVaultOracleMap(): Promise<void>;
 
 	getStateAccountAndSlot(): DataAndSlot<StateAccount>;
+	getInsuranceAccountAndSlot(): DataAndSlot<InsuranceFundAccount>;
 	getMarketAccountAndSlot(
 		marketIndex: number
 	): DataAndSlot<MarketAccount> | undefined;
@@ -124,6 +126,8 @@ export interface TokenAccountSubscriber {
 
 	getTokenAccountAndSlot(): DataAndSlot<Account>;
 }
+
+// TODO: do we need an InsuranceFundAccountSubscriber?
 
 export interface InsuranceFundStakeAccountSubscriber {
 	eventEmitter: StrictEventEmitter<

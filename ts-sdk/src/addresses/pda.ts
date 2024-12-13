@@ -128,15 +128,11 @@ export function getVaultPublicKeySync(
 }
 
 export async function getInsuranceFundVaultPublicKey(
-	programId: PublicKey,
-	marketIndex: number
+	programId: PublicKey
 ): Promise<PublicKey> {
 	return (
 		await PublicKey.findProgramAddress(
-			[
-				Buffer.from(anchor.utils.bytes.utf8.encode('insurance_fund_vault')),
-				new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
-			],
+			[Buffer.from(anchor.utils.bytes.utf8.encode('insurance_fund_vault'))],
 			programId
 		)
 	)[0];
@@ -144,14 +140,12 @@ export async function getInsuranceFundVaultPublicKey(
 
 export function getInsuranceFundStakeAccountPublicKey(
 	programId: PublicKey,
-	authority: PublicKey,
-	marketIndex: number
+	authority: PublicKey
 ): PublicKey {
 	return PublicKey.findProgramAddressSync(
 		[
 			Buffer.from(anchor.utils.bytes.utf8.encode('insurance_fund_stake')),
 			authority.toBuffer(),
-			new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
 		],
 		programId
 	)[0];

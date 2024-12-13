@@ -59,7 +59,6 @@ pub enum UserStatus {
 	BeingLiquidated = 0b00000001,
 	Bankrupt = 0b00000010,
 	ReduceOnly = 0b00000100,
-	AdvancedLp = 0b00001000,
 }
 
 // implement SIZE const for User

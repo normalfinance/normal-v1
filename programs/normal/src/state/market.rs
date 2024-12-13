@@ -49,7 +49,7 @@ pub enum MarketStatus {
 pub enum SyntheticType {
 	#[default]
 	Asset,
-	IndexFund,
+	Index,
 	Yield,
 }
 
@@ -174,7 +174,7 @@ pub struct Market {
 	pub liquidator_fee: u32,
 	/// The fee the insurance fund receives from liquidation
 	/// precision: LIQUIDATOR_FEE_PRECISION
-	pub insurance_fund_liquidation_fee: u32,
+	pub if_liquidation_fee: u32,
 	/// The margin ratio which determines how much collateral is required to open a position
 	/// e.g. margin ratio of .1 means a user must have $100 of total collateral to open a $1000 position
 	/// precision: MARGIN_PRECISION
