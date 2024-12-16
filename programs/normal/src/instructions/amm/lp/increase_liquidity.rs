@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
-use market::Market;
+use synth_market::SynthMarket;
 use tick::TickArray;
 
 use crate::errors::ErrorCode;
@@ -39,12 +39,12 @@ pub struct ModifyLiquidity<'info> {
 		InterfaceAccount<'info, TokenAccountInterface>
 	>,
 
-	#[account(mut, constraint = token_owner_account_quote.mint == market.amm.token_mint_quote)]
+	#[account(mut, constraint = token_owner_account_quote.mint == amm.token_mint_quote)]
 	pub token_owner_account_quote: Box<Account<'info, TokenAccount>>,
 
-	#[account(mut, constraint = token_vault_synthetic.key() == market.amm.token_vault_synthetic)]
+	#[account(mut, constraint = token_vault_synthetic.key() == amm.token_vault_synthetic)]
 	pub token_vault_synthetic: Box<Account<'info, TokenAccount>>,
-	#[account(mut, constraint = token_vault_quote.key() == market.amm.token_vault_quote)]
+	#[account(mut, constraint = token_vault_quote.key() == amm.token_vault_quote)]
 	pub token_vault_quote: Box<Account<'info, TokenAccount>>,
 
 	#[account(mut, has_one = market)]
@@ -76,7 +76,7 @@ pub fn handle_increase_liquidity(
 	let timestamp = to_timestamp_u64(clock.unix_timestamp)?;
 
 	let update = controller::liquidity::calculate_modify_liquidity(
-		&ctx.accounts.market.amm,
+		&ctx.accounts.amm,
 		&ctx.accounts.position,
 		&ctx.accounts.tick_array_lower,
 		&ctx.accounts.tick_array_upper,
@@ -85,7 +85,7 @@ pub fn handle_increase_liquidity(
 	)?;
 
 	controller::liquidity::sync_modify_liquidity_values(
-		&mut ctx.accounts.market.amm,
+		&mut ctx.accounts.amm,
 		&mut ctx.accounts.position,
 		&ctx.accounts.tick_array_lower,
 		&ctx.accounts.tick_array_upper,
@@ -95,8 +95,8 @@ pub fn handle_increase_liquidity(
 
 	let (delta_synthetic, delta_quote) =
 		controller::liquidity::calculate_liquidity_token_deltas(
-			ctx.accounts.market.amm.tick_current_index,
-			ctx.accounts.market.amm.sqrt_price,
+			ctx.accounts.amm.tick_current_index,
+			ctx.accounts.amm.sqrt_price,
 			&ctx.accounts.position,
 			liquidity_delta
 		)?;

@@ -1,4 +1,4 @@
-use crate::state::market::Market;
+use crate::state::synth_market::SynthMarket;
 use crate::state::{ PositionBundle, AMM };
 use anchor_lang::prelude::*;
 use anchor_spl::metadata::{

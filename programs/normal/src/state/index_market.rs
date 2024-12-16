@@ -17,31 +17,9 @@ use switchboard_on_demand::{ PullFeedAccountData, SB_ON_DEMAND_PRECISION };
 use crate::error::ErrorCode::{ InvalidOracle, UnableToLoadOracle };
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::load_ref::load_ref;
-use crate::state::market::Market;
+use crate::state::synth_market::SynthMarket;
 use crate::state::traits::Size;
 use crate::validate;
-
-#[derive(
-	Clone,
-	Copy,
-	BorshSerialize,
-	BorshDeserialize,
-	PartialEq,
-	Debug,
-	Eq,
-	Default
-)]
-pub enum IndexWeighting {
-	///
-	#[default]
-	Equal,
-	///
-	Custom,
-	///
-	MarketCap,
-	///
-	SquareRootMarketCap,
-}
 
 #[derive(
 	Clone,
@@ -61,15 +39,17 @@ pub enum IndexVisibility {
 
 #[derive(Default, PartialEq, Debug)]
 pub struct IndexAsset {
-	pub mint: Pubkey,
-	pub vault: Pubkey,
 	pub market_index: u16,
-	/// The asset's allocation in basis points
+	/// The asset's allocation (in basis points)
 	pub weight: u16,
 	pub last_updated_ts: i64,
 }
 
-pub(crate) type IndexAssets = BTreeMap<Pubkey, IndexAsset>;
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct UpdateWeight {
+	pub market_index: u16,
+	pub new_weight: u16,
+}
 
 #[account]
 pub struct IndexMarket {
@@ -80,7 +60,9 @@ pub struct IndexMarket {
 	/// An addresses that can control the account on the authority's behalf. Has limited power, cant withdraw
 	pub delegate: Pubkey,
 
-	// TODO: move these to the AMM
+	pub vault: Pubkey,
+	pub token_mint: Pubkey,
+
 	pub fee_authority: Pubkey,
 	pub whitelist_authority: Pubkey,
 	pub rebalance_authority: Pubkey,
@@ -101,8 +83,7 @@ pub struct IndexMarket {
 
 	/// Index
 	///
-	pub weighting: IndexWeighting,
-	pub assets: IndexAssets,
+	pub assets: Vec<IndexAsset>,
 	/// The visibility of the index fund
 	pub visibility: IndexVisibility,
 	/// List of accounts allowed to purchase the index
@@ -110,7 +91,7 @@ pub struct IndexMarket {
 	pub blacklist: Vec<Pubkey>,
 
 	/// Fees
-	/// 
+	///
 	/// Total taker fee paid in basis points
 	pub expense_ratio: u64,
 	///
@@ -120,18 +101,10 @@ pub struct IndexMarket {
 	pub referral_fee_owed: u64,
 	pub total_fees: u64,
 
-	// AMM
-	//
-	pub amm: AMM,
-
-	// Insurance
-	//
-	/// The market's claim on the insurance fund
-	pub insurance_claim: InsuranceClaim,
-
 	// Metrics
 	//
-	
+	pub total_minted: u64,
+	pub total_redeemed: i64,
 
 	// Shutdown
 	//
@@ -163,8 +136,7 @@ impl Default for IndexMarket {
 			oracle: Pubkey::default(),
 			oracle_source: OracleSource::default(),
 
-			weighting: IndexWeighting::default(),
-			assets: IndexAssets::default(),
+			assets: [],
 			visibility: IndexVisibility::default(),
 			whitelist: [],
 			manager_fee: 0,
@@ -173,47 +145,8 @@ impl Default for IndexMarket {
 			rebalanced_ts: 0,
 			updated_ts: 0,
 
-			token_mint_collateral: Pubkey::default(),
-			token_vault_synthetic: Pubkey::default(),
-			token_vault_collateral: Pubkey::default(),
-
-			amm: AMM {
-				oracle: 0,
-				oracle_source,
-				historical_oracle_data: HistoricalOracleData::default(),
-				last_oracle_conf_pct: 0,
-				last_oracle_valid: false,
-				last_oracle_normalised_price: 0,
-				last_oracle_reserve_price_spread_pct: 0,
-				oracle_std: 0,
-
-				tick_spacing,
-				tick_spacing_seed: tick_spacing.to_le_bytes(),
-
-				liquidity: 0,
-				sqrt_price,
-				tick_current_index: tick_index_from_sqrt_price(&sqrt_price),
-
-				fee_rate: 0,
-				protocol_fee_rate: 0,
-
-				protocol_fee_owed_synthetic: 0,
-				protocol_fee_owed_quote: 0,
-
-				token_mint_synthetic,
-				token_vault_synthetic,
-				fee_growth_global_synthetic: 0,
-
-				token_mint_quote,
-				token_vault_quote,
-				fee_growth_global_quote: 0,
-
-				reward_infos: [],
-			},
-
-			insurance_claim: InsuranceClaim::default(),
-
-			outstanding_debt: 0,
+			vault: Pubkey::default(),
+			token_mint: Pubkey::default(),
 
 			expiry_ts: 0,
 			expiry_price: 0,

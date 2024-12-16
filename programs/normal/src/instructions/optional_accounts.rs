@@ -1,7 +1,6 @@
 use crate::error::{ NormalResult, ErrorCode };
 use crate::state::index_market_map::IndexMarketMap;
-use crate::state::market_map::SynthMarketMap;
-use crate::state::vault_map::VaultMap;
+use crate::state::synth_market_map::SynthMarketMap;
 use std::convert::TryFrom;
 
 use crate::math::safe_unwrap::SafeUnwrap;
@@ -24,7 +23,6 @@ use std::slice::Iter;
 pub struct AccountMaps<'a> {
 	pub synth_market_map: SynthMarketMap<'a>,
 	pub index_market_map: IndexMarketMap<'a>,
-	pub vault_map: VaultMap<'a>,
 	pub oracle_map: OracleMap<'a>,
 }
 
@@ -32,7 +30,6 @@ pub fn load_maps<'a, 'b>(
 	account_info_iter: &mut Peekable<Iter<'a, AccountInfo<'a>>>,
 	writable_synth_markets: &'b MarketSet,
 	writable_index_markets: &'b MarketSet,
-	writable_vaults: &'b MarketSet,
 	slot: u64,
 	oracle_guard_rails: Option<OracleGuardRails>
 ) -> NormalResult<AccountMaps<'a>> {
@@ -41,7 +38,6 @@ pub fn load_maps<'a, 'b>(
 		slot,
 		oracle_guard_rails
 	)?;
-	let vault_map = VaultMap::load(writable_vaults, account_info_iter)?;
 	let synth_market_map = SynthMarketMap::load(
 		writable_synth_markets,
 		account_info_iter
@@ -54,7 +50,6 @@ pub fn load_maps<'a, 'b>(
 	Ok(AccountMaps {
 		synth_market_map,
 		index_market_map,
-		vault_map,
 		oracle_map,
 	})
 }

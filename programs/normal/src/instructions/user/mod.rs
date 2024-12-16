@@ -9,6 +9,7 @@ pub mod delete_user;
 pub mod update_user_delegate;
 pub mod update_user_reduce_only;
 pub mod update_user_custom_margin_ratio;
+pub mod set_user_status_to_being_liquidated;
 
 #[derive(Accounts)]
 #[instruction(

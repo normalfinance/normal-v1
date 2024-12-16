@@ -26,8 +26,8 @@ use crate::state::margin_calculation::{
 };
 use crate::state::oracle::{ OraclePriceData, StrictOraclePrice };
 use crate::state::oracle_map::OracleMap;
-use crate::state::market::{ SyntheticTier, MarketStatus, Market };
-use crate::state::market_map::MarketMap;
+use crate::state::synth_market::{ SyntheticTier, MarketStatus, SynthMarket };
+use crate::state::synth_market_map::SynthSynthMarketMap;
 use crate::state::user::{ MarketType, User };
 use num_integer::Roots;
 use solana_program::msg;
@@ -76,7 +76,7 @@ pub fn calculate_size_premium_liability_weight(
 
 pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 	user: &User,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	context: MarginContext
@@ -100,7 +100,7 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 
 		let (oracle_price_data, oracle_validity) =
 			oracle_map.get_price_data_and_validity(
-				MarketType::Spot,
+				MarketType::Synth,
 				market.market_index,
 				&market.oracle,
 				market.historical_oracle_data.last_oracle_price_twap,
@@ -124,7 +124,7 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 
 pub fn meets_initial_margin_requirement(
 	user: &User,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap
 ) -> NormalResult<bool> {
@@ -139,7 +139,7 @@ pub fn meets_initial_margin_requirement(
 
 pub fn meets_maintenance_margin_requirement(
 	user: &User,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap
 ) -> NormalResult<bool> {
@@ -155,7 +155,7 @@ pub fn meets_maintenance_margin_requirement(
 pub fn calculate_max_withdrawable_amount(
 	market_index: u16,
 	user: &User,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap
 ) -> NormalResult<u64> {
@@ -207,7 +207,7 @@ pub fn calculate_max_withdrawable_amount(
 
 pub fn calculate_user_equity(
 	user: &User,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap
 ) -> NormalResult<(i128, bool)> {
@@ -224,7 +224,7 @@ pub fn calculate_user_equity(
 		// Calculate collateral value
 		let (oracle_price_data, oracle_validity) =
 			oracle_map.get_price_data_and_validity(
-				MarketType::Spot,
+				MarketType::Synth,
 				spot_market.market_index,
 				&spot_market.oracle,
 				spot_market.historical_oracle_data.last_oracle_price_twap,

@@ -286,9 +286,9 @@ export class User {
 		const position = this.getClonedPosition(originalPosition);
 		const market = this.normalClient.getPerpMarketAccount(position.marketIndex);
 
-		if (market.amm.perLpBase != position.perLpBase) {
+		if (amm.perLpBase != position.perLpBase) {
 			// perLpBase = 1 => per 10 LP shares, perLpBase = -1 => per 0.1 LP shares
-			const expoDiff = market.amm.perLpBase - position.perLpBase;
+			const expoDiff = amm.perLpBase - position.perLpBase;
 			const marketPerLpRebaseScalar = new BN(10 ** Math.abs(expoDiff));
 
 			if (expoDiff > 0) {
@@ -312,31 +312,31 @@ export class User {
 		const quoteFundingPnl = calculatePositionFundingPNL(market, position);
 
 		let baseUnit = AMM_RESERVE_PRECISION;
-		if (market.amm.perLpBase == position.perLpBase) {
+		if (amm.perLpBase == position.perLpBase) {
 			if (
 				position.perLpBase >= 0 &&
 				position.perLpBase <= AMM_RESERVE_PRECISION_EXP.toNumber()
 			) {
-				const marketPerLpRebase = new BN(10 ** market.amm.perLpBase);
+				const marketPerLpRebase = new BN(10 ** amm.perLpBase);
 				baseUnit = baseUnit.mul(marketPerLpRebase);
 			} else if (
 				position.perLpBase < 0 &&
 				position.perLpBase >= -AMM_RESERVE_PRECISION_EXP.toNumber()
 			) {
-				const marketPerLpRebase = new BN(10 ** Math.abs(market.amm.perLpBase));
+				const marketPerLpRebase = new BN(10 ** Math.abs(amm.perLpBase));
 				baseUnit = baseUnit.div(marketPerLpRebase);
 			} else {
 				throw 'cannot calc';
 			}
 		} else {
-			throw 'market.amm.perLpBase != position.perLpBase';
+			throw 'amm.perLpBase != position.perLpBase';
 		}
 
-		const deltaBaa = market.amm.baseAssetAmountPerLp
+		const deltaBaa = amm.baseAssetAmountPerLp
 			.sub(position.lastBaseAssetAmountPerLp)
 			.mul(nShares)
 			.div(baseUnit);
-		const deltaQaa = market.amm.quoteAssetAmountPerLp
+		const deltaQaa = amm.quoteAssetAmountPerLp
 			.sub(position.lastQuoteAssetAmountPerLp)
 			.mul(nShares)
 			.div(baseUnit);
@@ -353,18 +353,18 @@ export class User {
 
 		const [standardizedBaa, remainderBaa] = standardize(
 			deltaBaa,
-			market.amm.orderStepSize
+			amm.orderStepSize
 		);
 
 		position.remainderBaseAssetAmount += remainderBaa.toNumber();
 
 		if (
 			Math.abs(position.remainderBaseAssetAmount) >
-			market.amm.orderStepSize.toNumber()
+			amm.orderStepSize.toNumber()
 		) {
 			const [newStandardizedBaa, newRemainderBaa] = standardize(
 				new BN(position.remainderBaseAssetAmount),
-				market.amm.orderStepSize
+				amm.orderStepSize
 			);
 			position.baseAssetAmount =
 				position.baseAssetAmount.add(newStandardizedBaa);
@@ -426,26 +426,26 @@ export class User {
 
 		// update open bids/asks
 		const [marketOpenBids, marketOpenAsks] = calculateMarketOpenBidAsk(
-			market.amm.baseAssetReserve,
-			market.amm.minBaseAssetReserve,
-			market.amm.maxBaseAssetReserve,
-			market.amm.orderStepSize
+			amm.baseAssetReserve,
+			amm.minBaseAssetReserve,
+			amm.maxBaseAssetReserve,
+			amm.orderStepSize
 		);
 		const lpOpenBids = marketOpenBids
 			.mul(position.lpShares)
-			.div(market.amm.sqrtK);
+			.div(amm.sqrtK);
 		const lpOpenAsks = marketOpenAsks
 			.mul(position.lpShares)
-			.div(market.amm.sqrtK);
+			.div(amm.sqrtK);
 		position.openBids = lpOpenBids.add(position.openBids);
 		position.openAsks = lpOpenAsks.add(position.openAsks);
 
 		// eliminate counting funding on settled position
 		if (position.baseAssetAmount.gt(ZERO)) {
-			position.lastCumulativeFundingRate = market.amm.cumulativeFundingRateLong;
+			position.lastCumulativeFundingRate = amm.cumulativeFundingRateLong;
 		} else if (position.baseAssetAmount.lt(ZERO)) {
 			position.lastCumulativeFundingRate =
-				market.amm.cumulativeFundingRateShort;
+				amm.cumulativeFundingRateShort;
 		} else {
 			position.lastCumulativeFundingRate = ZERO;
 		}
@@ -1108,7 +1108,7 @@ export class User {
 						BN.max(
 							QUOTE_PRECISION,
 							valuationPrice
-								.mul(market.amm.orderStepSize)
+								.mul(amm.orderStepSize)
 								.mul(QUOTE_PRECISION)
 								.div(AMM_RESERVE_PRECISION)
 								.div(PRICE_PRECISION)
@@ -1491,7 +1491,7 @@ export class User {
 		const totalLiabilityValue = perpLiabilityValue.add(spotLiabilityValue);
 
 		const lpBuffer = isLp
-			? marketPrice.mul(market.amm.orderStepSize).div(AMM_RESERVE_PRECISION)
+			? marketPrice.mul(amm.orderStepSize).div(AMM_RESERVE_PRECISION)
 			: ZERO;
 
 		const freeCollateral = this.getFreeCollateral().sub(lpBuffer);
@@ -1755,7 +1755,7 @@ export class User {
 		const oracle = market.oracle;
 		const perpMarketWithSameOracle = this.normalClient
 			.getPerpMarketAccounts()
-			.find((market) => market.amm.oracle.equals(oracle));
+			.find((market) => amm.oracle.equals(oracle));
 		const oraclePrice =
 			this.normalClient.getOracleDataForSpotMarket(marketIndex).price;
 		if (perpMarketWithSameOracle) {
@@ -1839,7 +1839,7 @@ export class User {
 
 		positionBaseSizeChange = standardizeBaseAssetAmount(
 			positionBaseSizeChange,
-			market.amm.orderStepSize
+			amm.orderStepSize
 		);
 
 		const freeCollateralChangeFromNewPosition =
@@ -3326,7 +3326,7 @@ export class User {
 				BN.max(
 					QUOTE_PRECISION,
 					oraclePrice
-						.mul(perpMarket.amm.orderStepSize)
+						.mul(perpamm.orderStepSize)
 						.mul(QUOTE_PRECISION)
 						.div(AMM_RESERVE_PRECISION)
 						.div(PRICE_PRECISION)

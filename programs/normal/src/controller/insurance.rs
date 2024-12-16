@@ -762,10 +762,10 @@ pub fn resolve_perp_pnl_deficit(
 	now: i64
 ) -> NormalResult<u64> {
 	validate!(
-		market.amm.total_fee_minus_distributions < 0,
+		amm.total_fee_minus_distributions < 0,
 		ErrorCode::NoAmmPerpPnlDeficit,
-		"market.amm.total_fee_minus_distributions={} must be negative",
-		market.amm.total_fee_minus_distributions
+		"amm.total_fee_minus_distributions={} must be negative",
+		amm.total_fee_minus_distributions
 	)?;
 
 	let pnl_pool_token_amount = get_token_amount(
@@ -788,7 +788,7 @@ pub fn resolve_perp_pnl_deficit(
 	let excess_user_pnl_imbalance = if market.unrealized_pnl_max_imbalance > 0 {
 		let net_unsettled_pnl = calculate_net_user_pnl(
 			&market.amm,
-			market.amm.historical_oracle_data.last_oracle_price
+			amm.historical_oracle_data.last_oracle_price
 		)?;
 
 		net_unsettled_pnl.safe_sub(market.unrealized_pnl_max_imbalance.cast()?)?
@@ -842,8 +842,8 @@ pub fn resolve_perp_pnl_deficit(
 		excess_user_pnl_imbalance
 	)?;
 
-	market.amm.total_fee_minus_distributions =
-		market.amm.total_fee_minus_distributions.safe_add(insurance_withdraw)?;
+	amm.total_fee_minus_distributions =
+		amm.total_fee_minus_distributions.safe_add(insurance_withdraw)?;
 
 	market.insurance_claim.revenue_withdraw_since_last_settle =
 		market.insurance_claim.revenue_withdraw_since_last_settle.safe_add(

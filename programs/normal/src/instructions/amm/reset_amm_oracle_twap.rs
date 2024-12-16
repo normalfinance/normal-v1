@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::instructions::constraints::{ market_valid, valid_oracle_for_amm };
-use crate::{ state::{ self, market::Market }, State };
+use crate::{ state::{ self, synth_market::SynthMarket }, State };
 
 #[derive(Accounts)]
 pub struct RepegCurve<'info> {
@@ -25,21 +25,21 @@ pub fn handle_reset_amm_oracle_twap(ctx: Context<RepegCurve>) -> Result<()> {
 
 	msg!("resetting amm oracle twap for market {}", market.market_index);
 	msg!(
-		"market.amm.historical_oracle_data.last_oracle_price_twap: {:?} -> {:?}",
-		market.amm.historical_oracle_data.last_oracle_price_twap,
-		market.amm.last_mark_price_twap.cast::<i64>()?
+		"amm.historical_oracle_data.last_oracle_price_twap: {:?} -> {:?}",
+		amm.historical_oracle_data.last_oracle_price_twap,
+		amm.last_mark_price_twap.cast::<i64>()?
 	);
 
 	msg!(
-		"market.amm.historical_oracle_data.last_oracle_price_twap_ts: {:?} -> {:?}",
-		market.amm.historical_oracle_data.last_oracle_price_twap_ts,
-		market.amm.last_mark_price_twap_ts
+		"amm.historical_oracle_data.last_oracle_price_twap_ts: {:?} -> {:?}",
+		amm.historical_oracle_data.last_oracle_price_twap_ts,
+		amm.last_mark_price_twap_ts
 	);
 
-	market.amm.historical_oracle_data.last_oracle_price_twap =
-		market.amm.last_mark_price_twap.cast::<i64>()?;
-	market.amm.historical_oracle_data.last_oracle_price_twap_ts =
-		market.amm.last_mark_price_twap_ts;
+	amm.historical_oracle_data.last_oracle_price_twap =
+		amm.last_mark_price_twap.cast::<i64>()?;
+	amm.historical_oracle_data.last_oracle_price_twap_ts =
+		amm.last_mark_price_twap_ts;
 
 	Ok(())
 }

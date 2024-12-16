@@ -622,7 +622,7 @@ export class AdminClient extends NormalClient {
 		return await this.program.instruction.moveAmmPrice(
 			newBaseAssetAmount,
 			newQuoteAssetAmount,
-			market.amm.sqrtK,
+			amm.sqrtK,
 			{
 				accounts: {
 					state: await this.getStatePublicKey(),

@@ -90,11 +90,11 @@ export function calculateOraclePriceForPerpMargin(
 	oraclePriceData: OraclePriceData
 ): BN {
 	const oraclePriceOffset = BN.min(
-		new BN(market.amm.maxSpread)
+		new BN(amm.maxSpread)
 			.mul(oraclePriceData.price)
 			.div(BID_ASK_SPREAD_PRECISION),
 		oraclePriceData.confidence.add(
-			new BN(market.amm.baseSpread)
+			new BN(amm.baseSpread)
 				.mul(oraclePriceData.price)
 				.div(BID_ASK_SPREAD_PRECISION)
 		)

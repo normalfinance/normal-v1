@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use lp::LP;
-use market::Market;
+use synth_market::SynthMarket;
 use tick::TickArray;
 
 use crate::{
@@ -41,7 +41,7 @@ pub fn handle_update_fees_and_rewards(
 			timestamp
 		)?;
 
-	market.amm.update_rewards(reward_infos, timestamp);
+	amm.update_rewards(reward_infos, timestamp);
 	position.update(&position_update);
 
 	Ok(())

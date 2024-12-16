@@ -10,13 +10,17 @@ use crate::{
 };
 use anchor_lang::prelude::*;
 
-use super::oracle::{ HistoricalOracleData, OracleSource };
+use super::{ oracle::{ HistoricalOracleData, OracleSource }, user::MarketType };
 
 #[assert_no_slop]
 #[zero_copy(unsafe)]
 #[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct AMM {
+	/// The AMM's address. It is a pda of the market index
+	pub pubkey: Pubkey,
+	pub market_index: u16,
+
 	/// the authority that can push or pull quote asset tokens to/from the Vault when price exceed the max_price_deviance
 	pub vault_balance_authority: Pubkey,
 
@@ -32,33 +36,11 @@ pub struct AMM {
 	/// Vault storing quote tokens (SOL, XLM, USDC)
 	pub token_vault_quote: Pubkey,
 
-	/// Oracle
-	///
-	/// oracle price data public key
-	pub oracle: Pubkey,
-	/// the oracle provider information. used to decode/scale the oracle public key
-	pub oracle_source: OracleSource,
-	/// stores historically witnessed oracle data
-	pub historical_oracle_data: HistoricalOracleData,
-	/// the pct size of the oracle confidence interval
-	/// precision: PERCENTAGE_PRECISION
-	pub last_oracle_conf_pct: u64,
-	/// tracks whether the oracle was considered valid at the last AMM update
-	pub last_oracle_valid: bool,
-	/// the last seen oracle price partially shrunk toward the amm reserve price
-	/// precision: PRICE_PRECISION
-	pub last_oracle_normalised_price: i64,
-	/// the gap between the oracle price and the reserve price = y * peg_multiplier / x
-	pub last_oracle_reserve_price_spread_pct: i64,
-	/// estimate of standard deviation of the oracle price at each update
-	/// precision: PRICE_PRECISION
-	pub oracle_std: u64,
-
 	/// Peg
 	///
 	pub fee_authority: Pubkey,
 	/// the maximum percent the pool price can deviate above or below the oracle twap
-	pub max_price_deviance: u16,
+	pub max_price_variance: u16,
 	/// volume divided by synthetic token market cap (how much volume is created per $1 of liquidity)
 	pub liquidity_to_volume_multiplier: u64,
 
@@ -109,7 +91,6 @@ impl Default for AMM {
 			last_oracle_valid: false,
 
 			fee_authority: Pubkey::default(),
-
 
 			reward_authority: Pubkey::default(),
 		}

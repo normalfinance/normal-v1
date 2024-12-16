@@ -1050,7 +1050,7 @@ export function getSwapDirection(
  * @returns cost : Precision PRICE_PRECISION
  */
 export function calculateTerminalPrice(market: PerpMarketAccount) {
-	const directionToClose = market.amm.baseAssetAmountWithAmm.gt(ZERO)
+	const directionToClose = amm.baseAssetAmountWithAmm.gt(ZERO)
 		? PositionDirection.SHORT
 		: PositionDirection.LONG;
 
@@ -1058,13 +1058,13 @@ export function calculateTerminalPrice(market: PerpMarketAccount) {
 		calculateAmmReservesAfterSwap(
 			market.amm,
 			'base',
-			market.amm.baseAssetAmountWithAmm.abs(),
+			amm.baseAssetAmountWithAmm.abs(),
 			getSwapDirection('base', directionToClose)
 		);
 
 	const terminalPrice = newQuoteAssetReserve
 		.mul(PRICE_PRECISION)
-		.mul(market.amm.pegMultiplier)
+		.mul(amm.pegMultiplier)
 		.div(PEG_PRECISION)
 		.div(newBaseAssetReserve);
 

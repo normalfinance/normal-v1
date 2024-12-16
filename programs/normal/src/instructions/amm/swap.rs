@@ -5,7 +5,7 @@ use crate::{
 	controller,
 	errors::ErrorCode,
 	manager::swap_manager::*,
-	state::{ market::Market, AMM },
+	state::{ synth_market::SynthMarket, AMM },
 	util::{
 		to_timestamp_u64,
 		update_and_swap_amm,
@@ -21,16 +21,16 @@ pub struct Swap<'info> {
 	pub token_authority: Signer<'info>,
 
 	#[account(mut)]
-	pub market: Box<Account<'info, Market>>,
+	pub amm: Box<Account<'info, AMM>>,
 
-	#[account(mut, constraint = token_owner_account_synthetic.mint == market.amm.token_mint_synthetic)]
+	#[account(mut, constraint = token_owner_account_synthetic.mint == amm.token_mint_synthetic)]
 	pub token_owner_account_synthetic: Box<Account<'info, TokenAccount>>,
-	#[account(mut, address = market.amm.token_vault_synthetic)]
+	#[account(mut, address = amm.token_vault_synthetic)]
 	pub token_vault_synthetic: Box<Account<'info, TokenAccount>>,
 
-	#[account(mut, constraint = token_owner_account_quote.mint == market.amm.token_mint_quote)]
+	#[account(mut, constraint = token_owner_account_quote.mint == amm.token_mint_quote)]
 	pub token_owner_account_quote: Box<Account<'info, TokenAccount>>,
-	#[account(mut, address = market.amm.token_vault_quote)]
+	#[account(mut, address = amm.token_vault_quote)]
 	pub token_vault_quote: Box<Account<'info, TokenAccount>>,
 
 	#[account(mut)]
@@ -54,13 +54,13 @@ pub fn handle_swap(
 	amount_specified_is_input: bool,
 	synthetic_to_quote: bool // Zero for one
 ) -> Result<()> {
-	let market = &mut ctx.accounts.market;
+	let amm = &mut ctx.accounts.amm;
 	let clock = Clock::get()?;
 	// Update the global reward growth which increases as a function of time.
 	let timestamp = to_timestamp_u64(clock.unix_timestamp)?;
 
 	let builder = SparseSwapTickSequenceBuilder::try_from(
-		market,
+		amm,
 		synthetic_to_quote,
 		vec![
 			ctx.accounts.tick_array_0.to_account_info(),
@@ -72,7 +72,7 @@ pub fn handle_swap(
 	let mut swap_tick_sequence = builder.build()?;
 
 	let swap_update = controller::swap::swap(
-		market.amm,
+		amm,
 		&mut swap_tick_sequence,
 		amount,
 		sqrt_price_limit,
@@ -98,10 +98,12 @@ pub fn handle_swap(
 		return Err(ErrorCode::AmountInAboveMaximum.into());
 	}
 
-	let inside_range = market.amm.is_price_inside_range(swap_update.next_sqrt_price);
+	let inside_range = amm.is_price_inside_range(
+		swap_update.next_sqrt_price
+	);
 
 	update_and_swap_amm(
-		market,
+		amm,
 		&ctx.accounts.token_authority,
 		&ctx.accounts.token_owner_account_synthetic,
 		&ctx.accounts.token_owner_account_quote,

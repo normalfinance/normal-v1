@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, Token, TokenAccount };
 
-use crate::state::{ market::Market };
+use crate::state::{ synth_market::SynthMarket };
 
 #[derive(Accounts)]
 #[instruction(reward_index: u8)]
@@ -9,7 +9,7 @@ pub struct InitializeReward<'info> {
 	#[account(mut)]
 	pub market: AccountLoader<'info, Market>, // TODO: do we need Box<>?
 
-	#[account(address = market.amm.reward_infos[reward_index as usize].authority)]
+	#[account(address = amm.reward_infos[reward_index as usize].authority)]
 	pub reward_authority: Signer<'info>,
 
 	#[account(mut)]
@@ -41,7 +41,7 @@ pub fn handler(ctx: Context<InitializeReward>, reward_index: u8) -> Result<()> {
 	}
 
 	let lowest_index = match
-		market.amm.reward_infos.iter().position(|r| !r.initialized())
+		amm.reward_infos.iter().position(|r| !r.initialized())
 	{
 		Some(lowest_index) => lowest_index,
 		None => {
@@ -53,8 +53,8 @@ pub fn handler(ctx: Context<InitializeReward>, reward_index: u8) -> Result<()> {
 		return Err(ErrorCode::InvalidRewardIndex.into());
 	}
 
-	market.amm.reward_infos[index].mint = ctx.accounts.reward_mint.key();
-	market.amm.reward_infos[index].vault = ctx.accounts.reward_vault.key();
+	amm.reward_infos[index].mint = ctx.accounts.reward_mint.key();
+	amm.reward_infos[index].vault = ctx.accounts.reward_vault.key();
 
 	Ok(())
 }

@@ -105,6 +105,41 @@ pub struct VaultBankruptcyRecord {
 	pub clawback_user_payment: Option<u128>,
 }
 
+// Index events
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
+pub struct CreateIndexRecord {
+	pub market_index: u16,
+	pub vault_index: u16,
+	pub oracle_price: i64,
+	pub base_asset_amount: i64,
+	pub quote_asset_amount: i64,
+	/// precision: QUOTE_PRECISION
+	pub liquidator_fee: u64,
+	/// precision: QUOTE_PRECISION
+	pub if_fee: u64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
+pub struct IndexMintRecord {
+	pub market_index: u16,
+	pub user: Pubkey,
+	pub oracle_price: i64,
+	pub quote_asset_amount: i64,
+	pub ts: i64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
+pub struct IndexRedeemRecord {
+	pub market_index: u16,
+	pub user: Pubkey,
+	pub oracle_price: i64,
+	pub base_asset_amount: i64,
+	pub ts: i64,
+}
+
+// Insurance events
+
 #[event]
 #[derive(Default)]
 pub struct InsuranceFundRecord {

@@ -45,10 +45,10 @@ use crate::math::margin::{
 use crate::state::margin_calculation::{ MarginCalculation, MarginContext };
 use crate::state::oracle_map::OracleMap;
 
-use super::market_map::MarketMap;
+use super::synth_market_map::SynthMarketMap;
 use super::vault::Vault;
 use super::vault_map::VaultMap;
-use super::vp::VaultPosition;
+use super::position::Position;
 
 // #[cfg(test)]
 // mod tests;
@@ -76,9 +76,9 @@ pub struct User {
 	pub delegate: Pubkey,
 	/// Encoded display name e.g. "toly"
 	pub name: [u8; 32],
-	/// The user's vault positions
-	pub vault_positions: [VaultPosition; 8],
-	/// The user's indexes (market_index)
+	/// The user's positions
+	pub positions: [Position; 8],
+	/// The user's created indexes (market_index)
 	pub indexes: [u16; 8],
 	/// The total values of deposits the user has made
 	/// precision: QUOTE_PRECISION
@@ -108,6 +108,8 @@ pub struct User {
 }
 
 impl User {
+	// Status
+
 	pub fn is_being_liquidated(&self) -> bool {
 		self.status &
 			((UserStatus::BeingLiquidated as u8) | (UserStatus::Bankrupt as u8)) > 0
@@ -121,10 +123,6 @@ impl User {
 		self.status & (UserStatus::ReduceOnly as u8) > 0
 	}
 
-	pub fn is_advanced_lp(&self) -> bool {
-		self.status & (UserStatus::AdvancedLp as u8) > 0
-	}
-
 	pub fn add_user_status(&mut self, status: UserStatus) {
 		self.status |= status as u8;
 	}
@@ -133,104 +131,90 @@ impl User {
 		self.status &= !(status as u8);
 	}
 
-	pub fn get_vault_position_index(
-		&self,
-		vault_index: u16
-	) -> NormalResult<usize> {
+	// Position
+
+	pub fn get_position_index(&self, market_index: u16) -> NormalResult<usize> {
 		// first spot position is always quote asset
-		if vault_index == 0 {
+		if market_index == 0 {
 			validate!(
-				self.vault_positions[0].vault_index == 0,
+				self.positions[0].market_index == 0,
 				ErrorCode::DefaultError,
-				"User position 0 not vault_index=0"
+				"User position 0 not market_index=0"
 			)?;
 			return Ok(0);
 		}
 
-		self.vault_positions
+		self.positions
 			.iter()
-			.position(|vault_position| vault_position.vault_index == vault_index)
+			.position(|position| position.market_index == market_index)
 			.ok_or(ErrorCode::CouldNotFindSpotPosition)
 	}
 
-	pub fn get_vault_position(
-		&self,
-		vault_index: u16
-	) -> NormalResult<&SpotPosition> {
+	pub fn get_position(&self, market_index: u16) -> NormalResult<&SpotPosition> {
 		self
-			.get_vault_position_index(vault_index)
-			.map(|vault_index| &self.vault_positions[vault_index])
+			.get_position_index(market_index)
+			.map(|market_index| &self.positions[market_index])
 	}
 
-	pub fn get_vault_position_mut(
+	pub fn get_position_mut(
 		&mut self,
-		vault_index: u16
+		market_index: u16
 	) -> NormalResult<&mut SpotPosition> {
 		self
-			.get_vault_position_index(vault_index)
-			.map(move |vault_index| &mut self.vault_positions[vault_index])
+			.get_position_index(market_index)
+			.map(move |market_index| &mut self.positions[market_index])
 	}
 
-	pub fn get_quote_vault_position(&self) -> &SpotPosition {
-		match self.get_vault_position(QUOTE_SPOT_MARKET_INDEX) {
-			Ok(position) => position,
-			Err(_) => unreachable!(),
-		}
-	}
-
-	pub fn get_quote_vault_position_mut(&mut self) -> &mut SpotPosition {
-		match self.get_vault_position_mut(QUOTE_SPOT_MARKET_INDEX) {
-			Ok(position) => position,
-			Err(_) => unreachable!(),
-		}
-	}
-
-	pub fn add_vault_position(
+	pub fn add_position(
 		&mut self,
 		market_index: u16,
 		balance_type: SpotBalanceType
 	) -> NormalResult<usize> {
-		let new_vault_position_index = self.vault_positions
+		let new_position_index = self.positions
 			.iter()
 			.enumerate()
-			.position(
-				|(index, vault_position)| index != 0 && vault_position.is_available()
-			)
+			.position(|(index, position)| index != 0 && position.is_available())
 			.ok_or(ErrorCode::NoSpotPositionAvailable)?;
 
-		let new_vault_position = SpotPosition {
+		let new_position = SpotPosition {
 			market_index,
 			balance_type,
 			..SpotPosition::default()
 		};
 
-		self.vault_positions[new_vault_position_index] = new_vault_position;
+		self.positions[new_position_index] = new_position;
 
-		Ok(new_vault_position_index)
+		Ok(new_position_index)
 	}
 
-	pub fn force_get_vault_position_mut(
+	pub fn force_get_position_mut(
 		&mut self,
-		vault_index: u16
+		market_index: u16
 	) -> NormalResult<&mut SpotPosition> {
 		self
-			.get_vault_position_index(vault_index)
-			.or_else(|_|
-				self.add_vault_position(vault_index, SpotBalanceType::Deposit)
-			)
-			.map(move |vault_index| &mut self.vault_positions[vault_index])
+			.get_position_index(market_index)
+			.or_else(|_| self.add_position(market_index, SpotBalanceType::Deposit))
+			.map(move |market_index| &mut self.positions[market_index])
 	}
 
-	pub fn force_get_vault_position_index(
+	pub fn force_get_position_index(
 		&mut self,
-		vault_index: u16
+		market_index: u16
 	) -> NormalResult<usize> {
 		self
-			.get_vault_position_index(vault_index)
-			.or_else(|_|
-				self.add_vault_position(vault_index, SpotBalanceType::Deposit)
-			)
+			.get_position_index(market_index)
+			.or_else(|_| self.add_position(market_index, SpotBalanceType::Deposit))
 	}
+
+	// Index
+
+	pub fn get_index(&self, market_index: u16) -> NormalResult<&SpotPosition> {
+		self
+			.get_index_index(market_index)
+			.map(|market_index| &self.indexes[market_index])
+	}
+
+	// Deposit/Withdrawal
 
 	pub fn get_deposit_value(
 		&mut self,
@@ -406,6 +390,9 @@ pub struct UserFees {
 	/// Total taker fee paid
 	/// precision: QUOTE_PRECISION
 	pub total_fee_paid: u64,
+	/// Total index management fee paid
+	/// precision: QUOTE_PRECISION
+	pub total_expense_ratio_paid: u64,
 	/// Total discount from being referred
 	/// precision: QUOTE_PRECISION
 	pub total_referee_discount: u64,
@@ -437,6 +424,7 @@ impl fmt::Display for MarketType {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			MarketType::Synth => write!(f, "Synth"),
+			MarketType::Index => write!(f, "Index"),
 		}
 	}
 }

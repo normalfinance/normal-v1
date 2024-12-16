@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
 use lp::LP;
-use market::Market;
+use synth_market::SynthMarket;
 
 use crate::{
 	state::*,
@@ -28,11 +28,11 @@ pub struct CollectReward<'info> {
 	>,
 
 	#[account(mut,
-        constraint = reward_owner_account.mint == market.amm.reward_infos[reward_index as usize].mint
+        constraint = reward_owner_account.mint == amm.reward_infos[reward_index as usize].mint
     )]
 	pub reward_owner_account: Box<Account<'info, TokenAccount>>,
 
-	#[account(mut, address = market.amm.reward_infos[reward_index as usize].vault)]
+	#[account(mut, address = amm.reward_infos[reward_index as usize].vault)]
 	pub reward_vault: Box<Account<'info, TokenAccount>>,
 
 	#[account(address = token::ID)]

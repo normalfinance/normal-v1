@@ -6,7 +6,7 @@ use crate::{
 	state::NUM_REWARDS,
 };
 
-use super::{ market::Market, Tick };
+use super::{ synth_market::SynthMarket, Tick };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Copy)]
 pub struct OpenLPWithMetadataBumps {
@@ -65,17 +65,17 @@ impl LP {
 		tick_upper_index: i32
 	) -> Result<()> {
 		if
-			!Tick::check_is_usable_tick(tick_lower_index, market.amm.tick_spacing) ||
-			!Tick::check_is_usable_tick(tick_upper_index, market.amm.tick_spacing) ||
+			!Tick::check_is_usable_tick(tick_lower_index, amm.tick_spacing) ||
+			!Tick::check_is_usable_tick(tick_upper_index, amm.tick_spacing) ||
 			tick_lower_index >= tick_upper_index
 		{
 			return Err(ErrorCode::InvalidTickIndex.into());
 		}
 
 		// On tick spacing >= 2^15, should only be able to open full range positions
-		if market.amm.tick_spacing >= FULL_RANGE_ONLY_TICK_SPACING_THRESHOLD {
+		if amm.tick_spacing >= FULL_RANGE_ONLY_TICK_SPACING_THRESHOLD {
 			let (full_range_lower_index, full_range_upper_index) =
-				Tick::full_range_indexes(market.amm.tick_spacing);
+				Tick::full_range_indexes(amm.tick_spacing);
 			if
 				tick_lower_index != full_range_lower_index ||
 				tick_upper_index != full_range_upper_index

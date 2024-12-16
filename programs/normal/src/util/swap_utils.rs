@@ -3,10 +3,7 @@ use std::ptr::null;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ Token, TokenAccount };
 
-use crate::{
-	manager::swap_manager::PostSwapUpdate,
-	state::{ amm::AMM, market::Market },
-};
+use crate::{ manager::swap_manager::PostSwapUpdate, state::{ amm::AMM } };
 
 use super::{
 	mint_synthetic_to_vault,
@@ -16,7 +13,7 @@ use super::{
 
 #[allow(clippy::too_many_arguments)]
 pub fn update_and_swap_amm<'info>(
-	market: &mut Account<'info, Market>,
+	amm: &mut Account<'info, AMM>,
 	token_authority: &Signer<'info>,
 	token_owner_account_synthetic: &Account<'info, TokenAccount>,
 	token_owner_account_quote: &Account<'info, TokenAccount>,
@@ -28,7 +25,7 @@ pub fn update_and_swap_amm<'info>(
 	reward_last_updated_timestamp: u64,
 	inside_range: bool
 ) -> Result<()> {
-	market.amm.update_after_swap(
+	amm.update_after_swap(
 		swap_update.next_liquidity,
 		swap_update.next_tick_index,
 		swap_update.next_sqrt_price,
@@ -40,7 +37,7 @@ pub fn update_and_swap_amm<'info>(
 	);
 
 	perform_swap(
-		market,
+		amm,
 		token_authority,
 		token_owner_account_synthetic,
 		token_owner_account_quote,
@@ -56,7 +53,7 @@ pub fn update_and_swap_amm<'info>(
 
 #[allow(clippy::too_many_arguments)]
 fn perform_swap<'info>(
-	market: &Account<'info, Market>,
+	amm: &Account<'info, AMM>,
 	token_authority: &Signer<'info>,
 	token_owner_account_synthetic: &Account<'info, TokenAccount>,
 	token_owner_account_quote: &Account<'info, TokenAccount>,

@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
 use lp::LP;
-use market::Market;
+use synth_market::SynthMarket;
 
 use crate::{
 	state::*,
@@ -26,14 +26,14 @@ pub struct CollectFees<'info> {
 		InterfaceAccount<'info, TokenAccountInterface>
 	>,
 
-	#[account(mut, constraint = token_owner_account_synthetic.mint == market.amm.token_mint_synthetic)]
+	#[account(mut, constraint = token_owner_account_synthetic.mint == amm.token_mint_synthetic)]
 	pub token_owner_account_synthetic: Box<Account<'info, TokenAccount>>,
-	#[account(mut, address = market.amm.token_vault_synthetic)]
+	#[account(mut, address = amm.token_vault_synthetic)]
 	pub token_vault_synthetic: Box<Account<'info, TokenAccount>>,
 
-	#[account(mut, constraint = token_owner_account_quote.mint == market.amm.token_mint_quote)]
+	#[account(mut, constraint = token_owner_account_quote.mint == amm.token_mint_quote)]
 	pub token_owner_account_quote: Box<Account<'info, TokenAccount>>,
-	#[account(mut, address = market.amm.token_vault_quote)]
+	#[account(mut, address = amm.token_vault_quote)]
 	pub token_vault_quote: Box<Account<'info, TokenAccount>>,
 
 	#[account(address = token::ID)]

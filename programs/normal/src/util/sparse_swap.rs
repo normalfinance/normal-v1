@@ -4,7 +4,8 @@ use std::{ cell::{ Ref, RefMut }, collections::VecDeque };
 use crate::{
 	errors::ErrorCode,
 	state::{
-		market::Market,
+		amm::AMM,
+		synth_market::SynthMarket,
 		Tick,
 		TickArray,
 		TickArrayType,
@@ -135,7 +136,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 	/// - `AccountDiscriminatorNotFound` - If the provided TickArray account does not have a discriminator
 	/// - `AccountDiscriminatorMismatch` - If the provided TickArray account has a mismatched discriminator
 	pub fn try_from(
-		market: &Account<'info, Market>,
+		amm: &Account<'info, AMM>,
 		synthetic_to_quote: bool,
 		static_tick_array_account_infos: Vec<AccountInfo<'info>>,
 		supplemental_tick_array_account_infos: Option<Vec<AccountInfo<'info>>>
@@ -338,9 +339,9 @@ fn get_start_tick_indexes(
 	market: &Account<Market>,
 	synthetic_to_quote: bool
 ) -> Vec<i32> {
-	let tick_current_index = market.amm.tick_current_index;
-	let tick_spacing_u16 = market.amm.tick_spacing;
-	let tick_spacing_i32 = market.amm.tick_spacing as i32;
+	let tick_current_index = amm.tick_current_index;
+	let tick_spacing_u16 = amm.tick_spacing;
+	let tick_spacing_i32 = amm.tick_spacing as i32;
 	let ticks_in_array = TICK_ARRAY_SIZE * tick_spacing_i32;
 
 	let start_tick_index_base =

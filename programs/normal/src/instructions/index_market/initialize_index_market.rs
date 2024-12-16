@@ -2,8 +2,8 @@ use amm::AMM;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, Token, TokenAccount };
 
-use index_market::{ IndexMarket, IndexVisibility, IndexWeightingMethod };
-use market::{ AuctionConfig, AuctionPreference, Market };
+use index_market::{ IndexAsset, IndexMarket, IndexVisibility };
+use synth_market::{ AuctionConfig, AuctionPreference, Market };
 use oracle_map::OracleMap;
 
 use crate::{ state::*, validation::margin::validate_margin, State };
@@ -66,20 +66,13 @@ pub fn handle_initialize_index_market(
 	oracle_source: OracleSource,
 
 	// Index
-	weighting_method: IndexWeightingMethod,
 	visibility: IndexVisibility,
+	assets: Vec<IndexAsset>,
 	manager_fee: u16,
 
 	// Insurance
 	max_revenue_withdraw_per_period: u64,
-	quote_max_insurance: u64,
-
-	// AMM
-	tick_spacing: u16,
-	initial_sqrt_price: u128,
-	oracle_source: OracleSource,
-	fee_rate: u16,
-	protocol_fee_rate: u16
+	quote_max_insurance: u64
 ) -> Result<()> {
 	msg!("index_market {}", index_market_index);
 	let index_market_pubkey = ctx.accounts.index_market.to_account_info().key;
@@ -100,7 +93,7 @@ pub fn handle_initialize_index_market(
 				delay: oracle_delay,
 				..
 			} = get_pyth_price(&ctx.accounts.oracle, clock_slot, 1, false)?;
-			let last_oracle_price_twap = market.amm.get_pyth_twap(
+			let last_oracle_price_twap = synth_amm.get_pyth_twap(
 				&ctx.accounts.oracle,
 				1,
 				false
@@ -113,7 +106,7 @@ pub fn handle_initialize_index_market(
 				delay: oracle_delay,
 				..
 			} = get_pyth_price(&ctx.accounts.oracle, clock_slot, 1000, false)?;
-			let last_oracle_price_twap = market.amm.get_pyth_twap(
+			let last_oracle_price_twap = synth_amm.get_pyth_twap(
 				&ctx.accounts.oracle,
 				1000,
 				false
@@ -126,7 +119,7 @@ pub fn handle_initialize_index_market(
 				delay: oracle_delay,
 				..
 			} = get_pyth_price(&ctx.accounts.oracle, clock_slot, 1000000, false)?;
-			let last_oracle_price_twap = market.amm.get_pyth_twap(
+			let last_oracle_price_twap = synth_amm.get_pyth_twap(
 				&ctx.accounts.oracle,
 				1000000,
 				false
@@ -160,7 +153,7 @@ pub fn handle_initialize_index_market(
 				delay: oracle_delay,
 				..
 			} = get_pyth_price(&ctx.accounts.oracle, clock_slot, 1, true)?;
-			let last_oracle_price_twap = market.amm.get_pyth_twap(
+			let last_oracle_price_twap = synth_amm.get_pyth_twap(
 				&ctx.accounts.oracle,
 				1,
 				true
@@ -173,7 +166,7 @@ pub fn handle_initialize_index_market(
 				delay: oracle_delay,
 				..
 			} = get_pyth_price(&ctx.accounts.oracle, clock_slot, 1000, true)?;
-			let last_oracle_price_twap = market.amm.get_pyth_twap(
+			let last_oracle_price_twap = synth_amm.get_pyth_twap(
 				&ctx.accounts.oracle,
 				1000,
 				true
@@ -186,7 +179,7 @@ pub fn handle_initialize_index_market(
 				delay: oracle_delay,
 				..
 			} = get_pyth_price(&ctx.accounts.oracle, clock_slot, 1000000, true)?;
-			let last_oracle_price_twap = market.amm.get_pyth_twap(
+			let last_oracle_price_twap = synth_amm.get_pyth_twap(
 				&ctx.accounts.oracle,
 				1000000,
 				true
@@ -221,22 +214,6 @@ pub fn handle_initialize_index_market(
 		state.number_of_markets
 	)?;
 
-	// AMM validations
-	if token_mint_synthetic.ge(&token_mint_quote) {
-		return Err(ErrorCode::InvalidTokenMintOrder.into());
-	}
-
-	if !(MIN_SQRT_PRICE_X64..=MAX_SQRT_PRICE_X64).contains(&sqrt_price) {
-		return Err(ErrorCode::SqrtPriceOutOfBounds.into());
-	}
-
-	if fee_rate > MAX_FEE_RATE {
-		return Err(ErrorCode::FeeRateMaxExceeded.into());
-	}
-	if protocol_fee_rate > MAX_PROTOCOL_FEE_RATE {
-		return Err(ErrorCode::ProtocolFeeRateMaxExceeded.into());
-	}
-
 	**index_market = IndexMarket {
 		pubkey: *index_market_pubkey,
 		market_index,
@@ -246,8 +223,6 @@ pub fn handle_initialize_index_market(
 		} else {
 			MarketStatus::Initialized
 		},
-		synthetic_type,
-		synthetic_tier,
 		paused_operations: 0,
 		number_of_users: 0,
 
@@ -255,66 +230,16 @@ pub fn handle_initialize_index_market(
 		oracle: ctx.accounts.oracle.key(),
 		oracle_source,
 
-		// Collateral
-		token_mint_collateral: ctx.accounts.token_mint_collateral.key(),
-		token_vault_synthetic: ctx.accounts.token_vault_synthetic.key(),
-		token_vault_collateral: ctx.accounts.token_vault_collateral.key(),
+		// Accounts
+		vault: ctx.accounts.vault.key(),
+		token_mint: ctx.accounts.token_mint.key(),
 
 		// Index
-		weighting_method,
 		visibility,
+		assets,
 		manager_fee,
 
-		// AMM
-		amm: AMM {
-			token_mint_synthetic: ctx.accounts.token_mint_synthetic.key(),
-			token_vault_synthetic: ctx.accounts.token_vault_synthetic.key(),
-			token_mint_quote: ctx.accounts.token_mint_quote.key(),
-			token_vault_quote: ctx.accounts.token_vault_quote.key(),
-
-			// Oracle
-			oracle: *ctx.accounts.oracle.key,
-			oracle_source,
-			historical_oracle_data: HistoricalOracleData::default(),
-			last_oracle_conf_pct: 0,
-			last_oracle_valid: false,
-			last_oracle_normalised_price: 0,
-			last_oracle_reserve_price_spread_pct: 0,
-			oracle_std: 0,
-
-			// Liquidity
-			sqrt_price: initial_sqrt_price,
-			liquidity: 0,
-			tick_spacing,
-			tick_spacing_seed: tick_spacing.to_le_bytes(),
-			tick_current_index: math::amm::tick_index_from_sqrt_price(
-				&initial_sqrt_price
-			),
-
-			// Fees
-			fee_rate,
-			protocol_fee_rate,
-			protocol_fee_owed_synthetic: 0,
-			protocol_fee_owed_quote: 0,
-			fee_growth_global_synthetic: 0,
-			fee_growth_global_quote: 0,
-
-			// Rewards
-			reward_infos: [
-				AMMRewardInfo::new(state.reward_emissions_super_authority);
-				NUM_REWARDS
-			],
-		},
-
-		// Insurance
-		insurance_claim: InsuranceClaim {
-			max_revenue_withdraw_per_period,
-			quote_max_insurance,
-			..InsuranceClaim::default()
-		},
-
 		// Metrics
-		outstanding_debt: 0,
 
 		// Market settlement
 		expiry_price: 0,
@@ -323,7 +248,7 @@ pub fn handle_initialize_index_market(
 		padding: [0; 43],
 	};
 
-	safe_increment!(state.number_of_markets, 1);
+	safe_increment!(state.number_of_index_markets, 1);
 
 	Ok(())
 }

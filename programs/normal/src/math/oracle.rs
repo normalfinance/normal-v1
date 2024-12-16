@@ -11,7 +11,7 @@ use crate::math::safe_math::SafeMath;
 
 use crate::state::oracle::OraclePriceData;
 use crate::state::paused_operations::SynthOperation;
-use crate::state::market::Market;
+use crate::state::synth_market::SynthMarket;
 use crate::state::state::{ OracleGuardRails, ValidityGuardRails };
 use crate::state::user::MarketType;
 use std::fmt;
@@ -153,9 +153,9 @@ pub fn get_oracle_status(
 	reserve_price: u64
 ) -> NormalResult<OracleStatus> {
 	let oracle_validity = oracle_validity(
-		MarketType::Synthetic,
+		MarketType::Synth,
 		market.market_index,
-		market.amm.historical_oracle_data.last_oracle_price_twap,
+		amm.historical_oracle_data.last_oracle_price_twap,
 		oracle_price_data,
 		&guard_rails.validity,
 		market.get_max_confidence_interval_multiplier()?,

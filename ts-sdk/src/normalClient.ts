@@ -2857,7 +2857,7 @@ export class NormalClient {
 					isSigner: false,
 				});
 				oracleAccountInfos.push({
-					pubkey: market.amm.oracle,
+					pubkey: amm.oracle,
 					isWritable: false,
 					isSigner: false,
 				});
@@ -3800,7 +3800,7 @@ export class NormalClient {
 			accounts: {
 				state: await this.getStatePublicKey(),
 				market: market.pubkey,
-				oracle: market.amm.oracle,
+				oracle: amm.oracle,
 				authority: this.wallet.publicKey,
 				keeperStats: this.getUserStatsAccountPublicKey(),
 			},

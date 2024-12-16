@@ -141,9 +141,9 @@ export async function findAllMarketAndOracles(program: Program): Promise<{
 	for (const perpMarketProgramAccount of perpMarketProgramAccounts) {
 		const perpMarket = perpMarketProgramAccount.account as PerpMarketAccount;
 		perpMarketIndexes.push(perpMarket.marketIndex);
-		oracleInfos.set(perpMarket.amm.oracle.toString(), {
-			publicKey: perpMarket.amm.oracle,
-			source: perpMarket.amm.oracleSource,
+		oracleInfos.set(perpamm.oracle.toString(), {
+			publicKey: perpamm.oracle,
+			source: perpamm.oracleSource,
 		});
 	}
 

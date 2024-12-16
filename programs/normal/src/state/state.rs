@@ -13,7 +13,7 @@ use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
 use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
 
-use super::market::AuctionConfig;
+use super::synth_market::AuctionConfig;
 
 // #[cfg(test)]
 // mod tests;
@@ -40,11 +40,13 @@ pub struct State {
 	pub exchange_status: u8,
 	// the total number of markets live on the protocol
 	pub number_of_markets: u16,
-	// the total number of vaults live on the protocol
-	pub number_of_vaults: u16,
+	// the total number of index markets live on the protocol
+	pub number_of_index_markets: u16,
 
 	// Index
 	//
+	pub default_index_oracle: Pubkey,
+	pub max_index_assets: u16,
 	pub protocol_index_fee: u16,
 	pub protocol_index_fee_vault: Pubkey,
 

@@ -71,8 +71,8 @@ use crate::state::margin_calculation::{
 };
 use crate::state::oracle_map::OracleMap;
 use crate::state::paused_operations::SynthOperation;
-use crate::state::market::MarketStatus;
-use crate::state::market_map::MarketMap;
+use crate::state::synth_market::MarketStatus;
+use crate::state::synth_market_map::SynthMarketMap;
 use crate::state::state::State;
 use crate::state::traits::Size;
 use crate::state::user::{ MarketType, User, UserStats };
@@ -92,7 +92,7 @@ pub fn liquidate_vault(
 	liquidator: &mut User,
 	liquidator_key: &Pubkey,
 	liquidator_stats: &mut UserStats,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	slot: u64,
@@ -180,7 +180,7 @@ pub fn liquidate_vault(
 	)?;
 
 	let mut market = market_map.get_ref_mut(&market_index)?;
-	let oracle_price_data = oracle_map.get_price_data(&market.amm.oracle)?;
+	let oracle_price_data = oracle_map.get_price_data(&amm.oracle)?;
 
 	update_amm_and_check_validity(
 		&mut market,
@@ -273,7 +273,7 @@ pub fn liquidate_vault(
 				oracle_price,
 				quote_oracle_price
 			)?,
-			market.amm.order_step_size
+			amm.order_step_size
 		)?;
 	drop(market);
 
@@ -410,12 +410,12 @@ pub fn liquidate_vault(
 		validate!(
 			is_multiple_of_step_size(
 				user_position.base_asset_amount.unsigned_abs(),
-				market.amm.order_step_size
+				amm.order_step_size
 			)?,
 			ErrorCode::InvalidPerpPosition,
 			"base asset amount {} step size {}",
 			user_position.base_asset_amount,
-			market.amm.order_step_size
+			amm.order_step_size
 		)?;
 
 		let liquidator_position =
@@ -436,16 +436,16 @@ pub fn liquidate_vault(
 		validate!(
 			is_multiple_of_step_size(
 				liquidator_position.base_asset_amount.unsigned_abs(),
-				market.amm.order_step_size
+				amm.order_step_size
 			)?,
 			ErrorCode::InvalidPerpPosition,
 			"base asset amount {} step size {}",
 			liquidator_position.base_asset_amount,
-			market.amm.order_step_size
+			amm.order_step_size
 		)?;
 
-		market.amm.total_liquidation_fee =
-			market.amm.total_liquidation_fee.safe_add(if_fee.unsigned_abs().cast()?)?;
+		amm.total_liquidation_fee =
+			amm.total_liquidation_fee.safe_add(if_fee.unsigned_abs().cast()?)?;
 
 		(
 			user_existing_position_direction,
@@ -522,7 +522,7 @@ pub fn resolve_vault_bankruptcy(
 	user_key: &Pubkey,
 	liquidator: &mut User,
 	liquidator_key: &Pubkey,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	now: i64,
@@ -661,7 +661,7 @@ pub fn resolve_vault_bankruptcy(
 			fee_pool_payment.unsigned_abs(),
 			&SpotBalanceType::Borrow,
 			spot_market,
-			&mut market.amm.fee_pool,
+			&mut amm.fee_pool,
 			false
 		)?;
 	}
@@ -680,7 +680,7 @@ pub fn resolve_vault_bankruptcy(
 	if loss_to_socialize < 0 {
 		let mut market = market_map.get_ref_mut(&market_index)?;
 
-		market.amm.total_social_loss = market.amm.total_social_loss.safe_add(
+		amm.total_social_loss = amm.total_social_loss.safe_add(
 			loss_to_socialize.unsigned_abs()
 		)?;
 	}
@@ -736,7 +736,7 @@ pub fn resolve_vault_bankruptcy(
 
 pub fn calculate_margin_freed(
 	user: &User,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32,
@@ -762,7 +762,7 @@ pub fn calculate_margin_freed(
 
 pub fn set_vault_status_to_being_liquidated(
 	vault: &mut Vault,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	slot: u64,

@@ -10,11 +10,9 @@ pub mod lp;
 pub mod paused_operations;
 pub mod tick;
 pub mod margin_calculation;
-pub mod market_map;
-pub mod market;
-pub mod vault_map;
-pub mod vault;
-pub mod vp;
+pub mod synth_market_map;
+pub mod synth_market;
+pub mod position;
 #[allow(clippy::module_inception)]
 pub mod state;
 pub mod user;

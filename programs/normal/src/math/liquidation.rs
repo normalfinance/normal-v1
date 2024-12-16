@@ -21,8 +21,8 @@ use crate::math::spot_balance::get_token_amount;
 use crate::math::spot_swap::calculate_swap_price;
 use crate::state::margin_calculation::MarginContext;
 use crate::state::oracle_map::OracleMap;
-use crate::state::market::Market;
-use crate::state::market_map::MarketMap;
+use crate::state::synth_market::SynthMarket;
+use crate::state::synth_market_map::SynthMarketMap;
 use crate::state::user::{ User };
 use crate::state::vault_map::VaultMap;
 use crate::{
@@ -214,7 +214,7 @@ pub fn calculate_asset_transfer_for_liability_transfer(
 
 pub fn is_user_being_liquidated(
 	user: &User,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32
@@ -235,7 +235,7 @@ pub fn is_user_being_liquidated(
 
 pub fn validate_user_not_being_liquidated(
 	user: &mut User,
-	market_map: &MarketMap,
+	market_map: &SynthMarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32

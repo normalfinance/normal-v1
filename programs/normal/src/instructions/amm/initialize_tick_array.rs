@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
 	controller::tick,
-	state::{ market::Market, tick::{ Tick, TickArray } },
+	state::{ synth_market::SynthMarket, tick::{ Tick, TickArray } },
 };
 
 #[derive(Accounts)]
@@ -38,7 +38,7 @@ pub fn handle_initialize_tick_array(
 	if
 		!Tick::check_is_valid_start_tick(
 			start_tick_index,
-			&ctx.accounts.market.amm.tick_spacing
+			&ctx.accounts.amm.tick_spacing
 		)
 	{
 		return Err(ErrorCode::InvalidStartTick.into());

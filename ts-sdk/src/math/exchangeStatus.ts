@@ -67,19 +67,19 @@ export function isAmmDrawdownPause(market: MarketAccount): boolean {
 		isVariant(market.contractTier, 'a') ||
 		isVariant(market.contractTier, 'b')
 	) {
-		quoteDrawdownLimitBreached = market.amm.netRevenueSinceLastFunding.lte(
+		quoteDrawdownLimitBreached = amm.netRevenueSinceLastFunding.lte(
 			DEFAULT_REVENUE_SINCE_LAST_FUNDING_SPREAD_RETREAT.muln(400)
 		);
 	} else {
-		quoteDrawdownLimitBreached = market.amm.netRevenueSinceLastFunding.lte(
+		quoteDrawdownLimitBreached = amm.netRevenueSinceLastFunding.lte(
 			DEFAULT_REVENUE_SINCE_LAST_FUNDING_SPREAD_RETREAT.muln(200)
 		);
 	}
 
 	if (quoteDrawdownLimitBreached) {
-		const percentDrawdown = market.amm.netRevenueSinceLastFunding
+		const percentDrawdown = amm.netRevenueSinceLastFunding
 			.mul(PERCENTAGE_PRECISION)
-			.div(BN.max(market.amm.totalFeeMinusDistributions, ONE));
+			.div(BN.max(amm.totalFeeMinusDistributions, ONE));
 
 		let percentDrawdownLimitBreached: boolean;
 

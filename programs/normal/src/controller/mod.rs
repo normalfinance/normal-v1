@@ -1,5 +1,5 @@
 pub mod amm;
-pub mod fund;
+pub mod index;
 pub mod insurance;
 pub mod liquidity;
 pub mod liquidation;

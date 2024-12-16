@@ -20,7 +20,7 @@ use crate::constants::main::PRICE_PRECISION_I64;
 use crate::math::oracle::{ oracle_validity, OracleValidity };
 use crate::state::oracle::{ get_oracle_price, OraclePriceData, OracleSource };
 use crate::state::state::OracleGuardRails;
-use crate::state::market::MarketType;
+use crate::state::synth_market::MarketType;
 use anchor_lang::prelude::{ AccountInfo, Pubkey };
 
 use anchor_lang::Key;

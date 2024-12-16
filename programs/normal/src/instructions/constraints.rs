@@ -7,7 +7,7 @@ use spl_governance::state::{ get_proposal, Proposal, ProposalState };
 
 use crate::error::ErrorCode;
 use crate::state::amm::AMM;
-use crate::state::market::{ Market, MarketStatus };
+use crate::state::synth_market::{ Market, MarketStatus };
 use crate::state::state::{ ExchangeStatus, State };
 use crate::state::user::{ User, UserStats };
 use crate::state::vault::Vault;

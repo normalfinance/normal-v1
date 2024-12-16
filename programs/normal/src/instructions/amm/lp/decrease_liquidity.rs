@@ -37,7 +37,7 @@ pub fn handle_decrease_liquidity(
 	let timestamp = to_timestamp_u64(clock.unix_timestamp)?;
 
 	let update = controller::liquidity::calculate_modify_liquidity(
-		&ctx.accounts.market.amm,
+		&ctx.accounts.amm,
 		&ctx.accounts.position,
 		&ctx.accounts.tick_array_lower,
 		&ctx.accounts.tick_array_upper,
@@ -46,7 +46,7 @@ pub fn handle_decrease_liquidity(
 	)?;
 
 	controller::liquidity::sync_modify_liquidity_values(
-		&mut ctx.accounts.market.amm,
+		&mut ctx.accounts.amm,
 		&mut ctx.accounts.position,
 		&ctx.accounts.tick_array_lower,
 		&ctx.accounts.tick_array_upper,
@@ -56,8 +56,8 @@ pub fn handle_decrease_liquidity(
 
 	let (delta_synthetic, delta_quote) =
 		controller::liquidity::calculate_liquidity_token_deltas(
-			ctx.accounts.market.amm.tick_current_index,
-			ctx.accounts.market.amm.sqrt_price,
+			ctx.accounts.amm.tick_current_index,
+			ctx.accounts.amm.sqrt_price,
 			&ctx.accounts.position,
 			liquidity_delta
 		)?;

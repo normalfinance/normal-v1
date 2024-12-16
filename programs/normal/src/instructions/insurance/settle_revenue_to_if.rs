@@ -7,7 +7,7 @@ use solana_program::sysvar::instructions::{
 	ID as IX_ID,
 };
 
-use crate::state::market::Market;
+use crate::state::synth_market::SynthMarket;
 use crate::State;
 
 #[derive(Accounts)]

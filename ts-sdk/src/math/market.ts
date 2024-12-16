@@ -99,8 +99,8 @@ export function calculateNewMarketAfterTrade(
 	const newAmm = Object.assign({}, market.amm);
 	const newMarket = Object.assign({}, market);
 	newMarket.amm = newAmm;
-	newMarket.amm.quoteAssetReserve = newQuoteAssetReserve;
-	newMarket.amm.baseAssetReserve = newBaseAssetReserve;
+	newamm.quoteAssetReserve = newQuoteAssetReserve;
+	newamm.baseAssetReserve = newBaseAssetReserve;
 
 	return newMarket;
 }
@@ -143,7 +143,7 @@ export function calculateMarketMaxAvailableInsurance(
 			perpMarket.insuranceClaim.quoteSettledInsurance
 		);
 	const ammFeePool = getTokenAmount(
-		perpMarket.amm.feePool.scaledBalance,
+		perpamm.feePool.scaledBalance,
 		spotMarket,
 		SpotBalanceType.DEPOSIT
 	);
@@ -154,15 +154,15 @@ export function calculateNetUserPnl(
 	perpMarket: MarketAccount,
 	oraclePriceData: OraclePriceData
 ): BN {
-	const netUserPositionValue = perpMarket.amm.baseAssetAmountWithAmm
-		.add(perpMarket.amm.baseAssetAmountWithUnsettledLp)
+	const netUserPositionValue = perpamm.baseAssetAmountWithAmm
+		.add(perpamm.baseAssetAmountWithUnsettledLp)
 		.mul(oraclePriceData.price)
 		.div(BASE_PRECISION)
 		.div(PRICE_TO_QUOTE_PRECISION);
 
-	const netUserCostBasis = perpMarket.amm.quoteAssetAmount
-		.add(perpMarket.amm.quoteAssetAmountWithUnsettledLp)
-		.add(perpMarket.amm.netUnsettledFundingPnl);
+	const netUserCostBasis = perpamm.quoteAssetAmount
+		.add(perpamm.quoteAssetAmountWithUnsettledLp)
+		.add(perpamm.netUnsettledFundingPnl);
 
 	const netUserPnl = netUserPositionValue.add(netUserCostBasis);
 
@@ -183,7 +183,7 @@ export function calculateNetUserPnlImbalance(
 		SpotBalanceType.DEPOSIT
 	);
 	let feePool = getTokenAmount(
-		perpMarket.amm.feePool.scaledBalance,
+		perpamm.feePool.scaledBalance,
 		spotMarket,
 		SpotBalanceType.DEPOSIT
 	);
@@ -203,10 +203,10 @@ export function calculateAvailablePerpLiquidity(
 	slot: number
 ): { bids: BN; asks: BN } {
 	let [bids, asks] = calculateMarketOpenBidAsk(
-		market.amm.baseAssetReserve,
-		market.amm.minBaseAssetReserve,
-		market.amm.maxBaseAssetReserve,
-		market.amm.orderStepSize
+		amm.baseAssetReserve,
+		amm.minBaseAssetReserve,
+		amm.maxBaseAssetReserve,
+		amm.orderStepSize
 	);
 
 	asks = asks.abs();

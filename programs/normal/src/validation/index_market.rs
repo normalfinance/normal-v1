@@ -5,7 +5,7 @@ use crate::math::constants::MAX_BASE_ASSET_AMOUNT_WITH_AMM;
 use crate::math::index::calculate_total_weight;
 use crate::math::safe_math::SafeMath;
 use crate::state::index_market::IndexMarket;
-use crate::state::market::{ MarketStatus, Market };
+use crate::state::synth_market::{ MarketStatus, Market };
 use crate::{ validate, BID_ASK_SPREAD_PRECISION };
 use solana_program::msg;
 

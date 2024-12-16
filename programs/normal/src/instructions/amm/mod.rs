@@ -1,5 +1,6 @@
 #![allow(ambiguous_glob_reexports)]
 
+pub mod initialize_amm;
 pub mod initialize_tick_array;
 pub mod swap;
 pub mod update_fees_and_rewards;
@@ -9,6 +10,7 @@ pub mod fees;
 pub mod lp;
 pub mod rewards;
 
+pub use initialize_amm::*;
 pub use initialize_tick_array::*;
 pub use swap::*;
 pub use update_fees_and_rewards::*;

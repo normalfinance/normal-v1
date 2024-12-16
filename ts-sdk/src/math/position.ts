@@ -41,7 +41,7 @@ export function calculateBaseAssetValue(
 	let prepegAmm: Parameters<typeof calculateAmmReservesAfterSwap>[0];
 
 	if (!skipUpdate) {
-		if (market.amm.baseSpread > 0 && useSpread) {
+		if (amm.baseSpread > 0 && useSpread) {
 			const { baseAssetReserve, quoteAssetReserve, sqrtK, newPeg } =
 				calculateUpdatedAMMSpreadReserves(
 					market.amm,

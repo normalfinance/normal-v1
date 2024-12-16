@@ -9,7 +9,7 @@ use math::amm;
 use math::{ bn, constants::* };
 use state::oracle::OracleSource;
 
-use crate::state::market::{ SyntheticTier, MarketStatus };
+use crate::state::synth_market::{ SyntheticTier, MarketStatus };
 use crate::state::state::FeeStructure;
 use crate::state::state::*;
 
@@ -38,7 +38,7 @@ pub mod normal {
 		collateral::transfer_collateral::handle_transfer_collateral,
 		UpdateIndexMarket,
 	};
-	use state::index_market::{ IndexVisibility, IndexWeightingMethod };
+	use state::index_market::{ IndexAsset, IndexVisibility };
 
 	use super::*;
 
@@ -99,116 +99,134 @@ pub mod normal {
 		handle_update_state_max_initialize_user_fee(ctx, max_initialize_user_fee)
 	}
 
-	// Market instructions
+	// Synth Market instructions
 
-	pub fn initialize_market(ctx: Context<InitMarket>) -> Result<()> {
-		handle_initialize_market(ctx)
-	}
-
-	pub fn freeze_market_oracle(ctx: Context<FreezeMarketOracle>) -> Result<()> {
-		handle_freeze_market_oracle(ctx)
-	}
-
-	pub fn initialize_market_shutdown(
-		ctx: Context<AdminUpdateMarket>
+	pub fn initialize_synth_market(
+		ctx: Context<InitializeSynthMarket>
 	) -> Result<()> {
-		handle_initialize_market_shutdown(ctx)
+		handle_initialize_synth_market(ctx)
 	}
 
-	pub fn delete_initialized_market(
-		ctx: Context<DeleteInitializedMarket>,
+	pub fn freeze_synth_market_oracle(
+		ctx: Context<FreezeMarketOracle>
+	) -> Result<()> {
+		handle_freeze_synth_market_oracle(ctx)
+	}
+
+	pub fn initialize_synth_market_shutdown(
+		ctx: Context<AdminUpdateSynthMarket>
+	) -> Result<()> {
+		handle_initialize_synth_market_shutdown(ctx)
+	}
+
+	pub fn delete_initialized_synth_market(
+		ctx: Context<DeleteInitializedSynthMarket>,
 		market_index: u16
 	) -> Result<()> {
-		handle_delete_initialized_market(ctx, market_index)
+		handle_delete_initialized_synth_market(ctx, market_index)
 	}
 
-	pub fn update_market_debt_ceiling(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_amm(
+		ctx: Context<RepegCurve>,
+		amm: Pubkey
+	) -> Result<()> {
+		handle_update_synth_market_amm(ctx, amm)
+	}
+
+	pub fn update_synth_market_debt_ceiling(
+		ctx: Context<AdminUpdateSynthMarket>,
 		debt_ceiling: u128
 	) -> Result<()> {
-		handle_update_market_debt_celing(ctx, debt_ceiling)
+		handle_update_synth_market_debt_celing(ctx, debt_ceiling)
 	}
 
-	pub fn update_market_debt_floor(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_debt_floor(
+		ctx: Context<AdminUpdateSynthMarket>,
 		debt_floor: u32
 	) -> Result<()> {
-		handle_update_market_debt_celing(ctx, debt_floor)
+		handle_update_synth_market_debt_celing(ctx, debt_floor)
 	}
 
-	pub fn update_market_imf_factor(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_expiry(
+		ctx: Context<AdminUpdateSynthMarket>,
+		expiry_ts: i64
+	) -> Result<()> {
+		handle_update_synth_market_expiry(ctx, expiry_ts)
+	}
+
+	pub fn update_synth_market_imf_factor(
+		ctx: Context<AdminUpdateSynthMarket>,
 		imf_factor: u32
 	) -> Result<()> {
 		handle_update_imf_factor(ctx, imf_factor)
 	}
 
-	pub fn update_market_liquidation_fee(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_liquidation_fee(
+		ctx: Context<AdminUpdateSynthMarket>,
 		liquidator_fee: u32,
 		insurance_fund_liquidation_fee: u32
 	) -> Result<()> {
-		handle_update_market_liquidation_fee(
+		handle_update_synth_market_liquidation_fee(
 			ctx,
 			liquidator_fee,
 			insurance_fund_liquidation_fee
 		)
 	}
 
-	pub fn update_market_liquidation_penalty(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_liquidation_penalty(
+		ctx: Context<AdminUpdateSynthMarket>,
 		liquidator_penalty: u32
 	) -> Result<()> {
-		handle_update_market_liquidation_penalty(ctx, liquidator_penalty)
+		handle_update_synth_market_liquidation_penalty(ctx, liquidator_penalty)
 	}
 
-	pub fn update_market_margin_ratio(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_margin_ratio(
+		ctx: Context<AdminUpdatSyntheMarket>,
 		margin_ratio_initial: u32,
 		margin_ratio_maintenance: u32
 	) -> Result<()> {
-		handle_update_market_margin_ratio(
+		handle_update_synth_market_margin_ratio(
 			ctx,
 			margin_ratio_initial,
 			margin_ratio_maintenance
 		)
 	}
 
-	pub fn update_market_name(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_name(
+		ctx: Context<AdminUpdateSynthMarket>,
 		name: [u8; 32]
 	) -> Result<()> {
-		handle_update_market_name(ctx, name)
+		handle_update_synth_market_name(ctx, name)
 	}
 
-	pub fn update_market_number_of_users(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_number_of_users(
+		ctx: Context<AdminUpdateSynthMarket>,
 		number_of_users: Option<u32>
 	) -> Result<()> {
-		handle_update_market_number_of_users(ctx, number_of_users)
+		handle_update_synth_market_number_of_users(ctx, number_of_users)
 	}
 
 	// oracle...
 
-	pub fn update_market_paused_operations(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_paused_operations(
+		ctx: Context<AdminUpdateSynthMarket>,
 		paused_operations: u8
 	) -> Result<()> {
-		handle_update_market_paused_operations(ctx, paused_operations)
+		handle_update_synth_market_paused_operations(ctx, paused_operations)
 	}
 
-	pub fn update_market_status(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_status(
+		ctx: Context<AdminUpdateSynthMarket>,
 		status: MarketStatus
 	) -> Result<()> {
-		handle_update_market_status(ctx, status)
+		handle_update_synth_market_status(ctx, status)
 	}
 
-	pub fn update_market_synthetic_tier(
-		ctx: Context<AdminUpdateMarket>,
+	pub fn update_synth_market_synthetic_tier(
+		ctx: Context<AdminUpdateSynthMarket>,
 		synthetic_tier: SyntheticTier
 	) -> Result<()> {
-		handle_update_market_synthetic_tier(ctx, synthetic_tier)
+		handle_update_synth_market_synthetic_tier(ctx, synthetic_tier)
 	}
 
 	// User instructions
@@ -388,7 +406,8 @@ pub mod normal {
 		initial_sqrt_price: u128,
 		oracle_source: OracleSource,
 		fee_rate: u16,
-		protocol_fee_rate: u16
+		protocol_fee_rate: u16,
+		max_price_variance: u16
 	) -> Result<()> {
 		handle_initialize_amm(
 			ctx,
@@ -396,7 +415,8 @@ pub mod normal {
 			initial_sqrt_price,
 			oracle_source,
 			fee_rate,
-			protocol_fee_rate
+			protocol_fee_rate,
+			max_price_variance
 		)
 	}
 
@@ -746,10 +766,10 @@ pub mod normal {
 	pub fn initialize_index_market(
 		ctx: Context<InitializeIndexMarket>,
 		name: [u8; 32],
-		weighting: IndexWeightingMethod,
-		visibility: IndexVisibility
+		visibility: IndexVisibility,
+		weights: Vec<IndexAsset>
 	) -> Result<()> {
-		handle_initialize_index_market(ctx, name, weighting, visibility)
+		handle_initialize_index_market(ctx, name, visibility, weights)
 	}
 
 	pub fn update_index_market_expense_ratio(
@@ -757,6 +777,20 @@ pub mod normal {
 		expense_ratio: u64
 	) -> Result<()> {
 		handle_update_index_market_expense_ratio(ctx, expense_ratio)
+	}
+
+	pub fn update_index_market_expiry(
+		ctx: Context<UpdateIndexMarket>,
+		expiry_ts: i64
+	) -> Result<()> {
+		handle_update_index_market_expiry(ctx, expiry_ts)
+	}
+
+	pub fn update_index_market_paused_operations(
+		ctx: Context<UpdateIndexMarket>,
+		paused_operations: u8
+	) -> Result<()> {
+		handle_update_index_market_paused_operations(ctx, paused_operations)
 	}
 
 	pub fn update_index_market_revenue_share(
@@ -773,13 +807,6 @@ pub mod normal {
 		handle_update_index_market_visibility(ctx, visibility)
 	}
 
-	pub fn update_index_market_weighting(
-		ctx: Context<UpdateIndexMarket>,
-		weighting: IndexWeighting
-	) -> Result<()> {
-		handle_update_index_market_weighting(ctx, weighting)
-	}
-
 	pub fn update_index_market_whitelist(
 		ctx: Context<UpdateIndexMarket>,
 		whitelist: Vec<Pubkey>
@@ -794,19 +821,26 @@ pub mod normal {
 		handle_settle_index_market_fees_to_treasury(ctx, market_index)
 	}
 
-	// pub fn update_index_assets(
-	// 	ctx: Context<UpdateIndex<'info>>,
-	// 	assets: IndexAssets
-	// ) -> Result<()> {
-	// 	handle_update_index_assets(ctx, assets)
-	// }
+	pub fn rebalance_index_market(
+		ctx: Context<RebalanceIndexMarket<'info>>,
+		market_index: u16
+	) -> Result<()> {
+		handle_rebalance_index_market(ctx, market_index)
+	}
 
-	// pub fn rebalance_index(
-	// 	ctx: Context<RebalanceIndex<'info>>,
-	// 	market_index: u16
-	// ) -> Result<()> {
-	// 	handle_rebalance_index(ctx, market_index)
-	// }
+	pub fn mint_index_tokens(
+		ctx: Context<MintIndexTokens>,
+		amount: u64
+	) -> Result<()> {
+		handle_mint_index_tokens(ctx, amount)
+	}
+
+	pub fn redeem_index_tokens(
+		ctx: Context<RedeemIndexTokens>,
+		amount: u64
+	) -> Result<()> {
+		handle_redeem_index_tokens(ctx, amount)
+	}
 
 	pub fn delete_initialized_index_market(
 		ctx: Context<DeleteInitializedMarket>,

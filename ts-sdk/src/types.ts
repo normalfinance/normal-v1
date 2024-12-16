@@ -65,13 +65,6 @@ export enum IndexVisibility {
 	PUBLIC = 1,
 }
 
-export enum IndexWeighting {
-	EQUAL = 0,
-	CUSTOM = 1,
-	MARKET_CAP = 2,
-	SQRT_MARKET_CAP = 3,
-}
-
 export class SyntheticTier {
 	static readonly A = { a: {} };
 	static readonly B = { b: {} };
@@ -422,8 +415,7 @@ export type IndexMarketAccount = {
 	token_vault_synthetic: PublicKey;
 	token_vault_collateral: PublicKey;
 
-	weighting: IndexWeighting;
-	assets: IndexAssets;
+	assets: IndexAsset[];
 	visibility: IndexVisibility;
 	whitelist: PublicKey[];
 

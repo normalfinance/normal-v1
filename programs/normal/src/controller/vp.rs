@@ -198,7 +198,7 @@ pub fn update_position_and_market(
         market.number_of_users_with_base = market.number_of_users_with_base.safe_sub(1)?;
     }
 
-    market.amm.quote_asset_amount = market
+    amm.quote_asset_amount = market
         .amm
         .quote_asset_amount
         .safe_add(delta.quote_asset_amount.cast()?)?;
@@ -206,29 +206,29 @@ pub fn update_position_and_market(
     match update_type {
         PositionUpdateType::Open | PositionUpdateType::Increase => {
             if new_base_asset_amount > 0 {
-                market.amm.base_asset_amount_long = market
+                amm.base_asset_amount_long = market
                     .amm
                     .base_asset_amount_long
                     .safe_add(new_settled_base_asset_amount.cast()?)?;
-                market.amm.quote_entry_amount_long = market
+                amm.quote_entry_amount_long = market
                     .amm
                     .quote_entry_amount_long
                     .safe_add(delta.quote_asset_amount.cast()?)?;
-                market.amm.quote_break_even_amount_long =
+                amm.quote_break_even_amount_long =
                     market
                         .amm
                         .quote_break_even_amount_long
                         .safe_add(delta.quote_asset_amount.cast()?)?;
             } else {
-                market.amm.base_asset_amount_short = market
+                amm.base_asset_amount_short = market
                     .amm
                     .base_asset_amount_short
                     .safe_add(new_settled_base_asset_amount.cast()?)?;
-                market.amm.quote_entry_amount_short = market
+                amm.quote_entry_amount_short = market
                     .amm
                     .quote_entry_amount_short
                     .safe_add(delta.quote_asset_amount.cast()?)?;
-                market.amm.quote_break_even_amount_short = market
+                amm.quote_break_even_amount_short = market
                     .amm
                     .quote_break_even_amount_short
                     .safe_add(delta.quote_asset_amount.cast()?)?;
@@ -236,37 +236,37 @@ pub fn update_position_and_market(
         }
         PositionUpdateType::Reduce | PositionUpdateType::Close => {
             if position.base_asset_amount > 0 {
-                market.amm.base_asset_amount_long = market
+                amm.base_asset_amount_long = market
                     .amm
                     .base_asset_amount_long
                     .safe_add(new_settled_base_asset_amount.cast()?)?;
-                market.amm.quote_entry_amount_long = market.amm.quote_entry_amount_long.safe_sub(
+                amm.quote_entry_amount_long = amm.quote_entry_amount_long.safe_sub(
                     position
                         .quote_entry_amount
                         .safe_sub(new_quote_entry_amount)?
                         .cast()?,
                 )?;
-                market.amm.quote_break_even_amount_long =
-                    market.amm.quote_break_even_amount_long.safe_sub(
+                amm.quote_break_even_amount_long =
+                    amm.quote_break_even_amount_long.safe_sub(
                         position
                             .quote_break_even_amount
                             .safe_sub(new_quote_break_even_amount)?
                             .cast()?,
                     )?;
             } else {
-                market.amm.base_asset_amount_short = market
+                amm.base_asset_amount_short = market
                     .amm
                     .base_asset_amount_short
                     .safe_add(new_settled_base_asset_amount.cast()?)?;
-                market.amm.quote_entry_amount_short =
-                    market.amm.quote_entry_amount_short.safe_sub(
+                amm.quote_entry_amount_short =
+                    amm.quote_entry_amount_short.safe_sub(
                         position
                             .quote_entry_amount
                             .safe_sub(new_quote_entry_amount)?
                             .cast()?,
                     )?;
-                market.amm.quote_break_even_amount_short =
-                    market.amm.quote_break_even_amount_short.safe_sub(
+                amm.quote_break_even_amount_short =
+                    amm.quote_break_even_amount_short.safe_sub(
                         position
                             .quote_break_even_amount
                             .safe_sub(new_quote_break_even_amount)?
@@ -276,58 +276,58 @@ pub fn update_position_and_market(
         }
         PositionUpdateType::Flip => {
             if new_base_asset_amount > 0 {
-                market.amm.base_asset_amount_short = market
+                amm.base_asset_amount_short = market
                     .amm
                     .base_asset_amount_short
                     .safe_sub(position.base_asset_amount.cast()?)?;
-                market.amm.base_asset_amount_long = market
+                amm.base_asset_amount_long = market
                     .amm
                     .base_asset_amount_long
                     .safe_add(new_base_asset_amount.cast()?)?;
 
-                market.amm.quote_entry_amount_short = market
+                amm.quote_entry_amount_short = market
                     .amm
                     .quote_entry_amount_short
                     .safe_sub(position.quote_entry_amount.cast()?)?;
-                market.amm.quote_entry_amount_long = market
+                amm.quote_entry_amount_long = market
                     .amm
                     .quote_entry_amount_long
                     .safe_add(new_quote_entry_amount.cast()?)?;
 
-                market.amm.quote_break_even_amount_short = market
+                amm.quote_break_even_amount_short = market
                     .amm
                     .quote_break_even_amount_short
                     .safe_sub(position.quote_break_even_amount.cast()?)?;
-                market.amm.quote_break_even_amount_long =
+                amm.quote_break_even_amount_long =
                     market
                         .amm
                         .quote_break_even_amount_long
                         .safe_add(new_quote_break_even_amount.cast()?)?;
             } else {
-                market.amm.base_asset_amount_long = market
+                amm.base_asset_amount_long = market
                     .amm
                     .base_asset_amount_long
                     .safe_sub(position.base_asset_amount.cast()?)?;
-                market.amm.base_asset_amount_short = market
+                amm.base_asset_amount_short = market
                     .amm
                     .base_asset_amount_short
                     .safe_add(new_base_asset_amount.cast()?)?;
 
-                market.amm.quote_entry_amount_long = market
+                amm.quote_entry_amount_long = market
                     .amm
                     .quote_entry_amount_long
                     .safe_sub(position.quote_entry_amount.cast()?)?;
-                market.amm.quote_entry_amount_short = market
+                amm.quote_entry_amount_short = market
                     .amm
                     .quote_entry_amount_short
                     .safe_add(new_quote_entry_amount.cast()?)?;
 
-                market.amm.quote_break_even_amount_long =
+                amm.quote_break_even_amount_long =
                     market
                         .amm
                         .quote_break_even_amount_long
                         .safe_sub(position.quote_break_even_amount.cast()?)?;
-                market.amm.quote_break_even_amount_short = market
+                amm.quote_break_even_amount_short = market
                     .amm
                     .quote_break_even_amount_short
                     .safe_add(new_quote_break_even_amount.cast()?)?;
@@ -339,20 +339,20 @@ pub fn update_position_and_market(
     match position.get_direction() {
         PositionDirection::Long if position.base_asset_amount != 0 => {
             validate!(
-                position.last_cumulative_funding_rate.cast::<i128>()? == market.amm.cumulative_funding_rate_long,
+                position.last_cumulative_funding_rate.cast::<i128>()? == amm.cumulative_funding_rate_long,
                 ErrorCode::InvalidPositionLastFundingRate,
-                "position.last_cumulative_funding_rate {} market.amm.cumulative_funding_rate_long {}",
+                "position.last_cumulative_funding_rate {} amm.cumulative_funding_rate_long {}",
                 position.last_cumulative_funding_rate.cast::<i128>()?,
-                market.amm.cumulative_funding_rate_long,
+                amm.cumulative_funding_rate_long,
             )?;
         }
         PositionDirection::Short => {
             validate!(
-                position.last_cumulative_funding_rate == market.amm.cumulative_funding_rate_short.cast::<i64>()?,
+                position.last_cumulative_funding_rate == amm.cumulative_funding_rate_short.cast::<i64>()?,
                 ErrorCode::InvalidPositionLastFundingRate,
-                "position.last_cumulative_funding_rate {} market.amm.cumulative_funding_rate_short {}",
+                "position.last_cumulative_funding_rate {} amm.cumulative_funding_rate_short {}",
                 position.last_cumulative_funding_rate,
-                market.amm.cumulative_funding_rate_short,
+                amm.cumulative_funding_rate_short,
             )?;
         }
         _ => {}
@@ -370,17 +370,17 @@ pub fn update_position_and_market(
     ) {
         if new_position_base_with_remainder > 0 {
             position.last_cumulative_funding_rate =
-                market.amm.cumulative_funding_rate_long.cast()?;
+                amm.cumulative_funding_rate_long.cast()?;
         } else {
             position.last_cumulative_funding_rate =
-                market.amm.cumulative_funding_rate_short.cast()?;
+                amm.cumulative_funding_rate_short.cast()?;
         }
     }
 
     validate!(
         is_multiple_of_step_size(
             position.base_asset_amount.unsigned_abs(),
-            market.amm.order_step_size
+            amm.order_step_size
         )?,
         ErrorCode::InvalidPerpPositionDetected,
         "update_position_and_market left invalid position before {} after {}",
@@ -404,36 +404,36 @@ pub fn update_lp_market_position(
     fee_to_market: i128,
     liquidity_split: AMMLiquiditySplit,
 ) -> NormalResult<i128> {
-    if market.amm.user_lp_shares == 0 || liquidity_split == AMMLiquiditySplit::ProtocolOwned {
+    if amm.user_lp_shares == 0 || liquidity_split == AMMLiquiditySplit::ProtocolOwned {
         return Ok(0); // no need to split with LP
     }
 
-    let base_unit: i128 = market.amm.get_per_lp_base_unit()?;
+    let base_unit: i128 = amm.get_per_lp_base_unit()?;
 
     let (per_lp_delta_base, per_lp_delta_quote, per_lp_fee) =
         market
             .amm
             .calculate_per_lp_delta(delta, fee_to_market, liquidity_split, base_unit)?;
 
-    market.amm.base_asset_amount_per_lp = market
+    amm.base_asset_amount_per_lp = market
         .amm
         .base_asset_amount_per_lp
         .safe_add(-per_lp_delta_base)?;
 
-    market.amm.quote_asset_amount_per_lp = market
+    amm.quote_asset_amount_per_lp = market
         .amm
         .quote_asset_amount_per_lp
         .safe_add(-per_lp_delta_quote)?;
 
     // track total fee earned by lps (to attribute breakdown of IL)
-    market.amm.total_fee_earned_per_lp = market
+    amm.total_fee_earned_per_lp = market
         .amm
         .total_fee_earned_per_lp
         .saturating_add(per_lp_fee.cast()?);
 
     // update per lp position
-    market.amm.quote_asset_amount_per_lp =
-        market.amm.quote_asset_amount_per_lp.safe_add(per_lp_fee)?;
+    amm.quote_asset_amount_per_lp =
+        amm.quote_asset_amount_per_lp.safe_add(per_lp_fee)?;
 
     let lp_delta_base = market
         .amm
@@ -442,17 +442,17 @@ pub fn update_lp_market_position(
         .amm
         .calculate_lp_base_delta(per_lp_delta_quote, base_unit)?;
 
-    market.amm.base_asset_amount_with_amm = market
+    amm.base_asset_amount_with_amm = market
         .amm
         .base_asset_amount_with_amm
         .safe_sub(lp_delta_base)?;
 
-    market.amm.base_asset_amount_with_unsettled_lp = market
+    amm.base_asset_amount_with_unsettled_lp = market
         .amm
         .base_asset_amount_with_unsettled_lp
         .safe_add(lp_delta_base)?;
 
-    market.amm.quote_asset_amount_with_unsettled_lp = market
+    amm.quote_asset_amount_with_unsettled_lp = market
         .amm
         .quote_asset_amount_with_unsettled_lp
         .safe_add(lp_delta_quote.cast()?)?;
@@ -495,16 +495,16 @@ pub fn update_position_with_base_asset_amount(
         &position_delta,
     )?;
 
-    market.amm.base_asset_amount_with_amm = market
+    amm.base_asset_amount_with_amm = market
         .amm
         .base_asset_amount_with_amm
         .safe_add(position_delta.base_asset_amount.cast()?)?;
 
     validate!(
-        market.amm.base_asset_amount_with_amm.unsigned_abs() <= MAX_BASE_ASSET_AMOUNT_WITH_AMM,
+        amm.base_asset_amount_with_amm.unsigned_abs() <= MAX_BASE_ASSET_AMOUNT_WITH_AMM,
         ErrorCode::InvalidAmmDetected,
-        "market.amm.base_asset_amount_with_amm={} cannot exceed MAX_BASE_ASSET_AMOUNT_WITH_AMM",
-        market.amm.base_asset_amount_with_amm
+        "amm.base_asset_amount_with_amm={} cannot exceed MAX_BASE_ASSET_AMOUNT_WITH_AMM",
+        amm.base_asset_amount_with_amm
     )?;
 
     controller::amm::update_spread_reserves(market)?;
@@ -564,7 +564,7 @@ pub fn update_quote_asset_amount(
 
     position.quote_asset_amount = position.quote_asset_amount.safe_add(delta)?;
 
-    market.amm.quote_asset_amount = market.amm.quote_asset_amount.safe_add(delta.cast()?)?;
+    amm.quote_asset_amount = amm.quote_asset_amount.safe_add(delta.cast()?)?;
 
     if position.quote_asset_amount == 0
         && position.base_asset_amount == 0
@@ -588,13 +588,13 @@ pub fn update_quote_break_even_amount(
     position.quote_break_even_amount = position.quote_break_even_amount.safe_add(delta)?;
     match position.get_direction() {
         PositionDirection::Long => {
-            market.amm.quote_break_even_amount_long = market
+            amm.quote_break_even_amount_long = market
                 .amm
                 .quote_break_even_amount_long
                 .safe_add(delta.cast()?)?
         }
         PositionDirection::Short => {
-            market.amm.quote_break_even_amount_short = market
+            amm.quote_break_even_amount_short = market
                 .amm
                 .quote_break_even_amount_short
                 .safe_add(delta.cast()?)?

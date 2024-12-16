@@ -2,13 +2,13 @@ use anchor_lang::prelude::*;
 
 use crate::{
 	error::ErrorCode,
-	instructions::AdminUpdateMarket,
+	instructions::AdminUpdateSynthMarket,
 	math::amm::MAX_PROTOCOL_FEE_RATE,
-	state::market::Market,
+	state::synth_market::SynthMarket,
 };
 
 pub fn handle_set_protocol_fee_rate(
-	ctx: Context<AdminUpdateMarket>,
+	ctx: Context<AdminUpdateSynthMarket>,
 	protocol_fee_rate: u16
 ) -> Result<()> {
 	if protocol_fee_rate > MAX_PROTOCOL_FEE_RATE {

@@ -3,7 +3,7 @@ use crate::math::casting::Cast;
 use crate::math::margin::MarginRequirementType;
 use crate::math::safe_math::SafeMath;
 use crate::state::oracle::StrictOraclePrice;
-use crate::state::market::Market;
+use crate::state::synth_market::SynthMarket;
 use crate::state::user::{ User };
 use crate::{
 	validate,
