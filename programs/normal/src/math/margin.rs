@@ -9,14 +9,13 @@ use crate::math::constants::{
 	SPOT_WEIGHT_PRECISION_U128,
 };
 
-use crate::state::vault_map::VaultMap;
 use crate::{ validate, PRICE_PRECISION_I128 };
 use crate::{ validation, PRICE_PRECISION_I64 };
 
 use crate::math::casting::Cast;
 use crate::math::oracle::{ is_oracle_valid_for_action, NormalAction };
 
-use crate::math::spot_balance::{ get_strict_token_value, get_token_value };
+use crate::math::synth_balance::{ get_strict_token_value, get_token_value };
 
 use crate::math::safe_math::SafeMath;
 use crate::state::margin_calculation::{
@@ -77,7 +76,6 @@ pub fn calculate_size_premium_liability_weight(
 pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 	user: &User,
 	market_map: &SynthMarketMap,
-	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	context: MarginContext
 ) -> NormalResult<MarginCalculation> {
@@ -125,13 +123,11 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 pub fn meets_initial_margin_requirement(
 	user: &User,
 	market_map: &SynthMarketMap,
-	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap
 ) -> NormalResult<bool> {
 	calculate_margin_requirement_and_total_collateral_and_liability_info(
 		user,
 		market_map,
-		vault_map,
 		oracle_map,
 		MarginContext::standard(MarginRequirementType::Initial)
 	).map(|calc| calc.meets_margin_requirement())
@@ -140,13 +136,11 @@ pub fn meets_initial_margin_requirement(
 pub fn meets_maintenance_margin_requirement(
 	user: &User,
 	market_map: &SynthMarketMap,
-	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap
 ) -> NormalResult<bool> {
 	calculate_margin_requirement_and_total_collateral_and_liability_info(
 		user,
 		market_map,
-		vault_map,
 		oracle_map,
 		MarginContext::standard(MarginRequirementType::Maintenance)
 	).map(|calc| calc.meets_margin_requirement())
@@ -156,14 +150,12 @@ pub fn calculate_max_withdrawable_amount(
 	market_index: u16,
 	user: &User,
 	market_map: &SynthMarketMap,
-	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap
 ) -> NormalResult<u64> {
 	let calculation =
 		calculate_margin_requirement_and_total_collateral_and_liability_info(
 			user,
 			market_map,
-			vault_map,
 			oracle_map,
 			MarginContext::standard(MarginRequirementType::Initial)
 		)?;

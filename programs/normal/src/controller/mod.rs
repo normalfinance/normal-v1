@@ -10,3 +10,6 @@ pub mod tick;
 pub mod token;
 pub mod vault;
 pub mod vp;
+pub mod synth_balance;
+pub mod synth_position;
+pub mod schedule;

@@ -127,34 +127,6 @@ export function getIndexMarketPublicKeySync(
 	)[0];
 }
 
-export async function getVaultPublicKey(
-	programId: PublicKey,
-	vaultIndex: number
-): Promise<PublicKey> {
-	return (
-		await PublicKey.findProgramAddress(
-			[
-				Buffer.from(anchor.utils.bytes.utf8.encode('vault')),
-				new anchor.BN(vaultIndex).toArrayLike(Buffer, 'le', 2),
-			],
-			programId
-		)
-	)[0];
-}
-
-export function getVaultPublicKeySync(
-	programId: PublicKey,
-	vaultIndex: number
-): PublicKey {
-	return PublicKey.findProgramAddressSync(
-		[
-			Buffer.from(anchor.utils.bytes.utf8.encode('vault')),
-			new anchor.BN(vaultIndex).toArrayLike(Buffer, 'le', 2),
-		],
-		programId
-	)[0];
-}
-
 export async function getInsuranceFundPublicKey(
 	programId: PublicKey
 ): Promise<PublicKey> {

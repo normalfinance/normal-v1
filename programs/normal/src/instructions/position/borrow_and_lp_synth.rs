@@ -2,11 +2,14 @@ use amm::AMM;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
+use index_market_map::MarketSet;
+use synth_market::MarketStatus;
 use synth_market_map::get_writable_market_set;
 use user::{ User, UserStats };
 use vault::Vault;
 use vault_map::get_writable_vault_set;
 
+use crate::error::ErrorCode;
 use crate::errors::ErrorCode;
 use crate::instructions::optional_accounts::{ load_maps, AccountMaps };
 use crate::manager::liquidity_manager::{
@@ -55,10 +58,13 @@ pub struct DepositCollateral<'info> {
 	pub token_program: Interface<'info, TokenInterface>,
 }
 
-#[access_control(deposit_not_paused(&ctx.accounts.state))]
-pub fn handle_deposit_collateral<'c: 'info, 'info>(
+#[access_control(
+    deposit_not_paused(&ctx.accounts.state)
+    synth_market_valid(&ctx.accounts.synth_market)
+)]
+pub fn handle_deposit_into_synth_market_vault<'c: 'info, 'info>(
 	ctx: Context<'_, '_, 'c, 'info, DepositCollateral<'info>>,
-	vault_index: u16,
+	market_index: u16,
 	amount: u64,
 	reduce_only: bool
 ) -> Result<()> {
@@ -83,17 +89,16 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 	let slot = clock.slot;
 
 	let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
-	let AccountMaps { market_map, vault_map, mut oracle_map } = load_maps(
-		remaining_accounts_iter,
-		&MarketSet::new(),
-		&get_writable_vault_set(vault_index),
-		clock.slot,
-		Some(state.oracle_guard_rails)
-	)?;
+	let AccountMaps { synth_market_map, index_market_map, mut oracle_map } =
+		load_maps(
+			remaining_accounts_iter,
+			&MarketSet::new(),
+			&get_writable_synth_market_set(market_index),
+			clock.slot,
+			Some(state.oracle_guard_rails)
+		)?;
 
 	let mint = get_token_mint(remaining_accounts_iter)?;
-
-	// Validations
 
 	if amount == 0 {
 		return Err(ErrorCode::InsufficientDeposit.into());
@@ -101,14 +106,13 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 
 	validate!(!user.is_bankrupt(), ErrorCode::UserBankrupt)?;
 
-	let mut vault: std::cell::RefMut<'_, _> = vault_map.get_ref_mut(
-		&vault_index
-	)?;
-	let market = market_map.get_ref(&vault.market_index)?;
+	let mut synth_market = synth_market_map.get_ref_mut(&market_index)?;
+	let oracle_price_data = &oracle_map
+		.get_price_data(&synth_market.oracle)?
+		.clone();
 
-	// Ensure market is active
 	validate!(
-		!matches!(market.status, MarketStatus::Initialized),
+		!matches!(synth_market.status, MarketStatus::Initialized),
 		ErrorCode::MarketBeingInitialized,
 		"Market is being initialized"
 	)?;

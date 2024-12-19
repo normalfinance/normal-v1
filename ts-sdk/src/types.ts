@@ -84,6 +84,11 @@ export class SpotBalanceType {
 	static readonly BORROW = { borrow: {} };
 }
 
+export class OrderDirection {
+	static readonly BUY = { buy: {} };
+	static readonly SELL = { sell: {} };
+}
+
 export class DepositDirection {
 	static readonly DEPOSIT = { deposit: {} };
 	static readonly WITHDRAW = { withdraw: {} };
@@ -396,8 +401,6 @@ export type IndexAsset = {
 	lastUpdatedTs: BN;
 };
 
-export type IndexAssets = BTreeMap<PublicKey, IndexAsset>;
-
 export type IndexMarketAccount = {
 	pubkey: PublicKey;
 	marketIndex: number;
@@ -426,36 +429,11 @@ export type IndexMarketAccount = {
 	referral_fee_owed: number;
 	total_fees: number;
 
-	amm: AMM;
-
-	insuranceClaim: {
-		revenueWithdrawSinceLastSettle: BN;
-		maxRevenueWithdrawPerPeriod: BN;
-		lastRevenueWithdrawTs: BN;
-		quoteSettledInsurance: BN;
-		quoteMaxInsurance: BN;
-	};
-
 	expiryTs: BN;
 	expiryPrice: BN;
 
 	rebalancedTs: BN;
 	updatedTs: BN;
-};
-
-export type VaultAccount = {
-	pubkey: PublicKey;
-	authority: PublicKey;
-	delegate: PublicKey;
-	vaultIndex: number;
-	marketIndex: number;
-	collateral_loan_balance: BN;
-	token_vault_collateral: PublicKey;
-	status: VaultStatus;
-	lastActiveSlot: BN;
-	idle: boolean;
-	collateralization_ratio: BN;
-	synthetic_tokens_minted: BN;
 };
 
 export type HistoricalOracleData = {
@@ -521,13 +499,59 @@ export type AMM = {
 	rewardInfos: AMMRewardInfo[];
 };
 
-export type Index = {};
-
 // # User Account Types
-export type VaultPosition = {
+export type Position = {
 	scaledBalance: BN;
 	cumulativeDeposits: BN;
 	marketIndex: number;
+};
+
+export type Schedule = {
+	market_type: MarketType;
+	amm: PublicKey;
+	base_asset_amount_per_interval: BN;
+	direction: OrderDirection;
+	active: boolean;
+	interval_seconds: BN;
+	total_orders: number;
+	min_price: number;
+	max_price: number;
+	executed_orders: number;
+	total_executed: BN;
+	last_updated_ts: BN;
+	last_order_ts: BN;
+};
+
+export type ScheduleParams = {
+	marketType: MarketType;
+	direction: OrderDirection;
+	baseAssetAmount: BN;
+	marketIndex: number;
+	minPrice: BN | null;
+	maxPrice: BN | null;
+};
+
+export type NecessaryScheduleParams = {
+	marketIndex: number;
+	baseAssetAmount: BN;
+	direction: OrderDirection;
+};
+
+export type OptionalScheduleParams = {
+	[Property in keyof ScheduleParams]?: ScheduleParams[Property];
+} & NecessaryScheduleParams;
+
+export type ModifyScheduleParams = {
+	[Property in keyof ScheduleParams]?: ScheduleParams[Property] | null;
+};
+
+export const DefaultScheduleParams: ScheduleParams = {
+	marketType: MarketType.SYNTH,
+	direction: OrderDirection.BUY,
+	baseAssetAmount: ZERO,
+	marketIndex: 0,
+	minPrice: null,
+	maxPrice: null,
 };
 
 export type UserStatsAccount = {
@@ -558,13 +582,15 @@ export type UserAccount = {
 	delegate: PublicKey;
 	name: number[];
 	subAccountId: number;
-	vaultPositions: VaultPosition[];
+	positions: Position[];
+	indexes: number[];
+	schedules: Schedule[];
+	scheduleStreak: number;
 	status: number;
 	nextLiquidationId: number;
 	maxMarginRatio: number;
 	totalDeposits: BN;
 	totalWithdraws: BN;
-	cumulativeSpotFees: BN;
 	liquidationMarginFreed: BN;
 	lastActiveSlot: BN;
 	idle: boolean;

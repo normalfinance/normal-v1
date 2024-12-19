@@ -84,7 +84,7 @@ pub fn handle_withdraw_collateral<'c: 'info, 'info>(
 		let market = &mut market_map.get_ref_mut(&market_index)?;
 		let oracle_price_data = oracle_map.get_price_data(&market.oracle)?;
 
-		controller::spot_balance::update_spot_market_cumulative_interest(
+		controller::spot_balance::update_synth_market_cumulative_interest(
 			market,
 			Some(oracle_price_data),
 			now

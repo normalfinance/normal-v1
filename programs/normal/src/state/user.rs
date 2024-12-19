@@ -17,7 +17,7 @@ use crate::math::position::{
 	calculate_perp_liability_value,
 };
 use crate::math::safe_math::SafeMath;
-use crate::math::spot_balance::{
+use crate::math::synth_balance::{
 	get_signed_token_amount,
 	get_strict_token_value,
 	get_token_amount,
@@ -45,13 +45,9 @@ use crate::math::margin::{
 use crate::state::margin_calculation::{ MarginCalculation, MarginContext };
 use crate::state::oracle_map::OracleMap;
 
+use super::schedule::{Schedule};
 use super::synth_market_map::SynthMarketMap;
-use super::vault::Vault;
-use super::vault_map::VaultMap;
 use super::position::Position;
-
-// #[cfg(test)]
-// mod tests;
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
 pub enum UserStatus {
@@ -74,12 +70,17 @@ pub struct User {
 	pub authority: Pubkey,
 	/// An addresses that can control the account on the authority's behalf. Has limited power, cant withdraw
 	pub delegate: Pubkey,
+	//
+	pub vault: Pubkey,
 	/// Encoded display name e.g. "toly"
 	pub name: [u8; 32],
 	/// The user's positions
 	pub positions: [Position; 8],
 	/// The user's created indexes (market_index)
 	pub indexes: [u16; 8],
+	/// The user's Dollar-Cost Average (DCA) rules
+	pub schedules: [Schedule; 8],
+	pub schedule_streak: u16,
 	/// The total values of deposits the user has made
 	/// precision: QUOTE_PRECISION
 	pub total_deposits: u64,
@@ -129,6 +130,38 @@ impl User {
 
 	pub fn remove_user_status(&mut self, status: UserStatus) {
 		self.status &= !(status as u8);
+	}
+
+	// DCA
+
+	pub fn get_dca(&self, market_index: u16) -> DriftResult<&PerpPosition> {
+		Ok(
+			&self.dollar_cost_averages
+				[get_position_index(&self.dollar_cost_averages, market_index)?]
+		)
+	}
+
+	pub fn get_dca_mut(
+		&mut self,
+		market_index: u16
+	) -> DriftResult<&mut PerpPosition> {
+		Ok(
+			&mut self.dollar_cost_averages
+				[get_position_index(&self.dollar_cost_averages, market_index)?]
+		)
+	}
+
+	pub fn force_get_dca_mut(
+		&mut self,
+		market_index: u16
+	) -> DriftResult<&mut PerpPosition> {
+		let position_index = get_position_index(
+			&self.dollar_cost_averages,
+			market_index
+		).or_else(|_|
+			add_new_position(&mut self.dollar_cost_averages, market_index)
+		)?;
+		Ok(&mut self.dollar_cost_averages[position_index])
 	}
 
 	// Position
@@ -316,7 +349,6 @@ impl User {
 	pub fn calculate_margin(
 		&mut self,
 		market_map: &MarketMap,
-		vault_map: &VaultMap,
 		oracle_map: &mut OracleMap,
 		context: MarginContext,
 		now: i64
@@ -325,7 +357,6 @@ impl User {
 			calculate_margin_requirement_and_total_collateral_and_liability_info(
 				self,
 				market_map,
-				vault_map,
 				oracle_map,
 				context
 			)?;
@@ -336,7 +367,6 @@ impl User {
 	pub fn meets_withdraw_margin_requirement(
 		&mut self,
 		market_map: &MarketMap,
-		vault_map: &VaultMap,
 		oracle_map: &mut OracleMap,
 		margin_requirement_type: MarginRequirementType,
 		withdraw_market_index: u16,
@@ -353,7 +383,6 @@ impl User {
 			calculate_margin_requirement_and_total_collateral_and_liability_info(
 				self,
 				market_map,
-				vault_map,
 				oracle_map,
 				context
 			)?;
@@ -402,186 +431,4 @@ pub struct UserFees {
 	/// Total reward to referrer this epoch
 	/// precision: QUOTE_PRECISION
 	pub current_epoch_referrer_reward: u64,
-}
-
-#[derive(
-	Default,
-	Clone,
-	Copy,
-	BorshSerialize,
-	BorshDeserialize,
-	PartialEq,
-	Debug,
-	Eq
-)]
-pub enum MarketType {
-	#[default]
-	Synth,
-	Index,
-}
-
-impl fmt::Display for MarketType {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			MarketType::Synth => write!(f, "Synth"),
-			MarketType::Index => write!(f, "Index"),
-		}
-	}
-}
-
-#[account(zero_copy(unsafe))]
-#[derive(Eq, PartialEq, Debug)]
-#[repr(C)]
-#[derive(Default)]
-pub struct UserStats {
-	/// The authority for all of a users sub accounts
-	pub authority: Pubkey,
-	/// The address that referred this user
-	pub referrer: Pubkey,
-	/// Stats on the fees paid by the user
-	pub fees: UserFees,
-
-	/// The timestamp of the next epoch
-	/// Epoch is used to limit referrer rewards earned in single epoch
-	pub next_epoch_ts: i64,
-
-	/// Rolling 30day collateral volume for user
-	/// precision: QUOTE_PRECISION
-	pub collateral_volume_30d: u64,
-	/// Rolling 30day trade volume for user
-	/// precision: QUOTE_PRECISION
-	pub trade_volume_30d: u64,
-	/// last time the collateral volume was updated
-	pub last_collateral_volume_30d_ts: i64,
-	/// last time the trade volume was updated
-	pub last_trade_volume_30d_ts: i64,
-
-	/// The amount of tokens staked in the quote spot markets if
-	pub if_staked_quote_asset_amount: u64,
-	/// The current number of sub accounts
-	pub number_of_sub_accounts: u16,
-	/// The number of sub accounts created. Can be greater than the number of sub accounts if user
-	/// has deleted sub accounts
-	pub number_of_sub_accounts_created: u16,
-	/// Whether the user is a referrer. Sub account 0 can not be deleted if user is a referrer
-	pub is_referrer: bool,
-	pub padding: [u8; 12],
-}
-
-impl Size for UserStats {
-	const SIZE: usize = 168;
-}
-
-impl UserStats {
-	pub fn update_collateral_volume_30d(
-		&mut self,
-		quote_asset_amount: u64,
-		now: i64
-	) -> NormalResult {
-		let since_last = max(
-			1_i64,
-			now.safe_sub(self.last_collateral_volume_30d_ts)?
-		);
-
-		self.collateral_volume_30d = calculate_rolling_sum(
-			self.collateral_volume_30d,
-			quote_asset_amount,
-			since_last,
-			THIRTY_DAY
-		)?;
-		self.last_collateral_volume_30d_ts = now;
-
-		Ok(())
-	}
-
-	pub fn update_trade_volume_30d(
-		&mut self,
-		quote_asset_amount: u64,
-		now: i64
-	) -> NormalResult {
-		let since_last = max(1_i64, now.safe_sub(self.last_trade_volume_30d_ts)?);
-
-		self.trade_volume_30d = calculate_rolling_sum(
-			self.trade_volume_30d,
-			quote_asset_amount,
-			since_last,
-			THIRTY_DAY
-		)?;
-		self.last_trade_volume_30d_ts = now;
-
-		Ok(())
-	}
-
-	pub fn increment_total_fees(&mut self, fee: u64) -> NormalResult {
-		self.fees.total_fee_paid = self.fees.total_fee_paid.safe_add(fee)?;
-
-		Ok(())
-	}
-
-	pub fn increment_total_referrer_reward(
-		&mut self,
-		reward: u64,
-		now: i64
-	) -> NormalResult {
-		self.fees.total_referrer_reward =
-			self.fees.total_referrer_reward.safe_add(reward)?;
-
-		self.fees.current_epoch_referrer_reward =
-			self.fees.current_epoch_referrer_reward.safe_add(reward)?;
-
-		if now > self.next_epoch_ts {
-			let n_epoch_durations = now
-				.safe_sub(self.next_epoch_ts)?
-				.safe_div(EPOCH_DURATION)?
-				.safe_add(1)?;
-
-			self.next_epoch_ts = self.next_epoch_ts.safe_add(
-				EPOCH_DURATION.safe_mul(n_epoch_durations)?
-			)?;
-
-			self.fees.current_epoch_referrer_reward = 0;
-		}
-
-		Ok(())
-	}
-
-	pub fn increment_total_referee_discount(
-		&mut self,
-		discount: u64
-	) -> NormalResult {
-		self.fees.total_referee_discount =
-			self.fees.total_referee_discount.safe_add(discount)?;
-
-		Ok(())
-	}
-
-	pub fn has_referrer(&self) -> bool {
-		!self.referrer.eq(&Pubkey::default())
-	}
-
-	pub fn get_total_30d_volume(&self) -> NormalResult<u64> {
-		self.trade_volume_30d.safe_add(self.collateral_volume_30d)
-	}
-
-	pub fn get_age_ts(&self, now: i64) -> i64 {
-		// upper bound of age of the user stats account
-		let min_action_ts: i64 = self.last_collateral_volume_30d_ts.min(
-			self.last_trade_volume_30d_ts
-		);
-		now.saturating_sub(min_action_ts).max(0)
-	}
-}
-
-#[account(zero_copy(unsafe))]
-#[derive(Default, Eq, PartialEq, Debug)]
-#[repr(C)]
-pub struct ReferrerName {
-	pub authority: Pubkey,
-	pub user: Pubkey,
-	pub user_stats: Pubkey,
-	pub name: [u8; 32],
-}
-
-impl Size for ReferrerName {
-	const SIZE: usize = 136;
 }

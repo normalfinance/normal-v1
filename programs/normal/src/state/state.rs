@@ -15,8 +15,30 @@ use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
 
 use super::synth_market::AuctionConfig;
 
-// #[cfg(test)]
-// mod tests;
+#[derive(
+	Default,
+	Clone,
+	Copy,
+	BorshSerialize,
+	BorshDeserialize,
+	PartialEq,
+	Debug,
+	Eq
+)]
+pub enum MarketType {
+	#[default]
+	Synth,
+	Index,
+}
+
+impl fmt::Display for MarketType {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			MarketType::Synth => write!(f, "Synth"),
+			MarketType::Index => write!(f, "Index"),
+		}
+	}
+}
 
 #[account]
 #[derive(Default)]
@@ -79,6 +101,8 @@ pub struct State {
 	// Debt Auctions
 	pub debt_auction_config: AuctionConfig,
 
+	pub dca_order_padding: u16,
+
 	pub padding: [u8; 10],
 }
 
@@ -90,6 +114,7 @@ pub enum ExchangeStatus {
 	LendPaused = 0b00000100,
 	AmmPaused = 0b00001000,
 	LiqPaused = 0b00010000,
+	ScheduleFillPaused = 0b00100000,
 	// Paused = 0b11111111
 }
 

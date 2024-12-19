@@ -36,9 +36,13 @@ declare_id!("...");
 pub mod normal {
 	use instructions::{
 		collateral::transfer_collateral::handle_transfer_collateral,
+		execute_schedule_order::ExecuteScheduleOrder,
 		UpdateIndexMarket,
 	};
-	use state::index_market::{ IndexAsset, IndexVisibility };
+	use state::{
+		index_market::{ IndexAsset, IndexVisibility },
+		schedule::OrderDirection,
+	};
 
 	use super::*;
 
@@ -847,6 +851,51 @@ pub mod normal {
 		market_index: u16
 	) -> Result<()> {
 		handle_delete_initialized_market(ctx, market_index)
+	}
+
+	// Schedule Instructions
+
+	pub fn create_schedule<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, PlaceOrder>,
+		params: ScheduleParams
+	) -> Result<()> {
+		handle_create_schedule(ctx, params)
+	}
+
+	pub fn modify_schedule<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, ModifySchedule<'info>>,
+		schedule_id: Option<u32>,
+		modify_schedule_params: ModifyScheduleParams
+	) -> Result<()> {
+		handle_modify_schedule(ctx, schedule_id, modify_schedule_params)
+	}
+
+	pub fn delete_schedule<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, DeleteSchedule>,
+		schedule_id: Option<u32>
+	) -> Result<()> {
+		handle_delete_schedule(ctx, schedule_id)
+	}
+
+	pub fn deposit_into_schedule_vault<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, DepositIntoScheduleVault<'info>>,
+		amount: u64
+	) -> Result<()> {
+		handle_deposit_into_schedule_vault(ctx, amount)
+	}
+
+	pub fn withdraw_from_schedule_vault<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, WithdrawFromScheduleVault<'info>>,
+		amount: u64
+	) -> Result<()> {
+		handle_withdraw_from_schedule_vault(ctx, amount)
+	}
+
+	pub fn execute_schedule_order<'c: 'info, 'info>(
+		ctx: Context<'_, '_, 'c, 'info, ExecuteScheduleOrder<'info>>,
+		schedule_id: Option<u32>
+	) -> Result<()> {
+		handle_execute_schedule_order(ctx, schedule_id)
 	}
 
 	// Oracle instructions

@@ -1,14 +1,16 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
+use events::DepositRecord;
 use user::{ User, UserStats };
 use vault_map::get_writable_vault_set;
 
 use crate::errors::ErrorCode;
-use crate::{ controller, state::*, State };
+use crate::instructions::optional_accounts::{ load_maps, AccountMaps };
+use crate::{ controller, load_mut, state::*, State };
 
 #[derive(Accounts)]
-#[instruction(vault_index: u16,)]
+#[instruction(market_index: u16,)]
 pub struct TransferCollateral<'info> {
 	#[account(
         mut,
@@ -28,10 +30,13 @@ pub struct TransferCollateral<'info> {
 	pub authority: Signer<'info>,
 	pub state: Box<Account<'info, State>>,
 	#[account(
-		seeds = [b"market_vault".as_ref(), market_index.to_le_bytes().as_ref()],
+		seeds = [
+			b"synth_market_vault".as_ref(),
+			market_index.to_le_bytes().as_ref(),
+		],
 		bump
 	)]
-	pub market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+	pub synth_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 }
 
 #[access_control(
@@ -40,7 +45,7 @@ pub struct TransferCollateral<'info> {
 )]
 pub fn handle_transfer_collateral<'c: 'info, 'info>(
 	ctx: Context<'_, '_, 'c, 'info, TransferCollateral<'info>>,
-	vault_index: u16,
+	market_index: u16,
 	amount: u64
 ) -> Result<()> {
 	let authority_key = ctx.accounts.authority.key;
@@ -75,27 +80,28 @@ pub fn handle_transfer_collateral<'c: 'info, 'info>(
 		"cant transfer between the same user account"
 	)?;
 
-	let AccountMaps { market_map, vault_map, mut oracle_map } = load_maps(
-		&mut ctx.remaining_accounts.iter().peekable(),
-		&MarketSet::new(),
-		&get_writable_vault_set(vault_index),
-		clock.slot,
-		Some(state.oracle_guard_rails)
-	)?;
+	let AccountMaps { synth_market_map, index_market_map, mut oracle_map } =
+		load_maps(
+			&mut ctx.remaining_accounts.iter().peekable(),
+			&MarketSet::new(),
+			&get_writable_vault_set(vault_index),
+			clock.slot,
+			Some(state.oracle_guard_rails)
+		)?;
 
-	// {
-	// 	let spot_market = &mut spot_market_map.get_ref_mut(&market_index)?;
-	// 	let oracle_price_data = oracle_map.get_price_data(&spot_market.oracle)?;
-	// 	controller::spot_balance::update_spot_market_cumulative_interest(
-	// 		spot_market,
-	// 		Some(oracle_price_data),
-	// 		clock.unix_timestamp
-	// 	)?;
-	// }
+	{
+		let synth_market = &mut synth_market_map.get_ref_mut(&market_index)?;
+		let oracle_price_data = oracle_map.get_price_data(&synth_market.oracle)?;
+		controller::synth_balance::update_synth_market_cumulative_interest(
+			synth_market,
+			Some(oracle_price_data),
+			clock.unix_timestamp
+		)?;
+	}
 
 	let oracle_price = {
-		let spot_market = &market_map.get_ref(&market_index)?;
-		oracle_map.get_price_data(&spot_market.oracle)?.price
+		let synth_market = &market_map.get_ref(&market_index)?;
+		oracle_map.get_price_data(&synth_market.oracle)?.price
 	};
 
 	{
@@ -104,14 +110,14 @@ pub fn handle_transfer_collateral<'c: 'info, 'info>(
 		from_user.increment_total_withdraws(
 			amount,
 			oracle_price,
-			spot_market.get_precision().cast()?
+			synth_market.get_precision().cast()?
 		)?;
 
 		// prevents withdraw when limits hit
 		controller::spot_position::update_spot_balances_and_cumulative_deposits_with_limits(
 			amount as u128,
 			&SpotBalanceType::Borrow,
-			spot_market,
+			synth_market,
 			from_user
 		)?;
 	}
@@ -221,10 +227,10 @@ pub fn handle_transfer_collateral<'c: 'info, 'info>(
 
 	to_user.update_last_active_slot(slot);
 
-	let spot_market = spot_market_map.get_ref(&market_index)?;
-	math::spot_withdraw::validate_spot_market_vault_amount(
-		&spot_market,
-		ctx.accounts.spot_market_vault.amount
+	let synth_market = synth_market_map.get_ref(&market_index)?;
+	math::synth_withdraw::validate_synth_market_vault_amount(
+		&synth_market,
+		ctx.accounts.synth_market_vault.amount
 	)?;
 
 	Ok(())

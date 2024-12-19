@@ -13,6 +13,9 @@ pub mod margin_calculation;
 pub mod synth_market_map;
 pub mod synth_market;
 pub mod position;
+pub mod referral;
+pub mod user_stats;
+pub mod schedule;
 #[allow(clippy::module_inception)]
 pub mod state;
 pub mod user;
