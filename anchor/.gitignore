@@ -1,0 +1,14 @@
+/**/target
+/**/test-ledger
+/**/node_modules
+/package-lock.json
+/**/output*
+.anchor
+.idea
+yarn-lock
+ts-sdk/src/**/*.js
+ts-sdk/src/**/*.js.map
+.DS_STORE
+.vscode
+migrations
+/**/*.env

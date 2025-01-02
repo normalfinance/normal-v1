@@ -1,5 +1,6 @@
 module.exports = {
 	root: true,
+	extends: 'next/core-web-vitals',
 	parser: '@typescript-eslint/parser',
 	env: {
 		browser: true,
