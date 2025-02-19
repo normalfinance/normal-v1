@@ -195,13 +195,6 @@ pub mod normal {
 		handle_update_market_name(ctx, name)
 	}
 
-	pub fn update_market_number_of_users(
-		ctx: Context<AdminUpdateMarket>,
-		number_of_users: Option<u32>
-	) -> Result<()> {
-		handle_update_market_number_of_users(ctx, number_of_users)
-	}
-
 	// oracle...
 
 	pub fn update_market_paused_operations(

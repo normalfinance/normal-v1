@@ -220,7 +220,6 @@ pub fn handle_initialize_market(
 		},
 		synthetic_tier,
 		paused_operations: 0,
-		number_of_users: 0,
 
 		// Oracle
 		oracle: ctx.accounts.oracle.key(),

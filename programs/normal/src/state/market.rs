@@ -104,7 +104,6 @@ pub struct Market {
 	/// It also influences the order markets can be liquidated, with less speculative markets being liquidated first
 	pub synthetic_tier: SyntheticTier,
 	pub paused_operations: u8,
-	pub number_of_users: u32,
 	/// The sum of the scaled balances for collateral deposits across users
 	/// To convert to the collateral token amount, multiply by the cumulative deposit interest
 	/// precision: SPOT_BALANCE_PRECISION
@@ -268,7 +267,6 @@ impl Default for Market {
 			status: MarketStatus::default(),
 			synthetic_tier: SyntheticTier::default(),
 			paused_operations: 0,
-			number_of_users: 0,
 
 			oracle: Pubkey::default(),
 			oracle_source: OracleSource::default(),

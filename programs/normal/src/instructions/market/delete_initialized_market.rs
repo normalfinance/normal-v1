@@ -41,12 +41,6 @@ pub fn handle_delete_initialized_market(
 		"market.status != Initialized"
 	)?;
 	validate!(
-		market.number_of_users == 0,
-		ErrorCode::InvalidMarketAccountforDeletion,
-		"market.number_of_users={} != 0",
-		market.number_of_users
-	)?;
-	validate!(
 		market.market_index == market_index,
 		ErrorCode::InvalidMarketAccountforDeletion,
 		"market_index={} != market.market_index={}",
