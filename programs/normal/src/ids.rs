@@ -21,19 +21,6 @@ pub mod normal_oracle_receiver_program {
     declare_id!("G6EoTTTgpkNBtVXo96EQp2m6uwwVh2Kt6YidjkmQqoha");
 }
 
-pub mod switchboard_program {
-    use solana_program::declare_id;
-    declare_id!("SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f");
-}
-
-pub mod switchboard_on_demand {
-    use solana_program::declare_id;
-    #[cfg(feature = "mainnet-beta")]
-    declare_id!("SBondMDrcV3K4kxZR1HNVT7osZxAHVHgYXL5Ze1oMUv");
-    #[cfg(not(feature = "mainnet-beta"))]
-    declare_id!("Aio4gaXjXzJNVLtzwtNVmSqGKpANtXhybbkhtAC94ji2");
-}
-
 pub mod bonk_oracle {
     use solana_program::declare_id;
     #[cfg(feature = "mainnet-beta")]
@@ -99,12 +86,4 @@ pub mod usdt_pull_oracle {
 pub mod admin_hot_wallet {
     use solana_program::declare_id;
     declare_id!("5hMjmxexWu954pX9gB9jkHxMqdjpxArQS2XdvkaevRax");
-}
-
-pub mod swift_server {
-    use solana_program::declare_id;
-    #[cfg(not(feature = "anchor-test"))]
-    declare_id!("SW1fThqrxLzVprnCMpiybiqYQfoNCdduC5uWsSUKChS");
-    #[cfg(feature = "anchor-test")]
-    declare_id!("DpaEdAPW3ZX67fnczT14AoX12Lx9VMkxvtT81nCHy3Nv");
 }

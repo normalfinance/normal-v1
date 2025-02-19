@@ -7,8 +7,6 @@ use crate::ids::{
 	pepe_oracle,
 	pepe_pull_oracle,
 	pyth_program,
-	switchboard_on_demand,
-	switchboard_program,
 	usdc_oracle,
 	usdc_pull_oracle,
 	usdt_oracle,
@@ -268,26 +266,6 @@ impl<'a> OracleMap<'a> {
 				});
 
 				continue;
-			} else if account_info.owner == &switchboard_program::id() {
-				let account_info = account_info_iter.next().safe_unwrap()?;
-				let pubkey = account_info.key();
-
-				oracles.insert(pubkey, AccountInfoAndOracleSource {
-					account_info: account_info.clone(),
-					oracle_source: OracleSource::Switchboard,
-				});
-
-				continue;
-			} else if account_info.owner == &switchboard_on_demand::id() {
-				let account_info = account_info_iter.next().safe_unwrap()?;
-				let pubkey = account_info.key();
-
-				oracles.insert(pubkey, AccountInfoAndOracleSource {
-					account_info: account_info.clone(),
-					oracle_source: OracleSource::SwitchboardOnDemand,
-				});
-
-				continue;
 			}
 
 			break;
@@ -357,18 +335,6 @@ impl<'a> OracleMap<'a> {
 			oracles.insert(pubkey, AccountInfoAndOracleSource {
 				account_info: account_info.clone(),
 				oracle_source,
-			});
-		} else if account_info.owner == &switchboard_program::id() {
-			let pubkey = account_info.key();
-			oracles.insert(pubkey, AccountInfoAndOracleSource {
-				account_info: account_info.clone(),
-				oracle_source: OracleSource::Switchboard,
-			});
-		} else if account_info.owner == &switchboard_on_demand::id() {
-			let pubkey = account_info.key();
-			oracles.insert(pubkey, AccountInfoAndOracleSource {
-				account_info: account_info.clone(),
-				oracle_source: OracleSource::SwitchboardOnDemand,
 			});
 		} else if account_info.key() != Pubkey::default() {
 			return Err(ErrorCode::InvalidOracle);

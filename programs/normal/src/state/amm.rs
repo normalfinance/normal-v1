@@ -215,11 +215,6 @@ impl AMM {
 				Ok(Some(self.get_pyth_twap(price_oracle, 1000, false)?)),
 			OracleSource::Pyth1M =>
 				Ok(Some(self.get_pyth_twap(price_oracle, 1000000, false)?)),
-			OracleSource::Switchboard =>
-				Ok(Some(get_switchboard_price(price_oracle, slot)?.price)),
-			OracleSource::SwitchboardOnDemand => {
-				Ok(Some(get_sb_on_demand_price(price_oracle, slot)?.price))
-			}
 			OracleSource::QuoteAsset => {
 				msg!("Can't get oracle twap for quote asset");
 				Err(ErrorCode::DefaultError)

@@ -47,8 +47,6 @@ import {
 	SpotPosition,
 	StateAccount,
 	SwapReduceOnly,
-	SwiftOrderParamsMessage,
-	SwiftServerMessage,
 	TakerInfo,
 	TxParams,
 	UserAccount,
@@ -126,7 +124,6 @@ import {
 	DRIFT_ORACLE_RECEIVER_ID,
 	DEFAULT_CONFIRMATION_OPTS,
 	DRIFT_PROGRAM_ID,
-	SWIFT_ID,
 } from './config';
 import { WRAPPED_SOL_MINT } from './constants/spotMarkets';
 import { UserStats } from './userStats';
@@ -162,7 +159,6 @@ import { PythSolanaReceiver } from '@pythnetwork/pyth-solana-receiver/lib/idl/py
 import { getFeedIdUint8Array, trimFeedId } from './util/pythPullOracleUtils';
 import { isVersionedTransaction } from './tx/utils';
 import pythSolanaReceiverIdl from './idl/pyth_solana_receiver.json';
-import { asV0Tx, PullFeed } from '@switchboard-xyz/on-demand';
 import * as ed from '@noble/ed25519';
 
 type RemainingAccountParams = {
@@ -386,9 +382,6 @@ export class NormalClient {
 				opts: this.opts,
 				txHandler: this.txHandler,
 			});
-
-		this.sbOnDemandProgramdId =
-			configs[config.env ?? 'mainnet-beta'].SB_ON_DEMAND_PID;
 	}
 
 	public getUserMapKey(subAccountId: number, authority: PublicKey): string {
@@ -4444,17 +4437,6 @@ export class NormalClient {
 		return this.receiverProgram;
 	}
 
-	public async getSwitchboardOnDemandProgram(): Promise<Program30<Idl30>> {
-		const idl = (await Program30.fetchIdl(
-			this.sbOnDemandProgramdId,
-			this.provider
-		))!;
-		if (this.sbOnDemandProgram === undefined) {
-			this.sbOnDemandProgram = new Program30(idl, this.provider);
-		}
-		return this.sbOnDemandProgram;
-	}
-
 	public async postPythPullOracleUpdateAtomic(
 		vaaString: string,
 		feedId: string
@@ -4666,55 +4648,6 @@ export class NormalClient {
 				},
 			}
 		);
-	}
-
-	public async getPostSwitchboardOnDemandUpdateAtomicIx(
-		feed: PublicKey,
-		numSignatures = 3
-	): Promise<TransactionInstruction | undefined> {
-		const program = await this.getSwitchboardOnDemandProgram();
-		const feedAccount = new PullFeed(program, feed);
-		if (!this.sbProgramFeedConfigs) {
-			this.sbProgramFeedConfigs = new Map();
-		}
-		if (!this.sbProgramFeedConfigs.has(feedAccount.pubkey.toString())) {
-			const feedConfig = await feedAccount.loadConfigs();
-			this.sbProgramFeedConfigs.set(feed.toString(), feedConfig);
-		}
-
-		const [pullIx, _responses, success] = await feedAccount.fetchUpdateIx({
-			numSignatures,
-		});
-		if (!success) {
-			return undefined;
-		}
-		return pullIx;
-	}
-
-	public async postSwitchboardOnDemandUpdate(
-		feed: PublicKey,
-		numSignatures = 3
-	): Promise<TransactionSignature> {
-		const pullIx = await this.getPostSwitchboardOnDemandUpdateAtomicIx(
-			feed,
-			numSignatures
-		);
-		if (!pullIx) {
-			return undefined;
-		}
-		const tx = await asV0Tx({
-			connection: this.connection,
-			ixs: [pullIx],
-			payer: this.wallet.publicKey,
-			computeUnitLimitMultiple: 1.3,
-			lookupTables: [await this.fetchMarketLookupTableAccount()],
-		});
-		const { txSig } = await this.sendTransaction(tx, [], {
-			commitment: 'processed',
-			skipPreflight: true,
-			maxRetries: 0,
-		});
-		return txSig;
 	}
 
 	private async getBuildEncodedVaaIxs(

@@ -140,15 +140,7 @@ pub fn handle_initialize_synth_market(
 			} = get_pyth_price(&ctx.accounts.oracle, clock_slot, 1, false)?;
 			(oracle_price, oracle_delay, QUOTE_PRECISION_I64)
 		}
-		OracleSource::Switchboard => {
-			let OraclePriceData {
-				price: oracle_price,
-				delay: oracle_delay,
-				..
-			} = get_switchboard_price(&ctx.accounts.oracle, clock_slot)?;
 
-			(oracle_price, oracle_delay, oracle_price)
-		}
 		OracleSource::QuoteAsset => {
 			msg!("Quote asset oracle cant be used for perp market");
 			return Err(ErrorCode::InvalidOracle.into());
@@ -199,15 +191,6 @@ pub fn handle_initialize_synth_market(
 				..
 			} = get_pyth_price(&ctx.accounts.oracle, clock_slot, 1, true)?;
 			(oracle_price, oracle_delay, QUOTE_PRECISION_I64)
-		}
-		OracleSource::SwitchboardOnDemand => {
-			let OraclePriceData {
-				price: oracle_price,
-				delay: oracle_delay,
-				..
-			} = get_sb_on_demand_price(&ctx.accounts.oracle, clock_slot)?;
-
-			(oracle_price, oracle_delay, oracle_price)
 		}
 	};
 

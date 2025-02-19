@@ -45,7 +45,6 @@ use crate::math::margin::{
 use crate::state::margin_calculation::{ MarginCalculation, MarginContext };
 use crate::state::oracle_map::OracleMap;
 
-use super::schedule::{Schedule};
 use super::synth_market_map::SynthMarketMap;
 use super::position::Position;
 
@@ -76,11 +75,6 @@ pub struct User {
 	pub name: [u8; 32],
 	/// The user's positions
 	pub positions: [Position; 8],
-	/// The user's created indexes (market_index)
-	pub indexes: [u16; 8],
-	/// The user's Dollar-Cost Average (DCA) rules
-	pub schedules: [Schedule; 8],
-	pub schedule_streak: u16,
 	/// The total values of deposits the user has made
 	/// precision: QUOTE_PRECISION
 	pub total_deposits: u64,
@@ -237,14 +231,6 @@ impl User {
 		self
 			.get_position_index(market_index)
 			.or_else(|_| self.add_position(market_index, SpotBalanceType::Deposit))
-	}
-
-	// Index
-
-	pub fn get_index(&self, market_index: u16) -> NormalResult<&SpotPosition> {
-		self
-			.get_index_index(market_index)
-			.map(|market_index| &self.indexes[market_index])
 	}
 
 	// Deposit/Withdrawal

@@ -8,10 +8,6 @@ import {
 } from './constants/markets';
 import { OracleInfo } from './oracles/types';
 import { Program, ProgramAccount } from '@coral-xyz/anchor';
-import {
-	ON_DEMAND_DEVNET_PID,
-	ON_DEMAND_MAINNET_PID,
-} from '@switchboard-xyz/on-demand';
 
 type NormalConfig = {
 	ENV: NormalEnv;
@@ -23,7 +19,6 @@ type NormalConfig = {
 	MARKETS: MarketConfig[];
 	MARKET_LOOKUP_TABLE: string;
 	PYTH_PULL_ORACLE_LOOKUP_TABLE?: string;
-	SB_ON_DEMAND_PID: PublicKey;
 };
 
 export type NormalEnv = 'devnet' | 'mainnet-beta';
@@ -49,7 +44,6 @@ export const configs: { [key in NormalEnv]: NormalConfig } = {
 		MARKETS: DevnetMarkets,
 		MARKET_LOOKUP_TABLE: 'FaMS3U4uBojvGn5FSDEPimddcXsCfwkKsFgMVVnDdxGb',
 		NORMAL_ORACLE_RECEIVER_ID,
-		SB_ON_DEMAND_PID: ON_DEMAND_DEVNET_PID,
 	},
 	'mainnet-beta': {
 		ENV: 'mainnet-beta',
@@ -61,7 +55,6 @@ export const configs: { [key in NormalEnv]: NormalConfig } = {
 		MARKETS: MainnetMarkets,
 		MARKET_LOOKUP_TABLE: 'D9cnvzswDikQDf53k4HpQ3KJ9y1Fv3HGGDFYMXnK5T6c',
 		NORMAL_ORACLE_RECEIVER_ID,
-		SB_ON_DEMAND_PID: ON_DEMAND_MAINNET_PID,
 	},
 };
 

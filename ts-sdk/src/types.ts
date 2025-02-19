@@ -101,17 +101,14 @@ export class OracleSource {
 	static readonly PYTH_PULL = { pythPull: {} };
 	static readonly PYTH_1K_PULL = { pyth1KPull: {} };
 	static readonly PYTH_1M_PULL = { pyth1MPull: {} };
-	static readonly SWITCHBOARD = { switchboard: {} };
 	static readonly QUOTE_ASSET = { quoteAsset: {} };
 	static readonly PYTH_STABLE_COIN = { pythStableCoin: {} };
 	static readonly PYTH_STABLE_COIN_PULL = { pythStableCoinPull: {} };
-	static readonly SWITCHBOARD_ON_DEMAND = { switchboardOnDemand: {} };
 }
 
-export declare type MarketTypeStr = 'synth' | 'index';
+export declare type MarketTypeStr = 'synth';
 export class MarketType {
 	static readonly SYNTH = { synth: {} };
-	static readonly INDEX = { index: {} };
 }
 
 export class DepositExplanation {
