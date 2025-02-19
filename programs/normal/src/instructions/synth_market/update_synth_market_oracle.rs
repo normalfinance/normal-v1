@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[access_control(market_valid(&ctx.accounts.market))]
-pub fn handle_update_synth_market_oracle(
+pub fn handle_update_market_oracle(
 	ctx: Context<RepegCurve>,
 	oracle: Pubkey,
 	oracle_source: OracleSource

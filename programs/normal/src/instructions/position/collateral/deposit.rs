@@ -3,8 +3,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
 use index_market_map::MarketSet;
-use synth_market::MarketStatus;
-use synth_market_map::get_writable_market_set;
+use market::MarketStatus;
+use market_map::get_writable_market_set;
 use user::{ User, UserStats };
 use vault::Vault;
 use vault_map::get_writable_vault_set;
@@ -64,7 +64,7 @@ pub struct DepositCollateral<'info> {
 
 #[access_control(
     deposit_not_paused(&ctx.accounts.state)
-    synth_market_valid(&ctx.accounts.synth_market)
+    market_valid(&ctx.accounts.market)
 )]
 pub fn handle_deposit_collateral<'c: 'info, 'info>(
 	ctx: Context<'_, '_, 'c, 'info, DepositCollateral<'info>>,
@@ -81,10 +81,10 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 	let slot = clock.slot;
 
 	let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
-	let AccountMaps { synth_market_map, index_market_map, mut oracle_map } =
+	let AccountMaps { market_map, index_market_map, mut oracle_map } =
 		load_maps(
 			remaining_accounts_iter,
-			&get_writable_synth_market_set(market_index),
+			&get_writable_market_set(market_index),
 			&MarketSet::new(),
 			clock.slot,
 			Some(state.oracle_guard_rails)
@@ -98,30 +98,30 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 
 	validate!(!user.is_bankrupt(), ErrorCode::UserBankrupt)?;
 
-	let mut synth_market = synth_market_map.get_ref_mut(&market_index)?;
+	let mut market = market_map.get_ref_mut(&market_index)?;
 	let oracle_price_data = &oracle_map
-		.get_price_data(&synth_market.oracle)?
+		.get_price_data(&market.oracle)?
 		.clone();
 
 	validate!(
-		!matches!(synth_market.status, MarketStatus::Initialized),
+		!matches!(market.status, MarketStatus::Initialized),
 		ErrorCode::MarketBeingInitialized,
 		"Market is being initialized"
 	)?;
 
-	controller::synth_balance::update_synth_market_cumulative_interest(
-		&mut synth_market,
+	controller::synth_balance::update_market_cumulative_interest(
+		&mut market,
 		Some(oracle_price_data),
 		now
 	)?;
 
 	let position_index = user.force_get_position_index(
-		synth_market.market_index
+		market.market_index
 	)?;
 
 	let is_borrow_before = user.positions[position_index].is_borrow();
 
-	let force_reduce_only = synth_market.is_reduce_only();
+	let force_reduce_only = market.is_reduce_only();
 
 	// if reduce only, have to compare ix amount to current borrow amount
 	let amount = if
@@ -139,7 +139,7 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 	user.increment_total_deposits(
 		amount,
 		oracle_price_data.price,
-		synth_market.get_precision().cast()?
+		market.get_precision().cast()?
 	)?;
 
 	let total_deposits_after = user.total_deposits;
@@ -149,13 +149,13 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 	controller::synth_position::update_synth_balances_and_cumulative_deposits(
 		amount as u128,
 		&SpotBalanceType::Deposit,
-		&mut synth_market,
+		&mut market,
 		synth_position,
 		false,
 		None
 	)?;
 
-	let token_amount = synth_position.get_token_amount(&synth_market)?;
+	let token_amount = synth_position.get_token_amount(&market)?;
 	if token_amount == 0 {
 		validate!(
 			synth_position.scaled_balance == 0,
@@ -171,19 +171,19 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 		synth_position.scaled_balance > 0
 	{
 		validate!(
-			matches!(synth_market.status, MarketStatus::Active),
+			matches!(market.status, MarketStatus::Active),
 			ErrorCode::MarketActionPaused,
 			"synth_market not active"
 		)?;
 	}
 
-	drop(synth_market);
+	drop(market);
 	if user.is_being_liquidated() {
 		// try to update liquidation status if user is was already being liq'd
 		let is_being_liquidated = is_user_being_liquidated(
 			user,
 			&perp_market_map,
-			&synth_market_map,
+			&market_map,
 			&mut oracle_map,
 			state.liquidation_margin_buffer_ratio
 		)?;
@@ -195,20 +195,20 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 
 	user.update_last_active_slot(slot);
 
-	let synth_market = &mut synth_market_map.get_ref_mut(&market_index)?;
+	let market = &mut market_map.get_ref_mut(&market_index)?;
 
 	controller::token::receive(
 		&ctx.accounts.token_program,
 		&ctx.accounts.user_token_account,
-		&ctx.accounts.synth_market_vault,
+		&ctx.accounts.market_vault,
 		&ctx.accounts.authority,
 		amount,
 		&mint
 	)?;
-	ctx.accounts.synth_market_vault.reload()?;
+	ctx.accounts.market_vault.reload()?;
 
 	let deposit_record_id = get_then_update_id!(
-		synth_market,
+		market,
 		next_deposit_record_id
 	);
 	let oracle_price = oracle_price_data.price;
@@ -225,10 +225,10 @@ pub fn handle_deposit_collateral<'c: 'info, 'info>(
 		direction: DepositDirection::Deposit,
 		amount,
 		oracle_price,
-		market_deposit_balance: synth_market.deposit_balance,
-		market_withdraw_balance: synth_market.borrow_balance,
-		market_cumulative_deposit_interest: synth_market.cumulative_deposit_interest,
-		market_cumulative_borrow_interest: synth_market.cumulative_borrow_interest,
+		market_deposit_balance: market.deposit_balance,
+		market_withdraw_balance: market.borrow_balance,
+		market_cumulative_deposit_interest: market.cumulative_deposit_interest,
+		market_cumulative_borrow_interest: market.cumulative_borrow_interest,
 		total_deposits_after,
 		total_withdraws_after,
 		market_index,

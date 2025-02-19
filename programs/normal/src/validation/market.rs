@@ -4,12 +4,12 @@ use crate::math::casting::Cast;
 use crate::math::constants::MAX_BASE_ASSET_AMOUNT_WITH_AMM;
 use crate::math::safe_math::SafeMath;
 
-use crate::state::synth_market::{ MarketStatus, Market };
+use crate::state::market::{ MarketStatus, Market };
 use crate::{ validate, BID_ASK_SPREAD_PRECISION };
 use solana_program::msg;
 
 #[allow(clippy::comparison_chain)]
-pub fn validate_synth_market(market: &Market) -> NormalResult {
+pub fn validate_market(market: &Market) -> NormalResult {
 	// let (_, remainder_base_asset_amount_long) =
 	// 	crate::math::orders::standardize_base_asset_amount_with_remainder_i128(
 	// 		amm.base_asset_amount_long,

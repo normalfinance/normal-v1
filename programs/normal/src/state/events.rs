@@ -6,7 +6,6 @@ use crate::error::{ NormalResult, ErrorCode::InvalidOrder };
 use crate::math::casting::Cast;
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
-use crate::state::user::{ MarketType, Order };
 use anchor_lang::Discriminator;
 use std::io::Write;
 

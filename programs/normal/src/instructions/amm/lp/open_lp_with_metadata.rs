@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::Metadata;
 use anchor_spl::token::{ self, Mint, Token, TokenAccount };
-use synth_market::SynthMarket;
+use market::Market;
 
 use crate::state;
 use crate::{

@@ -10,21 +10,21 @@ use anchor_lang::Discriminator;
 use arrayref::array_ref;
 
 use crate::error::{ NormalResult, ErrorCode };
-use crate::state::synth_market::SynthMarket;
+use crate::state::market::Market;
 
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
 use solana_program::msg;
 use std::panic::Location;
 
-pub struct SynthMarketMap<'a>(
-	pub BTreeMap<u16, AccountLoader<'a, SynthMarket>>,
+pub struct MarketMap<'a>(
+	pub BTreeMap<u16, AccountLoader<'a, Market>>,
 );
 
-impl<'a> SynthMarketMap<'a> {
+impl<'a> MarketMap<'a> {
 	#[track_caller]
 	#[inline(always)]
-	pub fn get_ref(&self, market_index: &u16) -> NormalResult<Ref<SynthMarket>> {
+	pub fn get_ref(&self, market_index: &u16) -> NormalResult<Ref<Market>> {
 		let loader = match self.0.get(market_index) {
 			Some(loader) => loader,
 			None => {
@@ -180,14 +180,14 @@ impl<'a> MarketMap<'a> {
 	}
 
 	pub fn empty() -> Self {
-		SynthMarketMap(BTreeMap::new())
+		MarketMap(BTreeMap::new())
 	}
 
 	pub fn load_multiple<'c: 'a>(
 		account_infos: Vec<&'c AccountInfo<'a>>,
 		must_be_writable: bool
-	) -> NormalResult<SynthMarketMap<'a>> {
-		let mut market_map: SynthMarketMap = SynthMarketMap(BTreeMap::new());
+	) -> NormalResult<MarketMap<'a>> {
+		let mut market_map: MarketMap = MarketMap(BTreeMap::new());
 
 		for account_info in account_infos {
 			let data = account_info
@@ -226,13 +226,13 @@ impl<'a> MarketMap<'a> {
 
 pub(crate) type MarketSet = BTreeSet<u16>;
 
-pub fn get_writable_synth_market_set(market_index: u16) -> MarketSet {
+pub fn get_writable_market_set(market_index: u16) -> MarketSet {
 	let mut writable_markets = MarketSet::new();
 	writable_markets.insert(market_index);
 	writable_markets
 }
 
-pub fn get_writable_synth_market_set_from_vec(
+pub fn get_writable_market_set_from_vec(
 	market_indexes: &[u16]
 ) -> MarketSet {
 	let mut writable_markets = MarketSet::new();
@@ -242,7 +242,7 @@ pub fn get_writable_synth_market_set_from_vec(
 	writable_markets
 }
 
-pub fn get_synth_market_set_from_list(market_indexes: [u16; 5]) -> MarketSet {
+pub fn get_market_set_from_list(market_indexes: [u16; 5]) -> MarketSet {
 	let mut writable_markets = MarketSet::new();
 	for market_index in market_indexes.iter() {
 		if *market_index == 100 {

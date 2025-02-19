@@ -8,7 +8,7 @@ use crate::controller::spot_balance::{
 	update_revenue_pool_balances,
 	update_spot_balances,
 	update_spot_market_and_check_validity,
-	update_synth_market_cumulative_interest,
+	update_market_cumulative_interest,
 };
 use crate::controller::spot_position::update_spot_balances_and_cumulative_deposits;
 use crate::error::{ NormalResult, ErrorCode };
@@ -70,9 +70,9 @@ use crate::state::margin_calculation::{
 	MarketIdentifier,
 };
 use crate::state::oracle_map::OracleMap;
-use crate::state::paused_operations::SynthOperation;
-use crate::state::synth_market::MarketStatus;
-use crate::state::synth_market_map::SynthMarketMap;
+use crate::state::paused_operations::MarketOperation;
+use crate::state::market::MarketStatus;
+use crate::state::market_map::MarketMap;
 use crate::state::state::State;
 use crate::state::traits::Size;
 use crate::state::user::{ MarketType, User, UserStats };
@@ -90,7 +90,7 @@ pub fn liquidate_vault(
 	liquidator: &mut User,
 	liquidator_key: &Pubkey,
 	liquidator_stats: &mut UserStats,
-	market_map: &SynthMarketMap,
+	market_map: &MarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	slot: u64,
@@ -123,7 +123,7 @@ pub fn liquidate_vault(
 
 	// TODO: do we store these on Market or vault operations?
 	validate!(
-		!market.is_operation_paused(SynthOperation::Liquidation),
+		!market.is_operation_paused(MarketOperation::Liquidation),
 		ErrorCode::InvalidLiquidation,
 		"Liquidation operation is paused for market {}",
 		market_index
@@ -520,7 +520,7 @@ pub fn resolve_vault_bankruptcy(
 	user_key: &Pubkey,
 	liquidator: &mut User,
 	liquidator_key: &Pubkey,
-	market_map: &SynthMarketMap,
+	market_map: &MarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	now: i64,
@@ -551,7 +551,7 @@ pub fn resolve_vault_bankruptcy(
 	let market = market_map.get_ref(&market_index)?;
 
 	validate!(
-		!market.is_operation_paused(SynthOperation::Liquidation),
+		!market.is_operation_paused(MarketOperation::Liquidation),
 		ErrorCode::InvalidLiquidation,
 		"Liquidation operation is paused for market {}",
 		market_index
@@ -607,7 +607,7 @@ pub fn resolve_vault_bankruptcy(
 			&QUOTE_SPOT_MARKET_INDEX
 		)?;
 		let oracle_price_data = oracle_map.get_price_data(&spot_market.oracle)?;
-		update_synth_market_cumulative_interest(
+		update_market_cumulative_interest(
 			spot_market,
 			Some(oracle_price_data),
 			now
@@ -734,7 +734,7 @@ pub fn resolve_vault_bankruptcy(
 
 pub fn calculate_margin_freed(
 	user: &User,
-	market_map: &SynthMarketMap,
+	market_map: &MarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32,
@@ -760,7 +760,7 @@ pub fn calculate_margin_freed(
 
 pub fn set_vault_status_to_being_liquidated(
 	vault: &mut Vault,
-	market_map: &SynthMarketMap,
+	market_map: &MarketMap,
 	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	slot: u64,

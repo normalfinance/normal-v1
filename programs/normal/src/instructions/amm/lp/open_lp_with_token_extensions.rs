@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_2022::spl_token_2022;
 use anchor_spl::token_2022::Token2022;
-use synth_market::SynthMarket;
+use market::Market;
 
 use crate::constants::nft::amm_nft_update_auth::ID as WP_NFT_UPDATE_AUTH;
 use crate::util::{

@@ -9,7 +9,7 @@ use crate::math::constants::{
 use crate::math::safe_math::{ SafeDivFloor, SafeMath };
 use crate::state::oracle::{ OraclePriceData, StrictOraclePrice };
 use crate::state::position::Position;
-use crate::state::synth_market::SynthMarket;
+use crate::state::market::Market;
 use crate::state::user::SpotPosition;
 
 pub fn get_spot_balance(
@@ -40,16 +40,16 @@ pub fn get_spot_balance(
 
 pub fn get_token_amount(
 	balance: u128,
-	synth_market: &SynthMarket,
+	market: &Market,
 	balance_type: &SpotBalanceType
 ) -> NormalResult<u128> {
 	let precision_decrease = (10_u128).pow(
-		(19_u32).safe_sub(synth_market.decimals)?
+		(19_u32).safe_sub(market.decimals)?
 	);
 
 	let cumulative_interest = match balance_type {
-		SpotBalanceType::Deposit => synth_market.cumulative_deposit_interest,
-		SpotBalanceType::Borrow => synth_market.cumulative_borrow_interest,
+		SpotBalanceType::Deposit => market.cumulative_deposit_interest,
+		SpotBalanceType::Borrow => market.cumulative_borrow_interest,
 	};
 
 	let token_amount = match balance_type {
@@ -75,11 +75,11 @@ pub fn get_signed_token_amount(
 
 pub fn get_interest_token_amount(
 	balance: u128,
-	synth_market: &SynthMarket,
+	market: &Market,
 	interest: u128
 ) -> NormalResult<u128> {
 	let precision_decrease = (10_u128).pow(
-		(19_u32).safe_sub(synth_market.decimals)?
+		(19_u32).safe_sub(market.decimals)?
 	);
 
 	let token_amount = balance.safe_mul(interest)?.safe_div(precision_decrease)?;
@@ -110,17 +110,17 @@ pub fn calculate_utilization(
 	Ok(utilization)
 }
 
-pub fn calculate_synth_market_utilization(
-	synth_market: &SynthMarket
+pub fn calculate_market_utilization(
+	market: &Market
 ) -> NormalResult<u128> {
 	let collateral_token_amount = get_token_amount(
-		synth_market.collateral_balance,
-		synth_market,
+		market.collateral_balance,
+		market,
 		&SpotBalanceType::Deposit
 	)?;
 	let debt_token_amount = get_token_amount(
-		synth_market.debt_balance,
-		synth_market,
+		market.debt_balance,
+		market,
 		&SpotBalanceType::Borrow
 	)?;
 	let utilization = calculate_utilization(
@@ -132,7 +132,7 @@ pub fn calculate_synth_market_utilization(
 }
 
 pub fn calculate_accumulated_interest(
-	spot_market: &SynthMarket,
+	spot_market: &Market,
 	now: i64
 ) -> NormalResult<InterestAccumulated> {
 	if now <= spot_market.last_interest_ts.cast()? {
@@ -142,7 +142,7 @@ pub fn calculate_accumulated_interest(
 		});
 	}
 
-	let utilization = calculate_synth_market_utilization(spot_market)?;
+	let utilization = calculate_market_utilization(spot_market)?;
 
 	if utilization == 0 {
 		return Ok(InterestAccumulated {
@@ -204,12 +204,12 @@ pub fn calculate_accumulated_interest(
 
 pub fn get_balance_value_and_token_amount(
 	position: &Position,
-	synth_market: &SynthMarket,
+	market: &Market,
 	oracle_price_data: &OraclePriceData
 ) -> NormalResult<(u128, u128)> {
 	let token_amount = position.get_token_amount(synth_market)?;
 
-	let precision_decrease = (10_u128).pow(synth_market.decimals);
+	let precision_decrease = (10_u128).pow(market.decimals);
 
 	let value = token_amount
 		.safe_mul(oracle_price_data.price.cast()?)?
@@ -265,12 +265,12 @@ pub fn get_token_value(
 
 pub fn get_balance_value(
 	position: &Position,
-	synth_market: &SynthMarket,
+	market: &Market,
 	oracle_price_data: &OraclePriceData
 ) -> NormalResult<u128> {
 	let (value, _) = get_balance_value_and_token_amount(
 		position,
-		synth_market,
+		market,
 		oracle_price_data
 	)?;
 	Ok(value)

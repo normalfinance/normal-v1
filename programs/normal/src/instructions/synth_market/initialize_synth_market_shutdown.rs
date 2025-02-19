@@ -1,16 +1,16 @@
 use anchor_lang::prelude::*;
 
 use crate::instructions::constraints::market_valid;
-use synth_market::{ Market, MarketStatus };
+use market::{ Market, MarketStatus };
 use paused_operations::VaultOperation;
 
 use crate::state::*;
 
-use super::update_market_liquidation_penalty::AdminUpdateSynthMarket;
+use super::update_market_liquidation_penalty::AdminUpdateMarket;
 
 #[access_control(market_valid(&ctx.accounts.market))]
 pub fn handle_initialize_market_shutdown(
-	ctx: Context<AdminUpdateSynthMarket>,
+	ctx: Context<AdminUpdateMarket>,
 	expiry_ts: i64
 ) -> Result<()> {
 	let clock: Clock = Clock::get()?;

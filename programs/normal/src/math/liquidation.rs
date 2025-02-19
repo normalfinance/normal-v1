@@ -21,12 +21,9 @@ use crate::math::synth_balance::get_token_amount;
 use crate::math::spot_swap::calculate_swap_price;
 use crate::state::margin_calculation::MarginContext;
 use crate::state::oracle_map::OracleMap;
-use crate::state::synth_market::SynthMarket;
-use crate::state::synth_market_map::SynthMarketMap;
-use crate::state::user::{ User };
+use crate::state::market_map::MarketMap;
 use crate::{
 	validate,
-	MarketType,
 	PositionDirection,
 	BASE_PRECISION,
 	LIQUIDATION_FEE_INCREASE_PER_SLOT,
@@ -213,7 +210,7 @@ pub fn calculate_asset_transfer_for_liability_transfer(
 
 pub fn is_user_being_liquidated(
 	user: &User,
-	market_map: &SynthMarketMap,
+	market_map: &MarketMap,
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32
 ) -> NormalResult<bool> {
@@ -232,7 +229,7 @@ pub fn is_user_being_liquidated(
 
 pub fn validate_user_not_being_liquidated(
 	user: &mut User,
-	market_map: &SynthMarketMap,
+	market_map: &MarketMap,
 	oracle_map: &mut OracleMap,
 	liquidation_margin_buffer_ratio: u32
 ) -> NormalResult {
@@ -435,7 +432,6 @@ pub fn get_liquidation_order_params(
 		direction,
 		price: limit_price,
 		order_type: OrderType::Limit,
-		market_type: MarketType::Synth,
 		base_asset_amount,
 		reduce_only: true,
 		..OrderParams::default()

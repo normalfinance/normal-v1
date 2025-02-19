@@ -5,7 +5,7 @@ use crate::{
 	errors::ErrorCode,
 	state::{
 		amm::AMM,
-		synth_market::SynthMarket,
+		market::Market,
 		Tick,
 		TickArray,
 		TickArrayType,

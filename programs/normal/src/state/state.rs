@@ -13,32 +13,7 @@ use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
 use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
 
-use super::synth_market::AuctionConfig;
-
-#[derive(
-	Default,
-	Clone,
-	Copy,
-	BorshSerialize,
-	BorshDeserialize,
-	PartialEq,
-	Debug,
-	Eq
-)]
-pub enum MarketType {
-	#[default]
-	Synth,
-	Index,
-}
-
-impl fmt::Display for MarketType {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			MarketType::Synth => write!(f, "Synth"),
-			MarketType::Index => write!(f, "Index"),
-		}
-	}
-}
+use super::market::AuctionConfig;
 
 #[account]
 #[derive(Default)]
@@ -62,15 +37,6 @@ pub struct State {
 	pub exchange_status: u8,
 	// the total number of markets live on the protocol
 	pub number_of_markets: u16,
-	// the total number of index markets live on the protocol
-	pub number_of_index_markets: u16,
-
-	// Index
-	//
-	pub default_index_oracle: Pubkey,
-	pub max_index_assets: u16,
-	pub protocol_index_fee: u16,
-	pub protocol_index_fee_vault: Pubkey,
 
 	// Insurance Fund
 	//
@@ -100,8 +66,6 @@ pub struct State {
 
 	// Debt Auctions
 	pub debt_auction_config: AuctionConfig,
-
-	pub dca_order_padding: u16,
 
 	pub padding: [u8; 10],
 }

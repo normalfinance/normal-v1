@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-use synth_market_map::get_writable_market_set;
+use market_map::get_writable_market_set;
 use user::{ User, UserStats };
 use vault::Vault;
-use synth_market::VaultsConfig;
+use market::VaultsConfig;
 
 use crate::{ controller, state::*, State };
 

@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 
 use crate::{ state::*, util::transfer_from_vault_to_owner };
-use synth_market::SynthMarket;
+use market::Market;
 
 #[derive(Accounts)]
 pub struct CollectProtocolFees<'info> {

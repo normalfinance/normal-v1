@@ -45,7 +45,7 @@ use crate::math::margin::{
 use crate::state::margin_calculation::{ MarginCalculation, MarginContext };
 use crate::state::oracle_map::OracleMap;
 
-use super::synth_market_map::SynthMarketMap;
+use super::market_map::MarketMap;
 use super::position::Position;
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]

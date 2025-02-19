@@ -3,8 +3,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
 use index_market_map::MarketSet;
-use synth_market::MarketStatus;
-use synth_market_map::get_writable_market_set;
+use market::MarketStatus;
+use market_map::get_writable_market_set;
 use user::{ User, UserStats };
 use vault::Vault;
 use vault_map::get_writable_vault_set;
@@ -60,9 +60,9 @@ pub struct DepositCollateral<'info> {
 
 #[access_control(
     deposit_not_paused(&ctx.accounts.state)
-    synth_market_valid(&ctx.accounts.synth_market)
+    market_valid(&ctx.accounts.market)
 )]
-pub fn handle_deposit_into_synth_market_vault<'c: 'info, 'info>(
+pub fn handle_deposit_into_market_vault<'c: 'info, 'info>(
 	ctx: Context<'_, '_, 'c, 'info, DepositCollateral<'info>>,
 	market_index: u16,
 	amount: u64,
@@ -89,11 +89,11 @@ pub fn handle_deposit_into_synth_market_vault<'c: 'info, 'info>(
 	let slot = clock.slot;
 
 	let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
-	let AccountMaps { synth_market_map, index_market_map, mut oracle_map } =
+	let AccountMaps { market_map, index_market_map, mut oracle_map } =
 		load_maps(
 			remaining_accounts_iter,
 			&MarketSet::new(),
-			&get_writable_synth_market_set(market_index),
+			&get_writable_market_set(market_index),
 			clock.slot,
 			Some(state.oracle_guard_rails)
 		)?;
@@ -106,13 +106,13 @@ pub fn handle_deposit_into_synth_market_vault<'c: 'info, 'info>(
 
 	validate!(!user.is_bankrupt(), ErrorCode::UserBankrupt)?;
 
-	let mut synth_market = synth_market_map.get_ref_mut(&market_index)?;
+	let mut market = market_map.get_ref_mut(&market_index)?;
 	let oracle_price_data = &oracle_map
-		.get_price_data(&synth_market.oracle)?
+		.get_price_data(&market.oracle)?
 		.clone();
 
 	validate!(
-		!matches!(synth_market.status, MarketStatus::Initialized),
+		!matches!(market.status, MarketStatus::Initialized),
 		ErrorCode::MarketBeingInitialized,
 		"Market is being initialized"
 	)?;

@@ -1,10 +1,10 @@
 use anchor_lang::prelude::*;
 
-use super::AdminUpdateSynthMarket;
+use super::AdminUpdateMarket;
 
 #[access_control(market_valid(&ctx.accounts.market))]
-pub fn handle_update_synth_market_name(
-	ctx: Context<AdminUpdateSynthMarket>,
+pub fn handle_update_market_name(
+	ctx: Context<AdminUpdateMarket>,
 	name: [u8; 32]
 ) -> Result<()> {
 	let mut market = load_mut!(ctx.accounts.market)?;

@@ -1,6 +1,5 @@
 use crate::error::{ NormalResult, ErrorCode };
-use crate::state::index_market_map::IndexMarketMap;
-use crate::state::synth_market_map::SynthMarketMap;
+use crate::state::market_map::MarketMap;
 use std::convert::TryFrom;
 
 use crate::math::safe_unwrap::SafeUnwrap;
@@ -21,15 +20,13 @@ use std::iter::Peekable;
 use std::slice::Iter;
 
 pub struct AccountMaps<'a> {
-	pub synth_market_map: SynthMarketMap<'a>,
-	pub index_market_map: IndexMarketMap<'a>,
+	pub market_map: MarketMap<'a>,
 	pub oracle_map: OracleMap<'a>,
 }
 
 pub fn load_maps<'a, 'b>(
 	account_info_iter: &mut Peekable<Iter<'a, AccountInfo<'a>>>,
-	writable_synth_markets: &'b MarketSet,
-	writable_index_markets: &'b MarketSet,
+	writable_markets: &'b MarketSet,
 	slot: u64,
 	oracle_guard_rails: Option<OracleGuardRails>
 ) -> NormalResult<AccountMaps<'a>> {
@@ -38,18 +35,13 @@ pub fn load_maps<'a, 'b>(
 		slot,
 		oracle_guard_rails
 	)?;
-	let synth_market_map = SynthMarketMap::load(
-		writable_synth_markets,
+	let market_map = MarketMap::load(
+		writable_markets,
 		account_info_iter
 	)?;
-	let index_market_map = IndexMarketMap::load(
-		writable_index_markets,
-		account_info_iter
-	)?;
-
+	
 	Ok(AccountMaps {
-		synth_market_map,
-		index_market_map,
+		market_map,
 		oracle_map,
 	})
 }

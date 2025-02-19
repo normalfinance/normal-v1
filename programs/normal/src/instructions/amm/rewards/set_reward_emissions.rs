@@ -6,7 +6,7 @@ use crate::errors::ErrorCode;
 use crate::manager::amm_manager::next_amm_reward_infos;
 use crate::math::checked_mul_shift_right;
 use crate::state::amm::NUM_REWARDS;
-use crate::state::synth_market::SynthMarket;
+use crate::state::market::Market;
 use crate::util::to_timestamp_u64;
 
 const DAY_IN_SECONDS: u128 = 60 * 60 * 24;

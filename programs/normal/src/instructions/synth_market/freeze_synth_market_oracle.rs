@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::instructions::constraints::market_valid;
-use synth_market::{ Market, MarketStatus };
+use market::{ Market, MarketStatus };
 
 use crate::{ state::*, State };
 

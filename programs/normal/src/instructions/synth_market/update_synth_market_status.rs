@@ -2,14 +2,14 @@ use anchor_lang::prelude::*;
 
 use crate::{
 	error::ErrorCode,
-	state::synth_market::MarketStatus,
+	state::market::MarketStatus,
 	instructions::constraints::market_valid,
 };
-use super::AdminUpdateSynthMarket;
+use super::AdminUpdateMarket;
 
 #[access_control(market_valid(&ctx.accounts.market))]
-pub fn handle_update_synth_market_status(
-	ctx: Context<AdminUpdateSynthMarket>,
+pub fn handle_update_market_status(
+	ctx: Context<AdminUpdateMarket>,
 	status: MarketStatus
 ) -> Result<()> {
 	validate!(

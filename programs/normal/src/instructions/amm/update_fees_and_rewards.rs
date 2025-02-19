@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use lp::LP;
-use synth_market::SynthMarket;
+use market::Market;
 use tick::TickArray;
 
 use crate::{

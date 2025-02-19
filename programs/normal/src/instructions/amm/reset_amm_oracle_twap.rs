@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::instructions::constraints::{ market_valid, valid_oracle_for_amm };
-use crate::{ state::{ self, synth_market::SynthMarket }, State };
+use crate::{ state::{ self, market::Market }, State };
 
 #[derive(Accounts)]
 pub struct RepegCurve<'info> {

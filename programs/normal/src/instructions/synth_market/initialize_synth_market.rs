@@ -1,13 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, Token, TokenAccount };
 
-use synth_market::{ AuctionConfig, AuctionPreference, Market, SynthMarket };
+use market::{ AuctionConfig, AuctionPreference, Market, Market };
 use oracle_map::OracleMap;
 
 use crate::{ state::*, validation::margin::validate_margin, State };
 
 #[derive(Accounts)]
-pub struct InitializeSynthMarket<'info> {
+pub struct InitializeMarket<'info> {
 	#[account(mut)]
 	pub admin: Signer<'info>,
 	#[account(
@@ -51,8 +51,8 @@ pub struct InitializeSynthMarket<'info> {
 	pub system_program: Program<'info, System>,
 }
 
-pub fn handle_initialize_synth_market(
-	ctx: Context<InitializeSynthMarket>,
+pub fn handle_initialize_market(
+	ctx: Context<InitializeMarket>,
 	market_index: u16,
 	name: [u8; 32],
 	active_status: bool,
@@ -209,7 +209,7 @@ pub fn handle_initialize_synth_market(
 		state.number_of_markets
 	)?;
 
-	**market = SynthMarket {
+	**market = Market {
 		pubkey: *market_pubkey,
 		market_index,
 		name,

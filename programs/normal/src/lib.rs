@@ -9,7 +9,7 @@ use math::amm;
 use math::{ bn, constants::* };
 use state::oracle::OracleSource;
 
-use crate::state::synth_market::{ SyntheticTier, MarketStatus };
+use crate::state::market::{ Tier, MarketStatus };
 use crate::state::state::FeeStructure;
 use crate::state::state::*;
 
@@ -36,12 +36,6 @@ declare_id!("...");
 pub mod normal {
 	use instructions::{
 		collateral::transfer_collateral::handle_transfer_collateral,
-		execute_schedule_order::ExecuteScheduleOrder,
-		UpdateIndexMarket,
-	};
-	use state::{
-		index_market::{ IndexAsset, IndexVisibility },
-		schedule::OrderDirection,
 	};
 
 	use super::*;
@@ -105,132 +99,130 @@ pub mod normal {
 
 	// Synth Market instructions
 
-	pub fn initialize_synth_market(
-		ctx: Context<InitializeSynthMarket>
-	) -> Result<()> {
-		handle_initialize_synth_market(ctx)
+	pub fn initialize_market(ctx: Context<InitializeMarket>) -> Result<()> {
+		handle_initialize_market(ctx)
 	}
 
-	pub fn freeze_synth_market_oracle(
+	pub fn freeze_market_oracle(
 		ctx: Context<FreezeMarketOracle>
 	) -> Result<()> {
-		handle_freeze_synth_market_oracle(ctx)
+		handle_freeze_market_oracle(ctx)
 	}
 
-	pub fn initialize_synth_market_shutdown(
-		ctx: Context<AdminUpdateSynthMarket>
+	pub fn initialize_market_shutdown(
+		ctx: Context<AdminUpdateMarket>
 	) -> Result<()> {
-		handle_initialize_synth_market_shutdown(ctx)
+		handle_initialize_market_shutdown(ctx)
 	}
 
-	pub fn delete_initialized_synth_market(
-		ctx: Context<DeleteInitializedSynthMarket>,
+	pub fn delete_initialized_market(
+		ctx: Context<DeleteInitializedMarket>,
 		market_index: u16
 	) -> Result<()> {
-		handle_delete_initialized_synth_market(ctx, market_index)
+		handle_delete_initialized_market(ctx, market_index)
 	}
 
-	pub fn update_synth_market_amm(
+	pub fn update_market_amm(
 		ctx: Context<RepegCurve>,
 		amm: Pubkey
 	) -> Result<()> {
-		handle_update_synth_market_amm(ctx, amm)
+		handle_update_market_amm(ctx, amm)
 	}
 
-	pub fn update_synth_market_debt_ceiling(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_debt_ceiling(
+		ctx: Context<AdminUpdateMarket>,
 		debt_ceiling: u128
 	) -> Result<()> {
-		handle_update_synth_market_debt_celing(ctx, debt_ceiling)
+		handle_update_market_debt_celing(ctx, debt_ceiling)
 	}
 
-	pub fn update_synth_market_debt_floor(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_debt_floor(
+		ctx: Context<AdminUpdateMarket>,
 		debt_floor: u32
 	) -> Result<()> {
-		handle_update_synth_market_debt_celing(ctx, debt_floor)
+		handle_update_market_debt_celing(ctx, debt_floor)
 	}
 
-	pub fn update_synth_market_expiry(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_expiry(
+		ctx: Context<AdminUpdateMarket>,
 		expiry_ts: i64
 	) -> Result<()> {
-		handle_update_synth_market_expiry(ctx, expiry_ts)
+		handle_update_market_expiry(ctx, expiry_ts)
 	}
 
-	pub fn update_synth_market_imf_factor(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_imf_factor(
+		ctx: Context<AdminUpdateMarket>,
 		imf_factor: u32
 	) -> Result<()> {
 		handle_update_imf_factor(ctx, imf_factor)
 	}
 
-	pub fn update_synth_market_liquidation_fee(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_liquidation_fee(
+		ctx: Context<AdminUpdateMarket>,
 		liquidator_fee: u32,
 		insurance_fund_liquidation_fee: u32
 	) -> Result<()> {
-		handle_update_synth_market_liquidation_fee(
+		handle_update_market_liquidation_fee(
 			ctx,
 			liquidator_fee,
 			insurance_fund_liquidation_fee
 		)
 	}
 
-	pub fn update_synth_market_liquidation_penalty(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_liquidation_penalty(
+		ctx: Context<AdminUpdateMarket>,
 		liquidator_penalty: u32
 	) -> Result<()> {
-		handle_update_synth_market_liquidation_penalty(ctx, liquidator_penalty)
+		handle_update_market_liquidation_penalty(ctx, liquidator_penalty)
 	}
 
-	pub fn update_synth_market_margin_ratio(
+	pub fn update_market_margin_ratio(
 		ctx: Context<AdminUpdatSyntheMarket>,
 		margin_ratio_initial: u32,
 		margin_ratio_maintenance: u32
 	) -> Result<()> {
-		handle_update_synth_market_margin_ratio(
+		handle_update_market_margin_ratio(
 			ctx,
 			margin_ratio_initial,
 			margin_ratio_maintenance
 		)
 	}
 
-	pub fn update_synth_market_name(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_name(
+		ctx: Context<AdminUpdateMarket>,
 		name: [u8; 32]
 	) -> Result<()> {
-		handle_update_synth_market_name(ctx, name)
+		handle_update_market_name(ctx, name)
 	}
 
-	pub fn update_synth_market_number_of_users(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_number_of_users(
+		ctx: Context<AdminUpdateMarket>,
 		number_of_users: Option<u32>
 	) -> Result<()> {
-		handle_update_synth_market_number_of_users(ctx, number_of_users)
+		handle_update_market_number_of_users(ctx, number_of_users)
 	}
 
 	// oracle...
 
-	pub fn update_synth_market_paused_operations(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_paused_operations(
+		ctx: Context<AdminUpdateMarket>,
 		paused_operations: u8
 	) -> Result<()> {
-		handle_update_synth_market_paused_operations(ctx, paused_operations)
+		handle_update_market_paused_operations(ctx, paused_operations)
 	}
 
-	pub fn update_synth_market_status(
-		ctx: Context<AdminUpdateSynthMarket>,
+	pub fn update_market_status(
+		ctx: Context<AdminUpdateMarket>,
 		status: MarketStatus
 	) -> Result<()> {
-		handle_update_synth_market_status(ctx, status)
+		handle_update_market_status(ctx, status)
 	}
 
-	pub fn update_synth_market_synthetic_tier(
-		ctx: Context<AdminUpdateSynthMarket>,
-		synthetic_tier: SyntheticTier
+	pub fn update_market_tier(
+		ctx: Context<AdminUpdateMarket>,
+		tier: Tier
 	) -> Result<()> {
-		handle_update_synth_market_synthetic_tier(ctx, synthetic_tier)
+		handle_update_market_tier(ctx, tier)
 	}
 
 	// User instructions
@@ -765,7 +757,6 @@ pub mod normal {
 		handle_reset_amm_oracle_twap(ctx)
 	}
 
-	
 	// Oracle instructions
 
 	pub fn initialize_pyth_pull_oracle(

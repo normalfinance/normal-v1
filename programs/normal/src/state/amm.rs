@@ -10,16 +10,14 @@ use crate::{
 };
 use anchor_lang::prelude::*;
 
-use super::{ oracle::{ HistoricalOracleData, OracleSource }, user::MarketType };
+use super::{ oracle::{ HistoricalOracleData, OracleSource } };
 
 #[assert_no_slop]
 #[zero_copy(unsafe)]
 #[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct AMM {
-	/// The AMM's address. It is a pda of the market index
-	pub pubkey: Pubkey,
-	pub market_index: u16,
+	
 
 	/// the authority that can push or pull quote asset tokens to/from the Vault when price exceed the max_price_deviance
 	pub vault_balance_authority: Pubkey,

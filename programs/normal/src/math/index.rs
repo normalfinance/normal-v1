@@ -7,7 +7,7 @@ use crate::state::oracles::index_fund::{ IndexFundAssets, WeightingMethod };
 use solana_program::msg;
 
 use crate::state::fill_mode::FillMode;
-use crate::state::synth_market::SynthMarket;
+use crate::state::market::Market;
 use std::cmp::min;
 use std::collections::BTreeMap;
 

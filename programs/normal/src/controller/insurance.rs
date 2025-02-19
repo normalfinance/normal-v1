@@ -5,7 +5,7 @@ use solana_program::msg;
 use crate::controller::spot_balance::{
 	update_revenue_pool_balances,
 	update_spot_balances,
-	update_synth_market_cumulative_interest,
+	update_market_cumulative_interest,
 };
 use crate::controller::token::send_from_program_vault;
 use crate::error::NormalResult;
@@ -648,7 +648,7 @@ pub fn settle_revenue_to_insurance_fund(
 	now: i64,
 	check_invariants: bool
 ) -> NormalResult<u64> {
-	update_synth_market_cumulative_interest(spot_market, None, now)?;
+	update_market_cumulative_interest(spot_market, None, now)?;
 
 	if spot_market.insurance_fund.revenue_settle_period == 0 {
 		// revenue pool not configured to settle, ending early
@@ -781,7 +781,7 @@ pub fn resolve_perp_pnl_deficit(
 		pnl_pool_token_amount
 	)?;
 
-	update_synth_market_cumulative_interest(spot_market, None, now)?;
+	update_market_cumulative_interest(spot_market, None, now)?;
 
 	let total_if_shares_before = spot_market.insurance_fund.total_shares;
 

@@ -71,7 +71,7 @@ export function getUserStatsAccountPublicKey(
 	)[0];
 }
 
-export async function getSynthMarketPublicKey(
+export async function getMarketPublicKey(
 	programId: PublicKey,
 	marketIndex: number
 ): Promise<PublicKey> {
@@ -86,7 +86,7 @@ export async function getSynthMarketPublicKey(
 	)[0];
 }
 
-export function getSynthMarketPublicKeySync(
+export function getMarketPublicKeySync(
 	programId: PublicKey,
 	marketIndex: number
 ): PublicKey {

@@ -6,7 +6,7 @@ use crate::{
 	state::NUM_REWARDS,
 };
 
-use super::{ synth_market::SynthMarket, Tick };
+use super::{ market::Market, Tick };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Copy)]
 pub struct OpenLPWithMetadataBumps {

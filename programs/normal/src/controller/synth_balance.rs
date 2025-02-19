@@ -1,6 +1,6 @@
 use crate::math::oracle::oracle_validity;
 use crate::state::state::ValidityGuardRails;
-use crate::state::synth_market::SynthMarket;
+use crate::state::market::Market;
 use std::cmp::max; //, OracleValidity};
 
 use anchor_lang::prelude::*;
@@ -26,17 +26,13 @@ use crate::math::synth_balance::{
 };
 use crate::math::stats::{ calculate_new_twap, calculate_weighted_average };
 
-use crate::math::oracle::{ is_oracle_valid_for_action, DriftAction };
+use crate::math::oracle::{ is_oracle_valid_for_action };
 use crate::math::safe_math::SafeMath;
-use crate::state::events::SpotInterestRecord;
 use crate::state::oracle::OraclePriceData;
-use crate::state::paused_operations::SpotOperation;
-use crate::state::spot_market::{ SpotBalance, SpotBalanceType, SpotMarket };
-use crate::state::user::MarketType;
 use crate::validate;
 
-pub fn update_synth_market_twap_stats(
-	spot_market: &mut SynthMarket,
+pub fn update_market_twap_stats(
+	spot_market: &mut Market,
 	oracle_price_data: Option<&OraclePriceData>,
 	now: i64
 ) -> NormalResult {
@@ -129,23 +125,23 @@ pub fn update_synth_market_twap_stats(
 	Ok(())
 }
 
-pub fn update_synth_market_cumulative_interest(
-	synth_market: &mut SynthMarket,
+pub fn update_market_cumulative_interest(
+	market: &mut Market,
 	oracle_price_data: Option<&OraclePriceData>,
 	now: i64
 ) -> NormalResult {
-	if synth_market.is_operation_paused(SpotOperation::UpdateCumulativeInterest) {
-		update_synth_market_twap_stats(synth_market, oracle_price_data, now)?;
+	if market.is_operation_paused(SpotOperation::UpdateCumulativeInterest) {
+		update_market_twap_stats(market, oracle_price_data, now)?;
 		return Ok(());
 	}
 
 	let InterestAccumulated { deposit_interest, borrow_interest } =
-		calculate_accumulated_interest(synth_market, now)?;
+		calculate_accumulated_interest(market, now)?;
 
 	if deposit_interest > 0 && borrow_interest > 1 {
 		// borrowers -> lenders IF fee here
 		let deposit_interest_for_stakers = deposit_interest
-			.safe_mul(synth_market.insurance_fund.total_factor as u128)?
+			.safe_mul(market.insurance_fund.total_factor as u128)?
 			.safe_div(IF_FACTOR_PRECISION)?;
 
 		let deposit_interest_for_lenders = deposit_interest.safe_sub(
@@ -153,19 +149,19 @@ pub fn update_synth_market_cumulative_interest(
 		)?;
 
 		if deposit_interest_for_lenders > 0 {
-			synth_market.cumulative_deposit_interest =
-				synth_market.cumulative_deposit_interest.safe_add(
+			market.cumulative_deposit_interest =
+				market.cumulative_deposit_interest.safe_add(
 					deposit_interest_for_lenders
 				)?;
 
-			synth_market.cumulative_borrow_interest =
-				synth_market.cumulative_borrow_interest.safe_add(borrow_interest)?;
-			synth_market.last_interest_ts = now.cast()?;
+			market.cumulative_borrow_interest =
+				market.cumulative_borrow_interest.safe_add(borrow_interest)?;
+			market.last_interest_ts = now.cast()?;
 
 			// add deposit_interest_for_stakers as balance for revenue_pool
 			let token_amount = get_interest_token_amount(
-				synth_market.deposit_balance,
-				synth_market,
+				market.deposit_balance,
+				market,
 				deposit_interest_for_stakers
 			)?;
 
@@ -177,19 +173,19 @@ pub fn update_synth_market_cumulative_interest(
 
 			emit!(SpotInterestRecord {
 				ts: now,
-				market_index: synth_market.market_index,
-				deposit_balance: synth_market.deposit_balance,
-				cumulative_deposit_interest: synth_market.cumulative_deposit_interest,
-				borrow_balance: synth_market.borrow_balance,
-				cumulative_borrow_interest: synth_market.cumulative_borrow_interest,
-				optimal_utilization: synth_market.optimal_utilization,
-				optimal_borrow_rate: synth_market.optimal_borrow_rate,
-				max_borrow_rate: synth_market.max_borrow_rate,
+				market_index: market.market_index,
+				deposit_balance: market.deposit_balance,
+				cumulative_deposit_interest: market.cumulative_deposit_interest,
+				borrow_balance: market.borrow_balance,
+				cumulative_borrow_interest: market.cumulative_borrow_interest,
+				optimal_utilization: market.optimal_utilization,
+				optimal_borrow_rate: market.optimal_borrow_rate,
+				max_borrow_rate: market.max_borrow_rate,
 			});
 		}
 	}
 
-	update_synth_market_twap_stats(synth_market, oracle_price_data, now)?;
+	update_market_twap_stats(market, oracle_price_data, now)?;
 
 	Ok(())
 }
@@ -421,7 +417,7 @@ pub fn update_spot_market_and_check_validity(
 	action: Option<DriftAction>
 ) -> NormalResult {
 	// update spot market EMAs with new/current data
-	update_synth_market_cumulative_interest(
+	update_market_cumulative_interest(
 		spot_market,
 		Some(oracle_price_data),
 		now

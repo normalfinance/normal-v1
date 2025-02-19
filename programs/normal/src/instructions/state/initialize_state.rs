@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
-use crate::{ state::synth_market::AuctionConfig, State };
+use crate::{ state::market::AuctionConfig, State };
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {

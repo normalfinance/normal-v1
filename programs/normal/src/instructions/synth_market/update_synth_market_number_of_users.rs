@@ -2,10 +2,10 @@ use anchor_lang::prelude::*;
 use market::{ Market, MarketStatus };
 
 use crate::error::ErrorCode;
-use super::AdminUpdateSynthMarket;
+use super::AdminUpdateMarket;
 
-pub fn handle_update_synth_market_number_of_users(
-	ctx: Context<AdminUpdateSynthMarket>,
+pub fn handle_update_market_number_of_users(
+	ctx: Context<AdminUpdateMarket>,
 	number_of_users: Option<u32>
 ) -> Result<()> {
 	let market = &mut load_mut!(ctx.accounts.market)?;

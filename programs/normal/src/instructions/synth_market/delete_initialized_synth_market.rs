@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
-use synth_market::{ Market, MarketStatus };
+use market::{ Market, MarketStatus };
 
 use crate::state::*;
 
-use super::update_market_liquidation_penalty::AdminUpdateSynthMarket;
+use super::update_market_liquidation_penalty::AdminUpdateMarket;
 
 #[derive(Accounts)]
 pub struct DeleteInitializedMarket<'info> {

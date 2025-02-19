@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::instructions::constraints::{ market_valid, valid_oracle_for_amm };
-use crate::{ state::{ self, synth_market::SynthMarket }, State };
+use crate::{ state::{ self, market::Market }, State };
 
 use super::reset_amm_oracle_twap::RepegCurve;
 

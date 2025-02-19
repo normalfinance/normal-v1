@@ -1,5 +1,5 @@
 import { ConfirmOptions } from '@solana/web3.js';
-import { SynthMarketAccount, PublicKey, VaultAccount } from '.';
+import { MarketAccount, PublicKey, VaultAccount } from '.';
 import {
 	DevnetMarkets,
 	MainnetMarkets,
@@ -88,12 +88,12 @@ export function getMarketsAndOraclesForSubscription(env: NormalEnv): {
 	indexMarketIndexes: number[];
 	oracleInfos: OracleInfo[];
 } {
-	const synthMarketIndexes = [];
+	const MarketIndexes = [];
 	const indexMarketIndexes = [];
 	const oracleInfos = new Map<string, OracleInfo>();
 
 	for (const market of Markets[env]) {
-		synthMarketIndexes.push(market.marketIndex);
+		MarketIndexes.push(market.marketIndex);
 		oracleInfos.set(market.oracle.toString(), {
 			publicKey: market.oracle,
 			source: market.oracleSource,
@@ -109,7 +109,7 @@ export function getMarketsAndOraclesForSubscription(env: NormalEnv): {
 	}
 
 	return {
-		synthMarketIndexes: synthMarketIndexes,
+		MarketIndexes: MarketIndexes,
 		indexMarketIndexes: indexMarketIndexes,
 		oracleInfos: Array.from(oracleInfos.values()),
 	};
@@ -117,7 +117,7 @@ export function getMarketsAndOraclesForSubscription(env: NormalEnv): {
 
 export async function findAllMarketAndOracles(program: Program): Promise<{
 	marketIndexes: number[];
-	marketAccounts: SynthMarketAccount[];
+	marketAccounts: MarketAccount[];
 	vaultIndexes: number[];
 	oracleInfos: OracleInfo[];
 	vaultAccounts: VaultAccount[];

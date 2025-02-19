@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
 
-use super::AdminUpdateSynthMarket;
+use super::AdminUpdateMarket;
 
 pub fn handle_set_liquidation_penalty(
-	ctx: Context<AdminUpdateSynthMarket>,
+	ctx: Context<AdminUpdateMarket>,
 	liquidation_penalty: u64
 ) -> Result<()> {
 	let market = &mut load_mut!(ctx.accounts.market)?;

@@ -1,11 +1,11 @@
 use anchor_lang::prelude::*;
 
 use crate::error::ErrorCode;
-use super::AdminUpdateSynthMarket;
+use super::AdminUpdateMarket;
 
 #[access_control(market_valid(&ctx.accounts.market))]
-pub fn handle_update_synth_market_liquidation_fee(
-	ctx: Context<AdminUpdateSynthMarket>,
+pub fn handle_update_market_liquidation_fee(
+	ctx: Context<AdminUpdateMarket>,
 	liquidator_fee: u32,
 	if_liquidation_fee: u32
 ) -> Result<()> {

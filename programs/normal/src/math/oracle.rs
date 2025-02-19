@@ -10,10 +10,9 @@ use crate::constants::main::BID_ASK_SPREAD_PRECISION;
 use crate::math::safe_math::SafeMath;
 
 use crate::state::oracle::OraclePriceData;
-use crate::state::paused_operations::SynthOperation;
-use crate::state::synth_market::SynthMarket;
+use crate::state::paused_operations::MarketOperation;
+use crate::state::market::Market;
 use crate::state::state::{ OracleGuardRails, ValidityGuardRails };
-use crate::state::user::MarketType;
 use std::fmt;
 
 // #[cfg(test)]
@@ -153,7 +152,6 @@ pub fn get_oracle_status(
 	reserve_price: u64
 ) -> NormalResult<OracleStatus> {
 	let oracle_validity = oracle_validity(
-		MarketType::Synth,
 		market.market_index,
 		amm.historical_oracle_data.last_oracle_price_twap,
 		oracle_price_data,
@@ -180,7 +178,6 @@ pub fn get_oracle_status(
 }
 
 pub fn oracle_validity(
-	market_type: MarketType,
 	market_index: u16,
 	last_oracle_twap: i64,
 	oracle_price_data: &OraclePriceData,

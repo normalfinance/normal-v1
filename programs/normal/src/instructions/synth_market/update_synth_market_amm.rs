@@ -1,26 +1,26 @@
 use anchor_lang::prelude::*;
 
-use crate::state::{ amm::AMM, synth_market::SynthMarket };
+use crate::state::{ amm::AMM, market::Market };
 
-use super::AdminUpdateSynthMarket;
+use super::AdminUpdateMarket;
 
 #[derive(Accounts)]
-pub struct AdminUpdateSynthMarketAMM<'info> {
+pub struct AdminUpdateMarketAMM<'info> {
 	pub admin: Signer<'info>,
 	#[account(has_one = admin)]
 	pub state: Box<Account<'info, State>>,
 	#[account(mut)]
-	pub synth_market: AccountLoader<'info, SynthMarket>,
+	pub market: AccountLoader<'info, Market>,
 	pub amm: AccountLoader<'info, AMM>,
 }
 
-#[access_control(synth_market_valid(&ctx.accounts.synth_market))]
-pub fn handle_update_synth_market_amm(
-	ctx: Context<AdminUpdateSynthMarketAMM>,
+#[access_control(market_valid(&ctx.accounts.market))]
+pub fn handle_update_market_amm(
+	ctx: Context<AdminUpdateMarketAMM>,
 	amm: Pubkey
 ) -> Result<()> {
-	let synth_market = &mut load_mut!(ctx.accounts.synth_market)?;
-	msg!("synth market {}", synth_market.market_index);
+	let market = &mut load_mut!(ctx.accounts.market)?;
+	msg!("synth market {}", market.market_index);
 
 	let clock = Clock::get()?;
 
@@ -39,9 +39,9 @@ pub fn handle_update_synth_market_amm(
 		..
 	} = get_oracle_price(&oracle_source, &ctx.accounts.oracle, clock.slot)?;
 
-	msg!("synth_market.amm: {:?} -> {:?}", synth_market.amm, amm);
+	msg!("market.amm: {:?} -> {:?}", market.amm, amm);
 
-	synth_market.amm = amm;
+	market.amm = amm;
 
 	Ok(())
 }

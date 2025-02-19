@@ -3,17 +3,14 @@ use crate::math::casting::Cast;
 use crate::math::margin::MarginRequirementType;
 use crate::math::safe_math::SafeMath;
 use crate::state::oracle::StrictOraclePrice;
-use crate::state::synth_market::SynthMarket;
+use crate::state::market::Market;
 use crate::state::user::{ User };
 use crate::{
 	validate,
-	MarketType,
 	AMM_RESERVE_PRECISION_I128,
 	MARGIN_PRECISION_U128,
 };
 use anchor_lang::{ prelude::*, solana_program::msg };
-
-use super::user::MarketType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum MarginCalculationMode {
@@ -35,14 +32,12 @@ pub struct MarginContext {
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, AnchorSerialize, AnchorDeserialize)]
 pub struct MarketIdentifier {
-	pub market_type: MarketType,
 	pub market_index: u16,
 }
 
 impl MarketIdentifier {
 	pub fn synth(market_index: u16) -> Self {
 		Self {
-			market_type: MarketType::Synth,
 			market_index,
 		}
 	}

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, Token, TokenAccount };
 
-use crate::state::{ synth_market::SynthMarket };
+use crate::state::{ market::Market };
 
 #[derive(Accounts)]
 #[instruction(reward_index: u8)]

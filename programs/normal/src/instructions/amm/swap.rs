@@ -5,7 +5,7 @@ use crate::{
 	controller,
 	errors::ErrorCode,
 	manager::swap_manager::*,
-	state::{ synth_market::SynthMarket, AMM },
+	state::{ market::Market, AMM },
 	util::{
 		to_timestamp_u64,
 		update_and_swap_amm,

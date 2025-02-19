@@ -31,12 +31,12 @@ pub struct TransferCollateral<'info> {
 	pub state: Box<Account<'info, State>>,
 	#[account(
 		seeds = [
-			b"synth_market_vault".as_ref(),
+			b"market_vault".as_ref(),
 			market_index.to_le_bytes().as_ref(),
 		],
 		bump
 	)]
-	pub synth_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+	pub market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 }
 
 #[access_control(
@@ -80,7 +80,7 @@ pub fn handle_transfer_collateral<'c: 'info, 'info>(
 		"cant transfer between the same user account"
 	)?;
 
-	let AccountMaps { synth_market_map, index_market_map, mut oracle_map } =
+	let AccountMaps { market_map, index_market_map, mut oracle_map } =
 		load_maps(
 			&mut ctx.remaining_accounts.iter().peekable(),
 			&MarketSet::new(),
@@ -90,18 +90,18 @@ pub fn handle_transfer_collateral<'c: 'info, 'info>(
 		)?;
 
 	{
-		let synth_market = &mut synth_market_map.get_ref_mut(&market_index)?;
-		let oracle_price_data = oracle_map.get_price_data(&synth_market.oracle)?;
-		controller::synth_balance::update_synth_market_cumulative_interest(
-			synth_market,
+		let market = &mut market_map.get_ref_mut(&market_index)?;
+		let oracle_price_data = oracle_map.get_price_data(&market.oracle)?;
+		controller::synth_balance::update_market_cumulative_interest(
+			market,
 			Some(oracle_price_data),
 			clock.unix_timestamp
 		)?;
 	}
 
 	let oracle_price = {
-		let synth_market = &market_map.get_ref(&market_index)?;
-		oracle_map.get_price_data(&synth_market.oracle)?.price
+		let market = &market_map.get_ref(&market_index)?;
+		oracle_map.get_price_data(&market.oracle)?.price
 	};
 
 	{
@@ -110,14 +110,14 @@ pub fn handle_transfer_collateral<'c: 'info, 'info>(
 		from_user.increment_total_withdraws(
 			amount,
 			oracle_price,
-			synth_market.get_precision().cast()?
+			market.get_precision().cast()?
 		)?;
 
 		// prevents withdraw when limits hit
 		controller::spot_position::update_spot_balances_and_cumulative_deposits_with_limits(
 			amount as u128,
 			&SpotBalanceType::Borrow,
-			synth_market,
+			market,
 			from_user
 		)?;
 	}
@@ -227,10 +227,10 @@ pub fn handle_transfer_collateral<'c: 'info, 'info>(
 
 	to_user.update_last_active_slot(slot);
 
-	let synth_market = synth_market_map.get_ref(&market_index)?;
-	math::synth_withdraw::validate_synth_market_vault_amount(
-		&synth_market,
-		ctx.accounts.synth_market_vault.amount
+	let market = market_map.get_ref(&market_index)?;
+	math::synth_withdraw::validate_market_vault_amount(
+		&market,
+		ctx.accounts.market_vault.amount
 	)?;
 
 	Ok(())

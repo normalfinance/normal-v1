@@ -18,7 +18,7 @@ use crate::constants::main::PRICE_PRECISION_I64;
 use crate::math::oracle::{ oracle_validity, OracleValidity };
 use crate::state::oracle::{ get_oracle_price, OraclePriceData, OracleSource };
 use crate::state::state::OracleGuardRails;
-use crate::state::synth_market::MarketType;
+use crate::validate;
 use anchor_lang::prelude::{ AccountInfo, Pubkey };
 
 use anchor_lang::Key;
@@ -115,7 +115,6 @@ impl<'a> OracleMap<'a> {
 
 	pub fn get_price_data_and_validity(
 		&mut self,
-		market_type: MarketType,
 		market_index: u16,
 		pubkey: &Pubkey,
 		last_oracle_price_twap: i64,

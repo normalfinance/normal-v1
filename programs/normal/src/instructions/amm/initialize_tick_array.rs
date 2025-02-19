@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
 	controller::tick,
-	state::{ synth_market::SynthMarket, tick::{ Tick, TickArray } },
+	state::{ market::Market, tick::{ Tick, TickArray } },
 };
 
 #[derive(Accounts)]

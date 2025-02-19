@@ -1,16 +1,9 @@
 use anchor_lang::prelude::*;
+use borsh::{ BorshDeserialize, BorshSerialize };
 
-use crate::{
-	errors::ErrorCode,
-	math::{ margin::MarginRequirementType, MAX_PROTOCOL_FEE_RATE },
-};
+use crate::{ math::{ margin::MarginRequirementType, MAX_PROTOCOL_FEE_RATE } };
 
-use super::{
-	amm::AMM,
-	collateral::Collateral,
-	insurance::{ InsuranceClaim, InsuranceFund },
-	oracle::OracleSource,
-};
+use super::{ amm::AMM, insurance::{ InsuranceClaim }, oracle::OracleSource };
 
 #[derive(
 	Clone,
@@ -48,7 +41,7 @@ pub enum MarketStatus {
 	Ord,
 	Default
 )]
-pub enum SyntheticTier {
+pub enum Tier {
 	/// max insurance capped at A level
 	A,
 	/// max insurance capped at B level
@@ -64,7 +57,7 @@ pub enum SyntheticTier {
 	Isolated,
 }
 
-impl SyntheticTier {
+impl Tier {
 	pub fn is_as_safe_as(
 		&self,
 		best_contract: &ContractTier,
@@ -88,40 +81,8 @@ impl SyntheticTier {
 	}
 }
 
-#[derive(
-	Clone,
-	Copy,
-	BorshSerialize,
-	BorshDeserialize,
-	PartialEq,
-	Debug,
-	Eq,
-	Default
-)]
-pub enum AuctionType {
-	#[default]
-	/// selling collateral from a Vault liquidation
-	Collateral,
-	/// selling newly minted NORM to cover Protocol Debt (the deficit from Collateral Auctions)
-	Debt,
-	/// selling excess synthetic token proceeds over the Insurance Fund max limit for NORM to be burned
-	Surplus,
-}
-
-#[derive(Copy, AnchorSerialize, AnchorDeserialize, Clone, Debug)]
-pub struct AuctionConfig {
-	/// where collateral auctions should take place (3rd party AMM vs private)
-	pub auction_location: AuctionPreference,
-	/// Maximum time allowed for the auction to complete.
-	pub auction_duration: u16,
-	/// Determines how quickly the starting price decreases during the auction if there are no bids.
-	pub auction_bid_decrease_rate: u16,
-	/// May be capped to prevent overly large auctions that could affect the market price.
-	pub max_auction_lot_size: u64,
-}
-
 #[account]
-pub struct SynthMarket {
+pub struct Market {
 	/// The market's address. It is a pda of the market index
 	pub pubkey: Pubkey,
 	/// oracle price data public key
@@ -273,7 +234,7 @@ pub struct SynthMarket {
 
 	// AMM
 	//
-	pub amm: Pubkey,
+	pub amm: AMM,
 
 	// Insurance
 	//
@@ -298,9 +259,9 @@ pub struct SynthMarket {
 	pub padding: [u8; 43],
 }
 
-impl Default for SynthMarket {
+impl Default for Market {
 	fn default() -> Self {
-		SynthMarket {
+		Market {
 			pubkey: Pubkey::default(),
 			market_index: 0,
 			name: [0; 32],
@@ -375,13 +336,13 @@ impl Default for SynthMarket {
 	}
 }
 
-impl Size for SynthMarket {
+impl Size for Market {
 	const SIZE: usize = 1216; // TODO:
 }
 
-impl SynthMarket {
-	pub fn is_operation_paused(&self, operation: SynthOperation) -> bool {
-		SynthOperation::is_operation_paused(self.paused_operations, operation)
+impl Market {
+	pub fn is_operation_paused(&self, operation: MarketOperation) -> bool {
+		MarketOperation::is_operation_paused(self.paused_operations, operation)
 	}
 
 	pub fn update_debt_ceiling(&self, debt_ceiling: u64) -> NormalResult<u64> {
@@ -438,22 +399,4 @@ impl SynthMarket {
 		}
 		self.liquidation_penalty = liquidation_penalty;
 	}
-}
-
-#[derive(
-	Clone,
-	Copy,
-	AnchorSerialize,
-	AnchorDeserialize,
-	PartialEq,
-	Debug,
-	Eq,
-	Default
-)]
-pub enum AuctionPreference {
-	#[default]
-	/// a local secondary market
-	Private,
-	/// a DEX like Orca, Serum, Jupiter, etc.
-	External,
 }

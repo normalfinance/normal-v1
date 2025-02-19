@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
-use synth_market_map::{ get_writable_market_set, MarketSet };
+use market_map::{ get_writable_market_set, MarketSet };
 use vault::Vault;
-use synth_market::VaultsConfig;
+use market::VaultsConfig;
 use vault_map::get_writable_vault_set;
 use crate::instructions::constraints::*;
 

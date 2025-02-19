@@ -341,7 +341,7 @@ export type InsuranceFundAccount = {
 	pausedOperations: number;
 };
 
-export type SynthMarketAccount = {
+export type MarketAccount = {
 	pubkey: PublicKey;
 	marketIndex: number;
 	name: number[];

@@ -1,10 +1,10 @@
 use anchor_lang::prelude::*;
 
-use super::AdminUpdateSynthMarket;
+use super::AdminUpdateMarket;
 
 #[access_control(market_valid(&ctx.accounts.market))]
-pub fn handle_update_synth_market_margin_ratio(
-	ctx: Context<AdminUpdateSynthMarket>,
+pub fn handle_update_market_margin_ratio(
+	ctx: Context<AdminUpdateMarket>,
 	margin_ratio_initial: u32,
 	margin_ratio_maintenance: u32
 ) -> Result<()> {
