@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
-use crate::{ State };
+use crate::{ math::constants::DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, state::{state::{ExchangeStatus, OracleGuardRails}, traits::Size}, State };
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -26,8 +26,6 @@ pub struct Initialize<'info> {
 pub fn handle_initialize_state(
 	ctx: Context<Initialize>,
 	total_debt_ceiling: u64,
-	protocol_index_fee: u64,
-	max_index_assets: u16
 ) -> Result<()> {
 	let (normal_signer, normal_signer_nonce) = Pubkey::find_program_address(
 		&[b"normal_signer".as_ref()],
@@ -49,8 +47,8 @@ pub fn handle_initialize_state(
 		max_number_of_sub_accounts: 0,
 		max_initialize_user_fee: 0,
 		total_debt_ceiling,
-		insurance_fund: *ctx.accounts.insurance_fund.key,
-		super_keepers: [],
+		insurance_fund: Pubkey::default(),
+		super_keepers: Vec::new(),
 		padding: [0; 10],
 	};
 

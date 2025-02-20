@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::constants::main::{ PRICE_PRECISION, PRICE_PRECISION_I64 };
+use crate::math::constants::{ PRICE_PRECISION, PRICE_PRECISION_I64 };
 use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 
@@ -156,17 +156,17 @@ pub fn get_pyth_price(
 	let mut oracle_precision: u128;
 	let published_slot: u64;
 
-	if is_pull_oracle {
-		let price_message = pyth_solana_receiver_sdk::price_update::PriceUpdateV2
-			::try_deserialize(&mut pyth_price_data)
-			.unwrap();
-		oracle_price = price_message.price_message.price;
-		oracle_conf = price_message.price_message.conf;
-		oracle_precision = (10_u128).pow(
-			price_message.price_message.exponent.unsigned_abs()
-		);
-		published_slot = price_message.posted_slot;
-	} else {
+	// if is_pull_oracle {
+	// 	let price_message = pyth_solana_receiver_sdk::price_update::PriceUpdateV2
+	// 		::try_deserialize(&mut pyth_price_data)
+	// 		.unwrap();
+	// 	oracle_price = price_message.price_message.price;
+	// 	oracle_conf = price_message.price_message.conf;
+	// 	oracle_precision = (10_u128).pow(
+	// 		price_message.price_message.exponent.unsigned_abs()
+	// 	);
+	// 	published_slot = price_message.posted_slot;
+	// } else {
 		let price_data = pyth_client::cast::<pyth_client::Price>(pyth_price_data);
 		oracle_price = price_data.agg.price;
 		oracle_conf = price_data.agg.conf;
@@ -184,7 +184,7 @@ pub fn get_pyth_price(
 
 		oracle_precision = (10_u128).pow(price_data.expo.unsigned_abs());
 		published_slot = price_data.valid_slot;
-	}
+	// }
 
 	if oracle_precision <= multiple {
 		msg!("Multiple larger than oracle precision");

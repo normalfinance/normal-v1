@@ -1,16 +1,9 @@
-pub mod amm;
 pub mod events;
 pub mod insurance;
 pub mod load_ref;
 pub mod oracle;
 pub mod oracle_map;
-pub mod liquidity_position;
 pub mod paused_operations;
-pub mod tick;
-pub mod margin_calculation;
-pub mod market_map;
-pub mod market;
-pub mod collateral_position;
 pub mod referral;
 pub mod user_stats;
 #[allow(clippy::module_inception)]

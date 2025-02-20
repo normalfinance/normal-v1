@@ -1,35 +1,16 @@
 use crate::errors::{ NormalResult, ErrorCode };
-use crate::math::auction::{ calculate_auction_price, is_auction_complete };
 use crate::math::casting::Cast;
-use crate::math::constants::{
-	EPOCH_DURATION,
-	FUEL_START_TS,
-	OPEN_ORDER_MARGIN_REQUIREMENT,
-	PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO,
-	QUOTE_PRECISION,
-	QUOTE_SPOT_MARKET_INDEX,
-	THIRTY_DAY,
-};
-use crate::math::margin::MarginRequirementType;
 
+use crate::math::constants::QUOTE_PRECISION_U64;
 use crate::math::safe_math::SafeMath;
 use crate::state::traits::Size;
-use crate::{ get_then_update_id, QUOTE_PRECISION_U64 };
-use crate::{ math_error, SPOT_WEIGHT_PRECISION_I128 };
-use crate::{ safe_increment, SPOT_WEIGHT_PRECISION };
-use crate::{ validate, MAX_PREDICTION_MARKET_PRICE };
+use crate::{ get_then_update_id, safe_increment, validate };
 use anchor_lang::prelude::*;
 use borsh::{ BorshDeserialize, BorshSerialize };
 use solana_program::msg;
+use crate::math_error;
 
-use crate::math::margin::{
-	calculate_margin_requirement_and_total_collateral_and_liability_info,
-};
-use crate::state::margin_calculation::{ MarginCalculation, MarginContext };
-use crate::state::oracle_map::OracleMap;
-
-use super::market_map::MarketMap;
-use super::collateral_position::CollateralPosition;
+use super::user_stats::UserStats;
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
 pub enum UserStatus {
@@ -55,7 +36,7 @@ pub struct User {
 	/// Encoded display name e.g. "toly"
 	pub name: [u8; 32],
 	/// The user's positions
-	pub positions: [CollateralPosition; 8],
+	// pub positions: [CollateralPosition; 8],
 	/// The total values of deposits the user has made
 	/// precision: QUOTE_PRECISION
 	pub total_deposits: u64,
@@ -111,82 +92,7 @@ impl User {
 		self.status &= !(status as u8);
 	}
 
-	// Position
-
-	pub fn get_position_index(&self, market_index: u16) -> NormalResult<usize> {
-		// first spot position is always quote asset
-		if market_index == 0 {
-			validate!(
-				self.positions[0].market_index == 0,
-				ErrorCode::DefaultError,
-				"User position 0 not market_index=0"
-			)?;
-			return Ok(0);
-		}
-
-		self.positions
-			.iter()
-			.position(|position| position.market_index == market_index)
-			.ok_or(ErrorCode::CouldNotFindSpotPosition)
-	}
-
-	pub fn get_position(&self, market_index: u16) -> NormalResult<&SpotPosition> {
-		self
-			.get_position_index(market_index)
-			.map(|market_index| &self.positions[market_index])
-	}
-
-	pub fn get_position_mut(
-		&mut self,
-		market_index: u16
-	) -> NormalResult<&mut SpotPosition> {
-		self
-			.get_position_index(market_index)
-			.map(move |market_index| &mut self.positions[market_index])
-	}
-
-	pub fn add_position(
-		&mut self,
-		market_index: u16,
-		balance_type: SpotBalanceType
-	) -> NormalResult<usize> {
-		let new_position_index = self.positions
-			.iter()
-			.enumerate()
-			.position(|(index, position)| index != 0 && position.is_available())
-			.ok_or(ErrorCode::NoSpotPositionAvailable)?;
-
-		let new_position = SpotPosition {
-			market_index,
-			balance_type,
-			..SpotPosition::default()
-		};
-
-		self.positions[new_position_index] = new_position;
-
-		Ok(new_position_index)
-	}
-
-	pub fn force_get_position_mut(
-		&mut self,
-		market_index: u16
-	) -> NormalResult<&mut SpotPosition> {
-		self
-			.get_position_index(market_index)
-			.or_else(|_| self.add_position(market_index, SpotBalanceType::Deposit))
-			.map(move |market_index| &mut self.positions[market_index])
-	}
-
-	pub fn force_get_position_index(
-		&mut self,
-		market_index: u16
-	) -> NormalResult<usize> {
-		self
-			.get_position_index(market_index)
-			.or_else(|_| self.add_position(market_index, SpotBalanceType::Deposit))
-	}
-
-	// Deposit/Withdrawal
+	// Position...
 
 	pub fn get_deposit_value(
 		&mut self,
@@ -312,68 +218,68 @@ impl User {
 		Ok(())
 	}
 
-	pub fn calculate_margin(
-		&mut self,
-		market_map: &MarketMap,
-		oracle_map: &mut OracleMap,
-		context: MarginContext,
-		now: i64
-	) -> NormalResult<MarginCalculation> {
-		let margin_calculation =
-			calculate_margin_requirement_and_total_collateral_and_liability_info(
-				self,
-				market_map,
-				oracle_map,
-				context
-			)?;
+	// pub fn calculate_margin(
+	// 	&mut self,
+	// 	market_map: &MarketMap,
+	// 	oracle_map: &mut OracleMap,
+	// 	context: MarginContext,
+	// 	now: i64
+	// ) -> NormalResult<MarginCalculation> {
+	// 	let margin_calculation =
+	// 		calculate_margin_requirement_and_total_collateral_and_liability_info(
+	// 			self,
+	// 			market_map,
+	// 			oracle_map,
+	// 			context
+	// 		)?;
 
-		Ok(margin_calculation)
-	}
+	// 	Ok(margin_calculation)
+	// }
 
-	pub fn meets_withdraw_margin_requirement(
-		&mut self,
-		market_map: &MarketMap,
-		oracle_map: &mut OracleMap,
-		margin_requirement_type: MarginRequirementType,
-		withdraw_market_index: u16,
-		withdraw_amount: u128,
-		user_stats: &mut UserStats,
-		now: i64
-	) -> NormalResult<bool> {
-		let strict = margin_requirement_type == MarginRequirementType::Initial;
-		let context = MarginContext::standard(margin_requirement_type).strict(
-			strict
-		);
+	// pub fn meets_withdraw_margin_requirement(
+	// 	&mut self,
+	// 	market_map: &MarketMap,
+	// 	oracle_map: &mut OracleMap,
+	// 	margin_requirement_type: MarginRequirementType,
+	// 	withdraw_market_index: u16,
+	// 	withdraw_amount: u128,
+	// 	user_stats: &mut UserStats,
+	// 	now: i64
+	// ) -> NormalResult<bool> {
+	// 	let strict = margin_requirement_type == MarginRequirementType::Initial;
+	// 	let context = MarginContext::standard(margin_requirement_type).strict(
+	// 		strict
+	// 	);
 
-		let calculation =
-			calculate_margin_requirement_and_total_collateral_and_liability_info(
-				self,
-				market_map,
-				oracle_map,
-				context
-			)?;
+	// 	let calculation =
+	// 		calculate_margin_requirement_and_total_collateral_and_liability_info(
+	// 			self,
+	// 			market_map,
+	// 			oracle_map,
+	// 			context
+	// 		)?;
 
-		if
-			calculation.margin_requirement > 0 ||
-			calculation.get_num_of_liabilities()? > 0
-		{
-			validate!(
-				calculation.all_oracles_valid,
-				ErrorCode::InvalidOracle,
-				"User attempting to withdraw with outstanding liabilities when an oracle is invalid"
-			)?;
-		}
+	// 	if
+	// 		calculation.margin_requirement > 0 ||
+	// 		calculation.get_num_of_liabilities()? > 0
+	// 	{
+	// 		validate!(
+	// 			calculation.all_oracles_valid,
+	// 			ErrorCode::InvalidOracle,
+	// 			"User attempting to withdraw with outstanding liabilities when an oracle is invalid"
+	// 		)?;
+	// 	}
 
-		validate_any_isolated_tier_requirements(self, calculation)?;
+	// 	validate_any_isolated_tier_requirements(self, calculation)?;
 
-		validate!(
-			calculation.meets_margin_requirement(),
-			ErrorCode::InsufficientCollateral,
-			"User attempting to withdraw where total_collateral {} is below initial_margin_requirement {}",
-			calculation.total_collateral,
-			calculation.margin_requirement
-		)?;
+	// 	validate!(
+	// 		calculation.meets_margin_requirement(),
+	// 		ErrorCode::InsufficientCollateral,
+	// 		"User attempting to withdraw where total_collateral {} is below initial_margin_requirement {}",
+	// 		calculation.total_collateral,
+	// 		calculation.margin_requirement
+	// 	)?;
 
-		Ok(true)
-	}
+	// 	Ok(true)
+	// }
 }

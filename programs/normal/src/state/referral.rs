@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 
+use super::traits::Size;
+
 #[account(zero_copy(unsafe))]
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]

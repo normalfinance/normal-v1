@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::state::state::State;
+use crate::state::state::{OracleGuardRails, State};
 
 #[derive(Accounts)]
 pub struct AdminUpdateState<'info> {

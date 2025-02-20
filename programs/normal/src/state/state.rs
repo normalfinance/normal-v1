@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use enumflags2::BitFlags;
 
 use crate::errors::NormalResult;
+use crate::math::constants::{LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64};
 use crate::math::safe_math::SafeMath;
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
@@ -14,29 +15,16 @@ pub struct State {
 	pub signer: Pubkey,
 	// ensures signer transaction are not duplicated
 	pub signer_nonce: u8,
-
-	// Oracle
-	//
 	// validations to ensure oracle prices are accurate and reliable
 	pub oracle_guard_rails: OracleGuardRails,
 	// set of elected keepers who can freeze/update oracles in an emergency
 	pub super_keepers: Vec<Pubkey>,
-
-	// Exchange/AMMs
-	//
 	// the current status of the protocol
 	pub exchange_status: u8,
 	// the total number of markets live on the protocol
 	pub number_of_markets: u16,
-
-	// Insurance Fund
-	//
 	pub insurance_fund: Pubkey,
-
 	pub total_debt_ceiling: u64,
-
-	// User
-	//
 	// ensures user inititialization does not become costly
 	pub max_initialize_user_fee: u16,
 	// tracks the number of User delegate authorities
@@ -45,16 +33,11 @@ pub struct State {
 	pub number_of_sub_accounts: u64,
 	// the maximum number of sub-accounts the protocol is willing to support
 	pub max_number_of_sub_accounts: u16,
-
-	// Liquidation
-	//
-
 	/// The maximum percent of the collateral that can be sent to the AMM as liquidity
 	// pub max_amm_liquidity_utilization: u64,
 	pub liquidation_margin_buffer_ratio: u32,
 	pub liquidation_duration: u8,
 	pub initial_pct_to_liquidate: u16,
-
 	pub padding: [u8; 10],
 }
 
@@ -66,7 +49,6 @@ pub enum ExchangeStatus {
 	LendPaused = 0b00000100,
 	AmmPaused = 0b00001000,
 	LiqPaused = 0b00010000,
-	ScheduleFillPaused = 0b00100000,
 	// Paused = 0b11111111
 }
 

@@ -4,8 +4,9 @@ use crate::{
 	load,
 	load_mut,
 	safe_decrement,
-	state::{ state::State, user::User, user_stats::UserStats },
+	state::{ state::State, user::User, user_stats::UserStats }, validation::user::validate_user_deletion,
 };
+use crate::math_error;
 
 #[derive(Accounts)]
 pub struct DeleteUser<'info> {

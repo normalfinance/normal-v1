@@ -1,8 +1,10 @@
 use anchor_lang::prelude::*;
 
 use crate::errors::ErrorCode;
+use crate::state::insurance::{InsuranceFund, InsuranceFundStake};
 use crate::state::paused_operations::InsuranceFundOperation;
 use crate::state::state::State;
+use crate::state::traits::Size;
 use crate::validate;
 
 #[derive(Accounts)]

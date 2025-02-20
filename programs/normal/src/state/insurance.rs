@@ -1,8 +1,15 @@
 use anchor_lang::prelude::*;
 
-use crate::{ errors::ErrorCode, safe_decrement, safe_increment, validate };
+use crate::{
+	errors::{ ErrorCode, NormalResult },
+	safe_decrement,
+	safe_increment,
+	validate,
+};
 
-use super::paused_operations::InsuranceFundOperation;
+use super::{ paused_operations::InsuranceFundOperation, traits::Size };
+
+use crate::math_error;
 
 // ################################################################
 //                             Buffer
@@ -50,6 +57,10 @@ impl InsuranceFund {
 			operation
 		)
 	}
+}
+
+impl Size for InsuranceFund {
+	const SIZE: usize = 185;
 }
 
 #[zero_copy(unsafe)]

@@ -1,5 +1,18 @@
 use anchor_lang::prelude::*;
 
+use crate::{
+	errors::NormalResult,
+	math::{
+		constants::{ EPOCH_DURATION, THIRTY_DAY },
+		safe_math::SafeMath,
+		stats::calculate_rolling_sum,
+	},
+};
+
+use super::traits::Size;
+
+use std::cmp::max;
+
 #[zero_copy(unsafe)]
 #[derive(Default, Eq, PartialEq, Debug)]
 #[repr(C)]
@@ -161,9 +174,9 @@ impl UserStats {
 
 	pub fn get_age_ts(&self, now: i64) -> i64 {
 		// upper bound of age of the user stats account
-		let min_action_ts: i64 = self.last_filler_volume_30d_ts
-			.min(self.last_maker_volume_30d_ts)
-			.min(self.last_taker_volume_30d_ts);
+		let min_action_ts: i64 = self.last_maker_volume_30d_ts.min(
+			self.last_taker_volume_30d_ts
+		);
 		now.saturating_sub(min_action_ts).max(0)
 	}
 }

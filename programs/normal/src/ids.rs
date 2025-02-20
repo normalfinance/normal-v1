@@ -6,6 +6,11 @@ pub mod pyth_program {
 	declare_id!("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s");
 }
 
+pub mod wormhole_program {
+    use solana_program::declare_id;
+    declare_id!("HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ");
+}
+
 pub mod normal_oracle_receiver_program {
 	use solana_program::declare_id;
 	declare_id!("G6EoTTTgpkNBtVXo96EQp2m6uwwVh2Kt6YidjkmQqoha");
@@ -35,6 +40,19 @@ pub mod pepe_oracle {
 pub mod pepe_pull_oracle {
 	use solana_program::declare_id;
 	declare_id!("CLxofhtzvLiErpn25wvUzpZXEqBhuZ6WMEckEraxyuGt");
+}
+
+pub mod wen_oracle {
+    use solana_program::declare_id;
+    #[cfg(feature = "mainnet-beta")]
+    declare_id!("6Uo93N83iF5U9KwC8eQpogx4XptMT4wSKfje7hB1Ufko");
+    #[cfg(not(feature = "mainnet-beta"))]
+    declare_id!("HuobqtT6QaJ8napVARKRxqZN33NqYzQJKLTKKrGy8Bvo");
+}
+
+pub mod wen_pull_oracle {
+    use solana_program::declare_id;
+    declare_id!("F47c7aJgYkfKXQ9gzrJaEpsNwUKHprysregTWXrtYLFp");
 }
 
 pub mod usdc_oracle {

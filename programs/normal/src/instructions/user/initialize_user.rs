@@ -1,14 +1,20 @@
 use anchor_lang::prelude::*;
-use anchor_lang::Discriminator;
+use solana_program::program::invoke;
+use solana_program::system_instruction::transfer;
 
 use crate::errors::ErrorCode;
+use crate::instructions::optional_accounts::get_referrer_and_referrer_stats;
 use crate::load;
 use crate::load_mut;
+use crate::math::safe_math::SafeMath;
 use crate::safe_increment;
+use crate::state::events::NewUserRecord;
+use crate::state::traits::Size;
 use crate::state::user::User;
 use crate::state::user_stats::UserStats;
 use crate::validate;
 use crate::State;
+use crate::math_error;
 
 #[derive(Accounts)]
 #[instruction(

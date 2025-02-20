@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+use crate::instructions::optional_accounts::AccountMaps;
 use crate::{
 	controller,
 	instructions::optional_accounts::load_maps,
@@ -7,6 +8,7 @@ use crate::{
 	state::user::User,
 	State,
 };
+use crate::instructions::constraints::*;
 
 #[derive(Accounts)]
 pub struct SetUserStatusToBeingLiquidated<'info> {
@@ -24,20 +26,23 @@ pub fn handle_set_user_status_to_being_liquidated<'c: 'info, 'info>(
 	let clock = Clock::get()?;
 	let user = &mut load_mut!(ctx.accounts.user)?;
 
-	let AccountMaps { market_map, mut oracle_map } = load_maps(
+	let AccountMaps {
+		// market_map,
+		mut oracle_map,
+	} = load_maps(
 		&mut ctx.remaining_accounts.iter().peekable(),
-		&MarketSet::new(),
+		// &MarketSet::new(),
 		clock.slot,
 		Some(state.oracle_guard_rails)
 	)?;
 
-	controller::liquidation::set_user_status_to_being_liquidated(
-		user,
-		&perp_market_map,
-		&mut oracle_map,
-		clock.slot,
-		&state
-	)?;
+	// controller::liquidation::set_user_status_to_being_liquidated(
+	// 	user,
+	// 	&perp_market_map,
+	// 	&mut oracle_map,
+	// 	clock.slot,
+	// 	&state
+	// )?;
 
 	Ok(())
 }

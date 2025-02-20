@@ -4,7 +4,7 @@ use crate::load_mut;
 
 use super::initialize_insurance_fund::AdminUpdateInsurnaceFund;
 
-pub fn handle_set_if_unstaking_period(
+pub fn handle_update_if_unstaking_period(
 	ctx: Context<AdminUpdateInsurnaceFund>,
 	unstaking_period: i64
 ) -> Result<()> {
@@ -14,9 +14,9 @@ pub fn handle_set_if_unstaking_period(
 	msg!(
 		"insurance_fund.unstaking_period: {:?} -> {:?}",
 		insurance_fund.unstaking_period,
-		insurance_fund_unstaking_period
+		unstaking_period
 	);
 
-	insurance_fund.unstaking_period = insurance_fund_unstaking_period;
+	insurance_fund.unstaking_period = unstaking_period;
 	Ok(())
 }

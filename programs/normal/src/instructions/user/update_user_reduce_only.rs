@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{load_mut, validate};
+use crate::{errors::ErrorCode, load_mut, validate};
 
 use super::initialize_user::UpdateUser;
 

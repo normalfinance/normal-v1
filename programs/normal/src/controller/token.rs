@@ -126,3 +126,18 @@ pub fn close_vault<'info>(
 	);
 	token_interface::close_account(cpi_context)
 }
+
+pub fn validate_mint_fee(account_info: &AccountInfo) -> Result<()> {
+    let mint_data = account_info.try_borrow_data()?;
+    let mint_with_extension = StateWithExtensions::<MintInner>::unpack(&mint_data)?;
+    if let Ok(fee_config) = mint_with_extension.get_extension::<TransferFeeConfig>() {
+        let fee = u16::from(
+            fee_config
+                .get_epoch_fee(Clock::get()?.epoch)
+                .transfer_fee_basis_points,
+        );
+        validate!(fee == 0, ErrorCode::NonZeroTransferFee)?
+    }
+
+    Ok(())
+}

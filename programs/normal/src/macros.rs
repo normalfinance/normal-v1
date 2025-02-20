@@ -57,7 +57,7 @@ macro_rules! load_mut {
     ($account_loader:expr) => {{
         $account_loader.load_mut().map_err(|e| {
             msg!("e {:?}", e);
-            let error_code = ErrorCode::UnableToLoadAccountLoader;
+            let error_code = $crate::errors::ErrorCode::UnableToLoadAccountLoader;
             msg!("Error {} thrown at {}:{}", error_code, file!(), line!());
             error_code
         })
@@ -68,7 +68,7 @@ macro_rules! load_mut {
 macro_rules! load {
     ($account_loader:expr) => {{
         $account_loader.load().map_err(|_| {
-            let error_code = ErrorCode::UnableToLoadAccountLoader;
+            let error_code = $crate::errors::ErrorCode::UnableToLoadAccountLoader;
             msg!("Error {} thrown at {}:{}", error_code, file!(), line!());
             error_code
         })

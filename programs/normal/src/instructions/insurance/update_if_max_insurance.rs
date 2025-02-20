@@ -14,7 +14,7 @@ pub fn handle_update_if_max_insurance(
 	msg!(
 		"insurance_fund.max_insurance: {:?} -> {:?}",
 		insurance_fund.max_insurance,
-		insurance_fund_max_insurance
+		max_insurance
 	);
 
 	insurance_fund.max_insurance = max_insurance;

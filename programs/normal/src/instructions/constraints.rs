@@ -4,13 +4,12 @@ use anchor_lang::accounts::signer::Signer;
 use anchor_lang::prelude::{ AccountInfo, Pubkey };
 
 use crate::errors::ErrorCode;
-use crate::state::amm::AMM;
-use crate::state::market::{ Market, MarketStatus };
+use crate::state::insurance::InsuranceFundStake;
 use crate::state::state::{ ExchangeStatus, State };
-use crate::state::user::{ User, UserStats };
-use crate::state::vault::Vault;
-use crate::validate;
-use solana_program::msg;
+use crate::state::user::User;
+use crate::state::user_stats::UserStats;
+// use crate::validate;
+// use solana_program::msg;
 
 pub fn can_sign_for_user(
 	user: &AccountLoader<User>,
@@ -42,40 +41,50 @@ pub fn is_stats_for_if_stake(
 	Ok(user_stats.authority.eq(&if_stake.authority))
 }
 
-pub fn can_sign_for_vault(
-	vault: &AccountLoader<Vault>,
-	signer: &Signer
-) -> anchor_lang::Result<bool> {
-	vault
-		.load()
-		.map(|vault| {
-			vault.authority.eq(signer.key) ||
-				(vault.delegate.eq(signer.key) &&
-					!vault.delegate.eq(&Pubkey::default()))
-		})
-}
+// pub fn market_valid(
+// 	market: &AccountLoader<Market>
+// ) -> anchor_lang::Result<()> {
+// 	if market.load()?.status == MarketStatus::Delisted {
+// 		return Err(ErrorCode::MarketDelisted.into());
+// 	}
+// 	Ok(())
+// }
 
-pub fn market_valid(market: &AccountLoader<Market>) -> anchor_lang::Result<()> {
-	if market.load()?.status == MarketStatus::Delisted {
-		return Err(ErrorCode::MarketDelisted.into());
+// pub fn valid_oracle_for_market(
+// 	oracle: &AccountInfo,
+// 	market: &AccountLoader<Market>
+// ) -> anchor_lang::Result<()> {
+// 	validate!(
+// 		market.load()?.amm.oracle.eq(oracle.key),
+// 		ErrorCode::InvalidOracle,
+// 		"not valid_oracle_for_perp_market"
+// 	)?;
+// 	Ok(())
+// }
+
+pub fn liq_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
+	if state.get_exchange_status()?.contains(ExchangeStatus::LiqPaused) {
+		return Err(ErrorCode::ExchangePaused.into());
 	}
 	Ok(())
 }
 
-pub fn valid_oracle_for_amm(
-	oracle: &AccountInfo,
-	amm: &AccountLoader<AMM>
-) -> anchor_lang::Result<()> {
-	validate!(
-		amm.load()?.oracle.eq(oracle.key),
-		ErrorCode::InvalidOracle,
-		"not valid_oracle_for_amm"
-	)?;
-	Ok(())
-}
+// pub fn amm_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
+// 	if state.amm_paused()? {
+// 		return Err(ErrorCode::ExchangePaused.into());
+// 	}
+// 	Ok(())
+// }
 
-pub fn liq_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
-	if state.get_exchange_status()?.contains(ExchangeStatus::LiqPaused) {
+// pub fn fill_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
+// 	if state.get_exchange_status()?.contains(ExchangeStatus::FillPaused) {
+// 		return Err(ErrorCode::ExchangePaused.into());
+// 	}
+// 	Ok(())
+// }
+
+pub fn deposit_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
+	if state.get_exchange_status()?.contains(ExchangeStatus::DepositPaused) {
 		return Err(ErrorCode::ExchangePaused.into());
 	}
 	Ok(())

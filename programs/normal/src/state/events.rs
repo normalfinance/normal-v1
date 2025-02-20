@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
 use borsh::{ BorshDeserialize, BorshSerialize };
 
-use crate::errors::{ NormalResult};
-use crate::math::safe_unwrap::SafeUnwrap;
+use crate::{errors::NormalResult, math::safe_unwrap::SafeUnwrap};
 use anchor_lang::Discriminator;
 use std::io::Write;
 
@@ -17,97 +16,12 @@ pub struct NewUserRecord {
 	pub referrer: Pubkey,
 }
 
-#[event]
-pub struct DepositRecord {
-	/// unix_timestamp of action
-	pub ts: i64,
-	pub user_authority: Pubkey,
-	/// user account public key
-	pub user: Pubkey,
-	pub deposit_record_id: u64,
-	/// precision: token mint precision
-	pub amount: u64,
-	/// spot market index
-	pub market_index: u16,
-	/// precision: PRICE_PRECISION
-	pub oracle_price: i64,
-	/// precision: SPOT_BALANCE_PRECISION
-	pub market_deposit_balance: u128,
-	/// precision: SPOT_BALANCE_PRECISION
-	pub market_withdraw_balance: u128,
-	/// precision: SPOT_CUMULATIVE_INTEREST_PRECISION
-	pub market_cumulative_deposit_interest: u128,
-	/// precision: SPOT_CUMULATIVE_INTEREST_PRECISION
-	pub market_cumulative_borrow_interest: u128,
-	/// precision: QUOTE_PRECISION
-	pub total_deposits_after: u64,
-	/// precision: QUOTE_PRECISION
-	pub total_withdraws_after: u64,
-	pub explanation: DepositExplanation,
-	pub transfer_user: Option<Pubkey>,
-}
-
-#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default)]
-pub enum DepositExplanation {
-	#[default]
-	None,
-	Transfer,
-	// Borrow,
-	// RepayBorrow,
-}
-
-#[event]
-#[derive(Default)]
-pub struct LiquidationRecord {
-	pub ts: i64,
-	pub liquidation_type: LiquidationType,
-	pub user: Pubkey,
-	pub liquidator: Pubkey,
-	pub margin_requirement: u128,
-	pub total_collateral: i128,
-	pub margin_freed: u64,
-	pub liquidation_id: u16,
-	pub bankrupt: bool,
-	pub liquidate_vault: LiquidateVaultRecord,
-	pub vault_bankruptcy: VaultBankruptcyRecord,
-}
-
-#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default)]
-pub enum LiquidationType {
-	#[default]
-	LiquidateVault,
-	VaultBankruptcy,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
-pub struct LiquidateVaultRecord {
-	pub market_index: u16,
-	pub vault_index: u16,
-	pub oracle_price: i64,
-	pub base_asset_amount: i64,
-	pub quote_asset_amount: i64,
-	/// precision: QUOTE_PRECISION
-	pub liquidator_fee: u64,
-	/// precision: QUOTE_PRECISION
-	pub if_fee: u64,
-}
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
-pub struct VaultBankruptcyRecord {
-	pub market_index: u16,
-	pub vault_index: u16,
-	pub pnl: i128,
-	pub if_payment: u128,
-	pub clawback_user: Option<Pubkey>,
-	pub clawback_user_payment: Option<u128>,
-}
-
 // Insurance events
 
 #[event]
 #[derive(Default)]
 pub struct InsuranceFundRecord {
 	pub ts: i64,
-	pub market_index: u16,
 	/// precision: PERCENTAGE_PRECISION
 	pub user_if_factor: u32,
 	/// precision: PERCENTAGE_PRECISION

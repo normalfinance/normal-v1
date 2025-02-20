@@ -13,6 +13,7 @@ pub fn handle_cancel_request_remove_insurance_fund_stake(
 	let clock = Clock::get()?;
 	let now = clock.unix_timestamp;
 	let insurance_fund_stake = &mut load_mut!(ctx.accounts.insurance_fund_stake)?;
+	let user_stats = &mut load_mut!(ctx.accounts.user_stats)?;
 	let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
 
 	validate!(
@@ -24,8 +25,8 @@ pub fn handle_cancel_request_remove_insurance_fund_stake(
 	controller::insurance::cancel_request_remove_insurance_fund_stake(
 		ctx.accounts.insurance_fund_vault.amount,
 		insurance_fund_stake,
+		insurance_fund,
 		user_stats,
-		spot_market,
 		now
 	)?;
 

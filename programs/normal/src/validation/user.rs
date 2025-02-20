@@ -1,7 +1,8 @@
 use crate::errors::{ NormalResult, ErrorCode };
-use crate::state::spot_market::SpotBalanceType;
-use crate::state::user::{ OrderStatus, User, UserStats };
-use crate::{ validate, State, THIRTEEN_DAY };
+use crate::math::constants::THIRTEEN_DAY;
+use crate::state::user::User;
+use crate::state::user_stats::UserStats;
+use crate::{ validate, State };
 use solana_program::msg;
 
 pub fn validate_user_deletion(
@@ -28,22 +29,14 @@ pub fn validate_user_deletion(
 		"user being liquidated"
 	)?;
 
-	for perp_position in &user.perp_positions {
-		validate!(
-			perp_position.is_available(),
-			ErrorCode::UserCantBeDeleted,
-			"user has perp position for market {}",
-			perp_position.market_index
-		)?;
-	}
-
-	for order in &user.orders {
-		validate!(
-			order.status == OrderStatus::Init,
-			ErrorCode::UserCantBeDeleted,
-			"user has an open order"
-		)?;
-	}
+	// for position in &user.positions {
+	// 	validate!(
+	// 		position.is_available(),
+	// 		ErrorCode::UserCantBeDeleted,
+	// 		"user has position for market {}",
+	// 		position.market_index
+	// 	)?;
+	// }
 
 	if state.max_initialize_user_fee > 0 {
 		let estimated_user_stats_age = user_stats.get_age_ts(now);
@@ -89,22 +82,14 @@ pub fn validate_user_is_idle(
 		"user being liquidated"
 	)?;
 
-	for perp_position in &user.perp_positions {
-		validate!(
-			perp_position.is_available(),
-			ErrorCode::UserNotInactive,
-			"user has perp position for market {}",
-			perp_position.market_index
-		)?;
-	}
-
-	for order in &user.orders {
-		validate!(
-			order.status == OrderStatus::Init,
-			ErrorCode::UserNotInactive,
-			"user has an open order"
-		)?;
-	}
+	// for position in &user.positions {
+	// 	validate!(
+	// 		position.is_available(),
+	// 		ErrorCode::UserNotInactive,
+	// 		"user has position for market {}",
+	// 		position.market_index
+	// 	)?;
+	// }
 
 	Ok(())
 }

@@ -2,7 +2,9 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenAccount;
 
 use crate::errors::ErrorCode;
+use crate::state::insurance::{ InsuranceFund, InsuranceFundStake };
 use crate::state::paused_operations::InsuranceFundOperation;
+use crate::state::user_stats::UserStats;
 use crate::validate;
 use crate::{ controller, math };
 use crate::load_mut;
@@ -20,6 +22,11 @@ pub struct RequestRemoveInsuranceFundStake<'info> {
         has_one = authority,
     )]
 	pub insurance_fund_stake: AccountLoader<'info, InsuranceFundStake>,
+	#[account(
+        mut,
+        has_one = authority,
+    )]
+	pub user_stats: AccountLoader<'info, UserStats>,
 	pub authority: Signer<'info>,
 	#[account(
         mut,
@@ -35,6 +42,7 @@ pub fn handle_request_remove_insurance_fund_stake(
 ) -> Result<()> {
 	let clock = Clock::get()?;
 	let insurance_fund_stake = &mut load_mut!(ctx.accounts.insurance_fund_stake)?;
+	let user_stats = &mut load_mut!(ctx.accounts.user_stats)?;
 	let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
 
 	validate!(
@@ -69,6 +77,7 @@ pub fn handle_request_remove_insurance_fund_stake(
 		ctx.accounts.insurance_fund_vault.amount,
 		insurance_fund_stake,
 		insurance_fund,
+		user_stats,
 		clock.unix_timestamp
 	)?;
 

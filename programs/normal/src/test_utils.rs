@@ -4,44 +4,43 @@ use bytes::BytesMut;
 
 use pyth::pc::Price;
 
-use crate::state::user::{Order, PerpPosition, SpotPosition};
 
-pub fn get_positions(position: PerpPosition) -> [PerpPosition; 8] {
-    let mut positions = [PerpPosition::default(); 8];
-    positions[0] = position;
-    positions
-}
+// pub fn get_positions(position: PerpPosition) -> [PerpPosition; 8] {
+//     let mut positions = [PerpPosition::default(); 8];
+//     positions[0] = position;
+//     positions
+// }
 
-pub fn get_orders(order: Order) -> [Order; 32] {
-    let mut orders = [Order::default(); 32];
-    orders[0] = order;
-    orders
-}
+// pub fn get_orders(order: Order) -> [Order; 32] {
+//     let mut orders = [Order::default(); 32];
+//     orders[0] = order;
+//     orders
+// }
 
-#[macro_export]
-macro_rules! get_orders {
-    ($($order: expr),+) => {
-        {
-            let mut orders = [Order::default(); 32];
-            let mut index = 0;
-            $(
-                index += 1;
-                orders[index - 1] = $order;
-            )+
-            orders
-        }
-    };
-}
+// #[macro_export]
+// macro_rules! get_orders {
+//     ($($order: expr),+) => {
+//         {
+//             let mut orders = [Order::default(); 32];
+//             let mut index = 0;
+//             $(
+//                 index += 1;
+//                 orders[index - 1] = $order;
+//             )+
+//             orders
+//         }
+//     };
+// }
 
-pub fn get_spot_positions(spot_position: SpotPosition) -> [SpotPosition; 8] {
-    let mut spot_positions = [SpotPosition::default(); 8];
-    if spot_position.market_index == 0 {
-        spot_positions[0] = spot_position;
-    } else {
-        spot_positions[1] = spot_position;
-    }
-    spot_positions
-}
+// pub fn get_spot_positions(spot_position: SpotPosition) -> [SpotPosition; 8] {
+//     let mut spot_positions = [SpotPosition::default(); 8];
+//     if spot_position.market_index == 0 {
+//         spot_positions[0] = spot_position;
+//     } else {
+//         spot_positions[1] = spot_position;
+//     }
+//     spot_positions
+// }
 
 pub fn get_account_bytes<T: bytemuck::Pod>(account: &mut T) -> BytesMut {
     let mut bytes = BytesMut::new();

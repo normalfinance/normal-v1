@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::ErrorCode;
 use crate::load;
+use crate::math::constants::THIRTEEN_DAY;
 use crate::state::user::User;
 use crate::state::user_stats::UserStats;
 use crate::validate;

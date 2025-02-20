@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+use crate::state::traits::Size;
 use crate::{
 	errors::ErrorCode,
 	safe_increment,
@@ -7,6 +8,7 @@ use crate::{
 	validate,
 	State,
 };
+use crate::math_error;
 
 #[derive(Accounts)]
 pub struct InitializeUserStats<'info> {

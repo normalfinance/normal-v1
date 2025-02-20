@@ -6,6 +6,7 @@ use crate::instructions::constraints::*;
 
 use crate::load;
 use crate::state::referral::ReferrerName;
+use crate::state::traits::Size;
 use crate::state::user::User;
 use crate::state::user_stats::UserStats;
 use crate::validate;

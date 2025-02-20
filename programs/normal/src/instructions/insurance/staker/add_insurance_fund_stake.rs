@@ -2,9 +2,11 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{ TokenAccount, TokenInterface };
 
 use crate::errors::ErrorCode;
+use crate::instructions::optional_accounts::get_token_mint;
 use crate::state::insurance::{ InsuranceFund, InsuranceFundStake };
 use crate::state::paused_operations::InsuranceFundOperation;
 use crate::state::state::State;
+use crate::state::user_stats::UserStats;
 use crate::validate;
 use crate::controller;
 use crate::load_mut;
@@ -23,6 +25,11 @@ pub struct AddInsuranceFundStake<'info> {
         has_one = authority,
     )]
 	pub insurance_fund_stake: AccountLoader<'info, InsuranceFundStake>,
+	#[account(
+        mut,
+        has_one = authority,
+    )]
+    pub user_stats: AccountLoader<'info, UserStats>,
 	pub authority: Signer<'info>,
 	#[account(
         mut,
@@ -54,6 +61,7 @@ pub fn handle_add_insurance_fund_stake<'c: 'info, 'info>(
 	let clock = Clock::get()?;
 	let now = clock.unix_timestamp;
 	let insurance_fund_stake = &mut load_mut!(ctx.accounts.insurance_fund_stake)?;
+	let user_stats = &mut load_mut!(ctx.accounts.user_stats)?;
 	let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
 	let state = &ctx.accounts.state;
 
@@ -107,7 +115,8 @@ pub fn handle_add_insurance_fund_stake<'c: 'info, 'info>(
 		ctx.accounts.insurance_fund_vault.amount,
 		insurance_fund_stake,
 		insurance_fund,
-		clock.unix_timestamp
+		user_stats,
+		now,
 	)?;
 
 	controller::token::receive(

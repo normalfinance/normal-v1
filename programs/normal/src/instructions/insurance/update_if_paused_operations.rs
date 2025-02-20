@@ -10,7 +10,7 @@ pub fn handle_update_if_paused_operations(
 ) -> Result<()> {
 	let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
 
-	insurance_fund.paused_operations = EM;
+	insurance_fund.paused_operations = paused_operations;
 
 	InsuranceFundOperation::log_all_operations_paused(
 		insurance_fund.paused_operations
