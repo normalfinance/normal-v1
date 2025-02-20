@@ -11,7 +11,7 @@ use crate::controller::spot_balance::{
 	update_market_cumulative_interest,
 };
 use crate::controller::spot_position::update_spot_balances_and_cumulative_deposits;
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::bankruptcy::is_user_bankrupt;
 use crate::math::casting::Cast;
 use crate::math::constants::{
@@ -758,40 +758,38 @@ pub fn calculate_margin_freed(
 	Ok((margin_freed, margin_calculation_after))
 }
 
-pub fn set_vault_status_to_being_liquidated(
-	vault: &mut Vault,
+pub fn set_user_status_to_being_liquidated(
+	user: &mut User,
 	market_map: &MarketMap,
-	vault_map: &VaultMap,
 	oracle_map: &mut OracleMap,
 	slot: u64,
 	state: &State
 ) -> NormalResult {
-	validate!(!vault.is_bankrupt(), ErrorCode::UserBankrupt, "vault bankrupt")?;
+	validate!(!user.is_bankrupt(), ErrorCode::UserBankrupt, "user bankrupt")?;
 
 	validate!(
-		!vault.is_being_liquidated(),
+		!user.is_being_liquidated(),
 		ErrorCode::UserIsBeingLiquidated,
-		"vault is already being liquidated"
+		"user is already being liquidated"
 	)?;
 
 	let liquidation_margin_buffer_ratio = state.liquidation_margin_buffer_ratio;
 	let margin_calculation =
 		calculate_margin_requirement_and_total_collateral_and_liability_info(
-			vault,
-			perp_market_map,
-			spot_market_map,
+			user,
+			market_map,
 			oracle_map,
 			MarginContext::liquidation(liquidation_margin_buffer_ratio)
 		)?;
 
 	if
-		!vault.is_being_liquidated() &&
+		!user.is_being_liquidated() &&
 		margin_calculation.meets_margin_requirement()
 	{
 		msg!("margin calculation: {:?}", margin_calculation);
 		return Err(ErrorCode::SufficientCollateral);
 	} else {
-		vault.enter_liquidation(slot)?;
+		user.enter_liquidation(slot)?;
 	}
 	Ok(())
 }

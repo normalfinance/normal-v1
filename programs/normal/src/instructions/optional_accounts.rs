@@ -1,4 +1,4 @@
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::state::market_map::MarketMap;
 use std::convert::TryFrom;
 

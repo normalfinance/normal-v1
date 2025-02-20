@@ -52,7 +52,7 @@ pub fn handle_swap(
 	other_amount_threshold: u64,
 	sqrt_price_limit: u128,
 	amount_specified_is_input: bool,
-	synthetic_to_quote: bool // Zero for one
+	a_to_b: bool // Zero for one
 ) -> Result<()> {
 	let amm = &mut ctx.accounts.amm;
 	let clock = Clock::get()?;
@@ -61,7 +61,7 @@ pub fn handle_swap(
 
 	let builder = SparseSwapTickSequenceBuilder::try_from(
 		amm,
-		synthetic_to_quote,
+		a_to_b,
 		vec![
 			ctx.accounts.tick_array_0.to_account_info(),
 			ctx.accounts.tick_array_1.to_account_info(),
@@ -77,23 +77,23 @@ pub fn handle_swap(
 		amount,
 		sqrt_price_limit,
 		amount_specified_is_input,
-		synthetic_to_quote,
+		a_to_b,
 		timestamp
 	)?;
 
 	if amount_specified_is_input {
 		if
-			(synthetic_to_quote &&
+			(a_to_b &&
 				other_amount_threshold > swap_update.amount_quote) ||
-			(!synthetic_to_quote &&
+			(!a_to_b &&
 				other_amount_threshold > swap_update.amount_synthetic)
 		{
 			return Err(ErrorCode::AmountOutBelowMinimum.into());
 		}
 	} else if
-		(synthetic_to_quote &&
+		(a_to_b &&
 			other_amount_threshold < swap_update.amount_synthetic) ||
-		(!synthetic_to_quote && other_amount_threshold < swap_update.amount_quote)
+		(!a_to_b && other_amount_threshold < swap_update.amount_quote)
 	{
 		return Err(ErrorCode::AmountInAboveMaximum.into());
 	}
@@ -111,7 +111,7 @@ pub fn handle_swap(
 		&ctx.accounts.token_vault_quote,
 		&ctx.accounts.token_program,
 		swap_update,
-		synthetic_to_quote,
+		a_to_b,
 		timestamp,
 		inside_range
 	)

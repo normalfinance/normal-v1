@@ -41,7 +41,7 @@ pub fn checked_mul_shift_right_round_up_if(
     n1: u128,
     round_up: bool,
 ) -> Result<u64, ErrorCode> {
-    // customized this function is used in try_get_amount_delta_quote (token_math.rs)
+    // customized this function is used in try_get_amount_delta_b (token_math.rs)
 
     if n0 == 0 || n1 == 0 {
         return Ok(0);

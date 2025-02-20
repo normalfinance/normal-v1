@@ -5,7 +5,7 @@ pub use insurance::*;
 pub use state::*;
 pub use market::*;
 pub use position::*;
-pub use user;
+pub use user::*;
 
 mod amm;
 mod constraints;

@@ -6,7 +6,7 @@ use std::cmp::max; //, OracleValidity};
 use anchor_lang::prelude::*;
 use solana_program::msg;
 
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::amm::sanitize_new_price;
 use crate::math::casting::Cast;
 use crate::math::constants::{

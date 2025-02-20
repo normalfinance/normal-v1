@@ -8,7 +8,7 @@ use solana_program::sysvar::instructions::{
 };
 
 use crate::state::market::Market;
-use crate::State;
+use crate::{load_mut, validate, State};
 
 #[derive(Accounts)]
 #[instruction(market_index: u16,)]

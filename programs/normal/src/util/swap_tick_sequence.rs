@@ -107,7 +107,7 @@ impl<'info> SwapTickSequence<'info> {
     /// # Parameters
     /// - `tick_index` - the tick index to start searching from
     /// - `tick_spacing` - A u8 integer of the tick spacing for this AMM
-    /// - `synthetic_to_quote` - If the trade is from synthetic_to_quote, the search will move to the left and the starting search tick is inclusive.
+    /// - `a_to_b` - If the trade is from a_to_b, the search will move to the left and the starting search tick is inclusive.
     ///              If the trade is from b_to_a, the search will move to the right and the starting search tick is not inclusive.
     /// - `start_array_index` -
     ///
@@ -120,7 +120,7 @@ impl<'info> SwapTickSequence<'info> {
         &self,
         tick_index: i32,
         tick_spacing: u16,
-        synthetic_to_quote: bool,
+        a_to_b: bool,
         start_array_index: usize,
     ) -> Result<(usize, i32)> {
         let ticks_in_array = TICK_ARRAY_SIZE * tick_spacing as i32;
@@ -136,7 +136,7 @@ impl<'info> SwapTickSequence<'info> {
             };
 
             let next_index =
-                next_array.get_next_init_tick_index(search_index, tick_spacing, synthetic_to_quote)?;
+                next_array.get_next_init_tick_index(search_index, tick_spacing, a_to_b)?;
 
             match next_index {
                 Some(next_index) => {
@@ -144,15 +144,15 @@ impl<'info> SwapTickSequence<'info> {
                 }
                 None => {
                     // If we are at the last valid tick array, return the min/max tick index
-                    if synthetic_to_quote && next_array.is_min_tick_array() {
+                    if a_to_b && next_array.is_min_tick_array() {
                         return Ok((array_index, MIN_TICK_INDEX));
-                    } else if !synthetic_to_quote && next_array.is_max_tick_array(tick_spacing) {
+                    } else if !a_to_b && next_array.is_max_tick_array(tick_spacing) {
                         return Ok((array_index, MAX_TICK_INDEX));
                     }
 
                     // If we are at the last tick array in the sequencer, return the last tick
                     if array_index + 1 == self.arrays.len() {
-                        if synthetic_to_quote {
+                        if a_to_b {
                             return Ok((array_index, next_array.start_tick_index()));
                         } else {
                             let last_tick = next_array.start_tick_index() + ticks_in_array - 1;
@@ -162,7 +162,7 @@ impl<'info> SwapTickSequence<'info> {
 
                     // No initialized index found. Move the search-index to the 1st search position
                     // of the next array in sequence.
-                    search_index = if synthetic_to_quote {
+                    search_index = if a_to_b {
                         next_array.start_tick_index() - 1
                     } else {
                         next_array.start_tick_index() + ticks_in_array - 1

@@ -578,10 +578,6 @@ pub enum ErrorCode {
 	#[msg("Liquidation order failed to fill")]
 	LiquidationOrderFailedToFill,
 
-	#[msg("Ed25519 Ix must be before place and make swift order ix")]
-	InvalidVerificationIxIndex,
-	#[msg("Swift message verificaiton failed")]
-	SigVerificationFailed,
 	#[msg("Market index mismatched b/w taker and maker swift order params")]
 	MismatchedSwiftOrderParamsMarketIndex,
 	#[msg("Swift only available for market/oracle perp orders")]
@@ -693,15 +689,6 @@ pub enum ErrorCode {
 	InvalidIntermediaryMint, // 0x1799 (6041)
 	#[msg("Duplicate two hop pool")]
 	DuplicateTwoHopPool, // 0x179a (6042)
-
-	#[msg("Bundle index is out of bounds")]
-	InvalidBundleIndex, // 0x179b (6043)
-	#[msg("Position has already been opened")]
-	BundledPositionAlreadyOpened, // 0x179c (6044)
-	#[msg("Position has already been closed")]
-	BundledPositionAlreadyClosed, // 0x179d (6045)
-	#[msg("Unable to delete PositionBundle with open positions")]
-	PositionBundleNotDeletable, // 0x179e (6046)
 
 	#[msg("Token mint has unsupported attributes")]
 	UnsupportedTokenMint, // 0x179f (6047)

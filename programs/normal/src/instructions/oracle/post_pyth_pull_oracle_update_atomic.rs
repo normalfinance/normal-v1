@@ -1,4 +1,4 @@
-use crate::error::ErrorCode;
+use crate::errors::ErrorCode;
 use crate::ids::{ normal_oracle_receiver_program, wormhole_program };
 use crate::{math, validate};
 use anchor_lang::prelude::*;

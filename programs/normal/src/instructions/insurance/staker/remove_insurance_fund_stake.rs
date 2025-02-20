@@ -1,26 +1,63 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{ TokenAccount, TokenInterface };
 
-use crate::error::ErrorCode;
+use crate::errors::ErrorCode;
 use crate::instructions::constraints::*;
-use crate::optional_accounts::get_token_mint;
-use crate::state::insurance_fund_stake::InsuranceFundStake;
+use crate::state::insurance::InsuranceFund;
+use crate::state::insurance::InsuranceFundStake;
 use crate::state::paused_operations::InsuranceFundOperation;
 use crate::state::state::State;
-use crate::state::traits::Size;
+use crate::state::user_stats::UserStats;
 use crate::validate;
-use crate::{ controller, math };
+use crate::controller;
 use crate::load_mut;
 
-use super::request_remove_insurance_fund_stake::RequestRemoveInsuranceFundStake;
+#[derive(Accounts)]
+#[instruction(market_index: u16,)]
+pub struct RemoveInsuranceFundStake<'info> {
+	pub state: Box<Account<'info, State>>,
+	#[account(
+        mut,
+        seeds = [b"insurance_fund"],
+        bump
+    )]
+	pub insurance_fund: AccountLoader<'info, InsuranceFund>,
+	#[account(
+        mut,
+        has_one = authority,
+    )]
+	pub insurance_fund_stake: AccountLoader<'info, InsuranceFundStake>,
+	#[account(
+        mut,
+        has_one = authority,
+    )]
+	pub user_stats: AccountLoader<'info, UserStats>,
+	pub authority: Signer<'info>,
+	#[account(
+        mut,
+        seeds = [b"insurance_fund_vault".as_ref()],
+        bump,
+    )]
+	pub insurance_fund_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+	#[account(constraint = state.signer.eq(&normal_signer.key()))]
+	/// CHECK: forced normal_signer
+	pub normal_signer: AccountInfo<'info>,
+	#[account(
+        mut,
+        token::mint = insurance_fund_vault.mint,
+        token::authority = authority
+    )]
+	pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+	pub token_program: Interface<'info, TokenInterface>,
+}
 
 #[access_control(withdraw_not_paused(&ctx.accounts.state))]
 pub fn handle_remove_insurance_fund_stake<'c: 'info, 'info>(
-	ctx: Context<'_, '_, 'c, 'info, RequestRemoveInsuranceFundStake<'info>>
+	ctx: Context<'_, '_, 'c, 'info, RemoveInsuranceFundStake<'info>>
 ) -> Result<()> {
 	let clock = Clock::get()?;
 	let now = clock.unix_timestamp;
 	let insurance_fund_stake = &mut load_mut!(ctx.accounts.insurance_fund_stake)?;
+	let user_stats = &mut load_mut!(ctx.accounts.user_stats)?;
 	let insurance_fund = &mut load_mut!(ctx.accounts.insurance_fund)?;
 	let state = &ctx.accounts.state;
 
@@ -39,6 +76,7 @@ pub fn handle_remove_insurance_fund_stake<'c: 'info, 'info>(
 		ctx.accounts.insurance_fund_vault.amount,
 		insurance_fund_stake,
 		insurance_fund,
+		user_stats,
 		now
 	)?;
 

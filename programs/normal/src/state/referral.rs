@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use borsh::{ BorshDeserialize, BorshSerialize };
 
 #[account(zero_copy(unsafe))]
 #[derive(Default, Eq, PartialEq, Debug)]

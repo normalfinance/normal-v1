@@ -11,7 +11,7 @@ import {
 	OracleSource,
 	ExchangeStatus,
 	MarketStatus,
-	SyntheticTier,
+	Tier,
 } from './types';
 import { DEFAULT_MARKET_NAME, encodeName } from './userName';
 import { BN } from '@coral-xyz/anchor';
@@ -93,7 +93,7 @@ export class AdminClient extends NormalClient {
 		priceOracle: PublicKey,
 
 		oracleSource: OracleSource = OracleSource.PYTH,
-		syntheticTier: SyntheticTier = SyntheticTier.SPECULATIVE,
+		Tier: Tier = Tier.SPECULATIVE,
 		marginRatioInitial = 2000,
 		marginRatioMaintenance = 500,
 		liquidatorFee = 0,
@@ -154,7 +154,7 @@ export class AdminClient extends NormalClient {
 		marketIndex: number,
 		priceOracle: PublicKey,
 		oracleSource: OracleSource = OracleSource.PYTH,
-		syntheticTier: SyntheticTier = SyntheticTier.SPECULATIVE,
+		Tier: Tier = Tier.SPECULATIVE,
 		marginRatioInitial = 2000,
 		marginRatioMaintenance = 500,
 		liquidatorFee = 0,
@@ -1516,26 +1516,26 @@ export class AdminClient extends NormalClient {
 		);
 	}
 
-	public async updateMarketSyntheticTier(
+	public async updateMarketTier(
 		marketIndex: number,
-		syntheticTier: SyntheticTier
+		Tier: Tier
 	): Promise<TransactionSignature> {
-		const updateMarketSyntheticTierIx =
-			await this.getUpdateMarketSyntheticTierIx(marketIndex, syntheticTier);
+		const updateMarketTierIx =
+			await this.getUpdateMarketTierIx(marketIndex, Tier);
 
-		const tx = await this.buildTransaction(updateMarketSyntheticTierIx);
+		const tx = await this.buildTransaction(updateMarketTierIx);
 
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 
 		return txSig;
 	}
 
-	public async getUpdateMarketSyntheticTierIx(
+	public async getUpdateMarketTierIx(
 		marketIndex: number,
-		syntheticTier: SyntheticTier
+		Tier: Tier
 	): Promise<TransactionInstruction> {
-		return await this.program.instruction.updateMarketSyntheticTier(
-			syntheticTier,
+		return await this.program.instruction.updateMarketTier(
+			Tier,
 			{
 				accounts: {
 					admin: this.isSubscribed

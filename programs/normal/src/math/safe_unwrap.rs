@@ -1,4 +1,4 @@
-use crate::error::{NormalResult, ErrorCode};
+use crate::errors::{NormalResult, ErrorCode};
 use solana_program::msg;
 use std::panic::Location;
 

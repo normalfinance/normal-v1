@@ -1,10 +1,9 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-	error::ErrorCode,
-	instructions::AdminUpdateMarket,
+	errors::ErrorCode,
+	instructions::initialize_market::AdminUpdateMarket,
 	math::amm::MAX_PROTOCOL_FEE_RATE,
-	state::market::Market,
 };
 
 pub fn handle_set_protocol_fee_rate(

@@ -15,11 +15,6 @@ pub const WP_METADATA_SYMBOL: &str = "NAP";
 pub const WP_METADATA_URI: &str =
 	"https://arweave.net/P_OoP15YyiZZu6LlxRFEWdbFTOjPsT23oHbbUZNXIJM";
 
-pub const WPB_METADATA_NAME_PREFIX: &str = "Normal Position Bundle";
-pub const WPB_METADATA_SYMBOL: &str = "NPB";
-pub const WPB_METADATA_URI: &str =
-	"https://arweave.net/xr5KNNixLPjO2AGu-6dBNxV4EgwNMHW-rLwkC240toE";
-
 // Based on Token-2022 TokenMetadata extension
 //
 // There is no clear upper limit on the length of name, symbol, and uri,

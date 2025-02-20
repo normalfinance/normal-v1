@@ -1,22 +1,16 @@
 use anchor_lang::prelude::*;
 
-use crate::{
-	errors::ErrorCode,
-	math::FULL_RANGE_ONLY_TICK_SPACING_THRESHOLD,
-	state::NUM_REWARDS,
-};
-
-use super::{ market::Market, Tick };
+use super::{ market::Market, tick::Tick };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Copy)]
-pub struct OpenLPWithMetadataBumps {
+pub struct OpenLiquidityPositionWithMetadataBumps {
 	pub position_bump: u8,
 	pub metadata_bump: u8,
 }
 
 #[account]
 #[derive(Default)]
-pub struct LP { // Liquidity Position
+pub struct LiquidityPosition {
 	pub market: Pubkey,
 	pub position_mint: Pubkey,
 
@@ -32,13 +26,13 @@ pub struct LP { // Liquidity Position
 	pub fee_growth_checkpoint_b: u128,
 	pub fee_owed_b: u64,
 
-	pub reward_infos: [LPRewardInfo; NUM_REWARDS], // 72
+	pub reward_infos: [LiquidityPositionRewardInfo; NUM_REWARDS], // 72
 }
 
-impl LP {
+impl LiquidityPosition {
 	pub const LEN: usize = 8 + 136 + 72;
 
-	pub fn is_position_empty(position: &LP) -> bool {
+	pub fn is_position_empty(position: &LiquidityPosition) -> bool {
 		let fees_not_owed = position.fee_owed_a == 0 && position.fee_owed_b == 0;
 		let mut rewards_not_owed = true;
 		for i in 0..NUM_REWARDS {
@@ -48,7 +42,7 @@ impl LP {
 		position.liquidity == 0 && fees_not_owed && rewards_not_owed
 	}
 
-	pub fn update(&mut self, update: &LPUpdate) {
+	pub fn update(&mut self, update: &LiquidityPositionUpdate) {
 		self.liquidity = update.liquidity;
 		self.fee_growth_checkpoint_a = update.fee_growth_checkpoint_a;
 		self.fee_growth_checkpoint_b = update.fee_growth_checkpoint_b;
@@ -111,18 +105,18 @@ impl LP {
 	Debug,
 	PartialEq
 )]
-pub struct LPRewardInfo {
+pub struct LiquidityPositionRewardInfo {
 	// Q64.64
 	pub growth_inside_checkpoint: u128,
 	pub amount_owed: u64,
 }
 
 #[derive(Default, Debug, PartialEq)]
-pub struct LPUpdate {
+pub struct LiquidityPositionUpdate {
 	pub liquidity: u128,
 	pub fee_growth_checkpoint_a: u128,
 	pub fee_owed_a: u64,
 	pub fee_growth_checkpoint_b: u128,
 	pub fee_owed_b: u64,
-	pub reward_infos: [LPRewardInfo; NUM_REWARDS],
+	pub reward_infos: [LiquidityPositionRewardInfo; NUM_REWARDS],
 }

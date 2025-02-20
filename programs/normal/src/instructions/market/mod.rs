@@ -1,5 +1,3 @@
-use crate::{ state::market::{ Market }, State };
-
 pub mod initialize_market;
 pub mod update_market_amm;
 pub mod update_market_liquidation_penalty;
@@ -17,12 +15,3 @@ pub mod update_market_imf_factor;
 pub mod update_market_oracle;
 pub mod freeze_market_oracle;
 pub mod update_market_expiry;
-
-#[derive(Accounts)]
-pub struct AdminUpdateMarket<'info> {
-	pub admin: Signer<'info>,
-	#[account(has_one = admin)]
-	pub state: Box<Account<'info, State>>,
-	#[account(mut)]
-	pub market: AccountLoader<'info, Market>,
-}

@@ -1,4 +1,4 @@
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::state::spot_market::SpotBalanceType;
 use crate::state::user::{ OrderStatus, User, UserStats };
 use crate::{ validate, State, THIRTEEN_DAY };

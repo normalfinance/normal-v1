@@ -1,8 +1,10 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{ self, Mint, Token, TokenAccount };
 
-use crate::state::*;
-use insurance::InsuranceFund;
+use crate::{
+	errors::ErrorCode,
+	state::{ insurance::InsuranceFund, state::State },
+	validate,
+};
 
 #[derive(Accounts)]
 pub struct InitializeInsuranceFund<'info> {
@@ -36,4 +38,13 @@ pub fn handle_initialize_insurance_fund(
 	)?;
 
 	Ok(())
+}
+
+#[derive(Accounts)]
+pub struct AdminUpdateInsurnaceFund<'info> {
+	pub admin: Signer<'info>,
+	#[account(has_one = admin)]
+	pub state: Box<Account<'info, State>>,
+	#[account(mut)]
+	pub insurance_fund: AccountLoader<'info, InsuranceFund>,
 }

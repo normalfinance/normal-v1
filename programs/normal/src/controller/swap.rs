@@ -2,10 +2,6 @@ use solana_program::msg;
 
 use crate::{
 	errors::ErrorCode,
-	manager::{
-		amm_manager::next_amm_reward_infos,
-		tick_manager::next_tick_cross_update,
-	},
 	math::{ self, * },
 	state::{ amm::AMM, * },
 	util::SwapTickSequence,
@@ -31,13 +27,13 @@ pub fn swap(
 	amount: u64,
 	sqrt_price_limit: u128,
 	amount_specified_is_input: bool,
-	synthetic_to_quote: bool,
+	a_to_b: bool,
 	timestamp: u64
 ) -> Result<PostSwapUpdate> {
 	let adjusted_sqrt_price_limit = if
 		sqrt_price_limit == NO_EXPLICIT_SQRT_PRICE_LIMIT
 	{
-		if synthetic_to_quote { MIN_SQRT_PRICE_X64 } else { MAX_SQRT_PRICE_X64 }
+		if a_to_b { MIN_SQRT_PRICE_X64 } else { MAX_SQRT_PRICE_X64 }
 	} else {
 		sqrt_price_limit
 	};
@@ -51,8 +47,8 @@ pub fn swap(
 	}
 
 	if
-		(synthetic_to_quote && adjusted_sqrt_price_limit > amm.sqrt_price) ||
-		(!synthetic_to_quote && adjusted_sqrt_price_limit < amm.sqrt_price)
+		(a_to_b && adjusted_sqrt_price_limit > amm.sqrt_price) ||
+		(!a_to_b && adjusted_sqrt_price_limit < amm.sqrt_price)
 	{
 		return Err(ErrorCode::InvalidSqrtPriceLimitDirection.into());
 	}
@@ -61,7 +57,7 @@ pub fn swap(
 		return Err(ErrorCode::ZeroTradableAmount.into());
 	}
 
-	if synthetic_to_quote && adjusted_sqrt_price_limit > amm.historical_oracle_data.last_oracle_price_twap_5min {
+	if a_to_b && adjusted_sqrt_price_limit > amm.historical_oracle_data.last_oracle_price_twap_5min {
 		// TODO: apply penalty
 	}
 	
@@ -78,10 +74,10 @@ pub fn swap(
 	let mut curr_liquidity = amm.liquidity;
 	let mut curr_protocol_fee: u64 = 0;
 	let mut curr_array_index: usize = 0;
-	let mut curr_fee_growth_global_input = if synthetic_to_quote {
-		amm.fee_growth_global_synthetic
+	let mut curr_fee_growth_global_input = if a_to_b {
+		amm.fee_growth_global_a
 	} else {
-		amm.fee_growth_global_quote
+		amm.fee_growth_global_b
 	};
 
 	while amount_remaining > 0 && adjusted_sqrt_price_limit != curr_sqrt_price {
@@ -89,14 +85,14 @@ pub fn swap(
 			swap_tick_sequence.get_next_initialized_tick_index(
 				curr_tick_index,
 				tick_spacing,
-				synthetic_to_quote,
+				a_to_b,
 				curr_array_index
 			)?;
 
 		let (next_tick_sqrt_price, sqrt_price_target) = get_next_sqrt_prices(
 			next_tick_index,
 			adjusted_sqrt_price_limit,
-			synthetic_to_quote
+			a_to_b
 		);
 
 		let swap_computation = math::amm::compute_swap(
@@ -106,7 +102,7 @@ pub fn swap(
 			curr_sqrt_price,
 			sqrt_price_target,
 			amount_specified_is_input,
-			synthetic_to_quote
+			a_to_b
 		)?;
 
 		if amount_specified_is_input {
@@ -152,20 +148,20 @@ pub fn swap(
 				);
 
 			if next_tick_initialized {
-				let (fee_growth_global_synthetic, fee_growth_global_quote) = if
-					synthetic_to_quote
+				let (fee_growth_global_a, fee_growth_global_b) = if
+					a_to_b
 				{
-					(curr_fee_growth_global_input, amm.fee_growth_global_quote)
+					(curr_fee_growth_global_input, amm.fee_growth_global_b)
 				} else {
-					(amm.fee_growth_global_synthetic, curr_fee_growth_global_input)
+					(amm.fee_growth_global_a, curr_fee_growth_global_input)
 				};
 
 				let (update, next_liquidity) = calculate_update(
 					next_tick.unwrap(),
-					synthetic_to_quote,
+					a_to_b,
 					curr_liquidity,
-					fee_growth_global_synthetic,
-					fee_growth_global_quote,
+					fee_growth_global_a,
+					fee_growth_global_b,
 					&next_reward_infos
 				)?;
 
@@ -188,17 +184,17 @@ pub fn swap(
 			//  - Price is moving left and the current tick is the start of the tick array
 			//  - Price is moving right and the current tick is the end of the tick array
 			curr_array_index = if
-				(synthetic_to_quote && tick_offset == 0) ||
-				(!synthetic_to_quote && tick_offset == (TICK_ARRAY_SIZE as isize) - 1)
+				(a_to_b && tick_offset == 0) ||
+				(!a_to_b && tick_offset == (TICK_ARRAY_SIZE as isize) - 1)
 			{
 				next_array_index + 1
 			} else {
 				next_array_index
 			};
 
-			// The get_init_tick search is inclusive of the current index in an synthetic_to_quote trade.
+			// The get_init_tick search is inclusive of the current index in an a_to_b trade.
 			// We therefore have to shift the index by 1 to advance to the next init tick to the left.
-			curr_tick_index = if synthetic_to_quote {
+			curr_tick_index = if a_to_b {
 				next_tick_index - 1
 			} else {
 				next_tick_index
@@ -222,17 +218,17 @@ pub fn swap(
 	}
 
 	let (amount_synthetic, amount_quote) = if
-		synthetic_to_quote == amount_specified_is_input
+		a_to_b == amount_specified_is_input
 	{
 		(amount - amount_remaining, amount_calculated)
 	} else {
 		(amount_calculated, amount - amount_remaining)
 	};
 
-	let fee_growth = if synthetic_to_quote {
-		curr_fee_growth_global_input - amm.fee_growth_global_synthetic
+	let fee_growth = if a_to_b {
+		curr_fee_growth_global_input - amm.fee_growth_global_a
 	} else {
-		curr_fee_growth_global_input - amm.fee_growth_global_quote
+		curr_fee_growth_global_input - amm.fee_growth_global_b
 	};
 
 	// Log delta in fee growth to track pool usage over time with off-chain analytics
@@ -285,15 +281,15 @@ fn calculate_protocol_fee(global_fee: u64, protocol_fee_rate: u16) -> u64 {
 
 fn calculate_update(
 	tick: &Tick,
-	synthetic_to_quote: bool,
+	a_to_b: bool,
 	liquidity: u128,
-	fee_growth_global_synthetic: u128,
-	fee_growth_global_quote: u128,
+	fee_growth_global_a: u128,
+	fee_growth_global_b: u128,
 	reward_infos: &[AMMRewardInfo; NUM_REWARDS]
 ) -> Result<(TickUpdate, u128)> {
 	// Use updated fee_growth for crossing tick
 	// Use -liquidity_net if going left, +liquidity_net going right
-	let signed_liquidity_net = if synthetic_to_quote {
+	let signed_liquidity_net = if a_to_b {
 		-tick.liquidity_net
 	} else {
 		tick.liquidity_net
@@ -301,8 +297,8 @@ fn calculate_update(
 
 	let update = controller::tick::next_tick_cross_update(
 		tick,
-		fee_growth_global_synthetic,
-		fee_growth_global_quote,
+		fee_growth_global_a,
+		fee_growth_global_b,
 		reward_infos
 	)?;
 
@@ -318,10 +314,10 @@ fn calculate_update(
 fn get_next_sqrt_prices(
 	next_tick_index: i32,
 	sqrt_price_limit: u128,
-	synthetic_to_quote: bool
+	a_to_b: bool
 ) -> (u128, u128) {
 	let next_tick_price = math::amm::sqrt_price_from_tick_index(next_tick_index);
-	let next_sqrt_price_limit = if synthetic_to_quote {
+	let next_sqrt_price_limit = if a_to_b {
 		sqrt_price_limit.max(next_tick_price)
 	} else {
 		sqrt_price_limit.min(next_tick_price)

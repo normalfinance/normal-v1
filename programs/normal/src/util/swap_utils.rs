@@ -62,7 +62,7 @@ fn perform_swap<'info>(
 	token_program: &Program<'info, Token>,
 	amount_synthetic: u64,
 	amount_quote: u64,
-	synthetic_to_quote: bool,
+	a_to_b: bool,
 	inside_range: bool
 ) -> Result<()> {
 	// Transfer from user to pool
@@ -75,7 +75,7 @@ fn perform_swap<'info>(
 	let withdrawal_account_pool;
 	let withdrawal_amount;
 
-	if synthetic_to_quote {
+	if a_to_b {
 		deposit_account_user = token_owner_account_synthetic;
 		deposit_account_pool = token_vault_synthetic;
 		deposit_amount = amount_synthetic;

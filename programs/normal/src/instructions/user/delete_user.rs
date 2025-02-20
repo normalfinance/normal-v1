@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-	state::user::{ User, UserStats },
-	validation::user::validate_user_deletion,
-	State,
+	load,
+	load_mut,
+	safe_decrement,
+	state::{ state::State, user::User, user_stats::UserStats },
 };
 
 #[derive(Accounts)]

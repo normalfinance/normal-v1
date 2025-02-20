@@ -1,4 +1,4 @@
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::auction::{ calculate_auction_price, is_auction_complete };
 use crate::math::casting::Cast;
 use crate::math::constants::{
@@ -46,7 +46,7 @@ use crate::state::margin_calculation::{ MarginCalculation, MarginContext };
 use crate::state::oracle_map::OracleMap;
 
 use super::market_map::MarketMap;
-use super::position::Position;
+use super::collateral_position::CollateralPosition;
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
 pub enum UserStatus {
@@ -69,12 +69,10 @@ pub struct User {
 	pub authority: Pubkey,
 	/// An addresses that can control the account on the authority's behalf. Has limited power, cant withdraw
 	pub delegate: Pubkey,
-	//
-	pub vault: Pubkey,
 	/// Encoded display name e.g. "toly"
 	pub name: [u8; 32],
 	/// The user's positions
-	pub positions: [Position; 8],
+	pub positions: [CollateralPosition; 8],
 	/// The total values of deposits the user has made
 	/// precision: QUOTE_PRECISION
 	pub total_deposits: u64,
@@ -124,38 +122,6 @@ impl User {
 
 	pub fn remove_user_status(&mut self, status: UserStatus) {
 		self.status &= !(status as u8);
-	}
-
-	// DCA
-
-	pub fn get_dca(&self, market_index: u16) -> DriftResult<&PerpPosition> {
-		Ok(
-			&self.dollar_cost_averages
-				[get_position_index(&self.dollar_cost_averages, market_index)?]
-		)
-	}
-
-	pub fn get_dca_mut(
-		&mut self,
-		market_index: u16
-	) -> DriftResult<&mut PerpPosition> {
-		Ok(
-			&mut self.dollar_cost_averages
-				[get_position_index(&self.dollar_cost_averages, market_index)?]
-		)
-	}
-
-	pub fn force_get_dca_mut(
-		&mut self,
-		market_index: u16
-	) -> DriftResult<&mut PerpPosition> {
-		let position_index = get_position_index(
-			&self.dollar_cost_averages,
-			market_index
-		).or_else(|_|
-			add_new_position(&mut self.dollar_cost_averages, market_index)
-		)?;
-		Ok(&mut self.dollar_cost_averages[position_index])
 	}
 
 	// Position

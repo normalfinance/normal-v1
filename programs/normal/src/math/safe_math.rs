@@ -1,4 +1,4 @@
-use crate::error::{NormalResult, ErrorCode};
+use crate::errors::{NormalResult, ErrorCode};
 use crate::math::bn::{U192, U256};
 use crate::math::ceil_div::CheckedCeilDiv;
 use crate::math::floor_div::CheckedFloorDiv;
@@ -129,7 +129,7 @@ div_floor_impl!(i8);
 
 #[cfg(test)]
 mod test {
-    use crate::error::ErrorCode;
+    use crate::errors::ErrorCode;
     use crate::math::safe_math::{SafeDivFloor, SafeMath};
 
     #[test]

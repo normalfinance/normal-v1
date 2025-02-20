@@ -1,7 +1,8 @@
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
-use crate::state::user::{ User, UserStats };
+use crate::state::user::User;
+use crate::state::user_stats::UserStats;
 use crate::validate;
 use anchor_lang::prelude::AccountLoader;
 use anchor_lang::Discriminator;

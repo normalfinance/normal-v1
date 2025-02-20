@@ -1,5 +1,5 @@
-use crate::error::NormalResult;
-use crate::error::ErrorCode;
+use crate::errors::NormalResult;
+use crate::errors::ErrorCode;
 use crate::math::constants::{
 	MARGIN_PRECISION_U128,
 	MAX_POSITIVE_UPNL_FOR_INITIAL_MARGIN,

@@ -9,7 +9,7 @@ use user::{ User, UserStats };
 use vault::Vault;
 use vault_map::get_writable_vault_set;
 
-use crate::error::ErrorCode;
+use crate::errors::ErrorCode;
 use crate::errors::ErrorCode;
 use crate::instructions::optional_accounts::{
 	get_token_mint,

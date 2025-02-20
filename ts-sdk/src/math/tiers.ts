@@ -16,10 +16,10 @@ export function getMarketTierNumber(market: MarketAccount): number {
 	}
 }
 
-export function syntheticTierIsAsSafeAs(
-	syntheticTier: number,
-	otherSyntheticTier: number
+export function TierIsAsSafeAs(
+	Tier: number,
+	otherTier: number
 ): boolean {
-	const asSafeAsSynthetic = syntheticTier <= otherSyntheticTier;
+	const asSafeAsSynthetic = Tier <= otherTier;
 	return asSafeAsSynthetic;
 }

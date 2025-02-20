@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
 	controller,
-	error::ErrorCode,
+	errors::ErrorCode,
 	instructions::optional_accounts::{ load_maps, AccountMaps },
 	load_mut,
 	state::{

@@ -1,5 +1,5 @@
-use crate::error::ErrorCode::UnableToLoadOracle;
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::ErrorCode::UnableToLoadOracle;
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::ids::{
 	bonk_oracle,
 	bonk_pull_oracle,
@@ -11,8 +11,6 @@ use crate::ids::{
 	usdc_pull_oracle,
 	usdt_oracle,
 	usdt_pull_oracle,
-	wen_oracle,
-	wen_pull_oracle,
 };
 use crate::constants::main::PRICE_PRECISION_I64;
 use crate::math::oracle::{ oracle_validity, OracleValidity };
@@ -133,7 +131,6 @@ impl<'a> OracleMap<'a> {
 				*oracle_validity
 			} else {
 				let oracle_validity = oracle_validity(
-					market_type,
 					market_index,
 					last_oracle_price_twap,
 					oracle_price_data,
@@ -162,7 +159,6 @@ impl<'a> OracleMap<'a> {
 
 		let oracle_price_data = self.price_data.get(pubkey).safe_unwrap()?;
 		let oracle_validity = oracle_validity(
-			market_type,
 			market_index,
 			last_oracle_price_twap,
 			oracle_price_data,

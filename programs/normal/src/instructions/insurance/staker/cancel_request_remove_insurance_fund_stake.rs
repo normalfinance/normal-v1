@@ -1,15 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{ TokenAccount, TokenInterface };
 
-use crate::error::ErrorCode;
-use crate::instructions::constraints::*;
-use crate::optional_accounts::get_token_mint;
-use crate::state::insurance_fund_stake::InsuranceFundStake;
-use crate::state::paused_operations::InsuranceFundOperation;
-use crate::state::state::State;
-use crate::state::traits::Size;
+use crate::errors::ErrorCode;
 use crate::validate;
-use crate::{ controller, math };
+use crate::controller;
 use crate::load_mut;
 
 use super::request_remove_insurance_fund_stake::RequestRemoveInsuranceFundStake;

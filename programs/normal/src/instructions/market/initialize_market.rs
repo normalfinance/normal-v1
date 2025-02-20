@@ -1,10 +1,25 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Mint, Token, TokenAccount };
 
-use market::{ AuctionConfig, AuctionPreference, Market, Market };
+use market::Market;
 use oracle_map::OracleMap;
 
-use crate::{ state::*, validation::margin::validate_margin, State };
+use crate::{
+	safe_increment,
+	state::*,
+	validate,
+	validation::margin::validate_margin,
+	State,
+};
+
+#[derive(Accounts)]
+pub struct AdminUpdateMarket<'info> {
+	pub admin: Signer<'info>,
+	#[account(has_one = admin)]
+	pub state: Box<Account<'info, State>>,
+	#[account(mut)]
+	pub market: AccountLoader<'info, Market>,
+}
 
 #[derive(Accounts)]
 pub struct InitializeMarket<'info> {
@@ -56,7 +71,7 @@ pub fn handle_initialize_market(
 	market_index: u16,
 	name: [u8; 32],
 	active_status: bool,
-	synthetic_tier: SyntheticTier,
+	tier: Tier,
 
 	// Oracle
 	oracle_source: OracleSource,
@@ -218,7 +233,7 @@ pub fn handle_initialize_market(
 		} else {
 			MarketStatus::Initialized
 		},
-		synthetic_tier,
+		tier,
 		paused_operations: 0,
 
 		// Oracle
@@ -239,7 +254,6 @@ pub fn handle_initialize_market(
 		imf_factor,
 		debt_ceiling,
 		debt_floor,
-		collateral_lending_utilization: 0,
 
 		// Auction
 		collateral_action_config: AuctionConfig {
@@ -264,8 +278,6 @@ pub fn handle_initialize_market(
 		// Market settlement
 		expiry_price: 0,
 		expiry_ts: 0,
-
-		total_gov_token_inflation: 0,
 
 		padding: [0; 43],
 	};

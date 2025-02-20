@@ -1,6 +1,16 @@
 use anchor_lang::prelude::*;
 
-use super::AdminUpdateState;
+use crate::state::state::State;
+
+#[derive(Accounts)]
+pub struct AdminUpdateState<'info> {
+	pub admin: Signer<'info>,
+	#[account(
+        mut,
+        has_one = admin
+    )]
+	pub state: Box<Account<'info, State>>,
+}
 
 pub fn handle_update_oracle_guard_rails(
 	ctx: Context<AdminUpdateState>,

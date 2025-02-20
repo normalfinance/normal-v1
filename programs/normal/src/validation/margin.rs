@@ -1,4 +1,4 @@
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::constants::main::{
 	LIQUIDATION_FEE_TO_MARGIN_PRECISION_RATIO,
 	MAX_MARGIN_RATIO,

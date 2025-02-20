@@ -1,4 +1,4 @@
-use crate::error::ErrorCode;
+use crate::errors::ErrorCode;
 use crate::signer::get_signer_seeds;
 use crate::validate;
 use anchor_lang::prelude::*;

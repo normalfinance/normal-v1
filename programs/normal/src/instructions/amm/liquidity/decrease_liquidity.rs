@@ -1,15 +1,14 @@
 use anchor_lang::prelude::*;
 
 use crate::controller;
-use crate::errors::ErrorCode;
-use crate::manager::liquidity_manager::{
-	calculate_liquidity_token_deltas,
-	calculate_modify_liquidity,
-	sync_modify_liquidity_values,
-};
-use crate::math::convert_to_liquidity_delta;
+// use crate::errors::ErrorCode;
+// use crate::manager::liquidity_manager::{
+// 	calculate_liquidity_token_deltas,
+// 	calculate_modify_liquidity,
+// 	sync_modify_liquidity_values,
+// };
+// use crate::math::convert_to_liquidity_delta;
 use crate::util::{
-	burn_synthetic_from_vault,
 	to_timestamp_u64,
 	transfer_from_vault_to_owner,
 	verify_position_authority_interface,
@@ -54,7 +53,7 @@ pub fn handle_decrease_liquidity(
 		timestamp
 	)?;
 
-	let (delta_synthetic, delta_quote) =
+	let (delta_a, delta_b) =
 		controller::liquidity::calculate_liquidity_token_deltas(
 			ctx.accounts.amm.tick_current_index,
 			ctx.accounts.amm.sqrt_price,
@@ -62,7 +61,7 @@ pub fn handle_decrease_liquidity(
 			liquidity_delta
 		)?;
 
-	if delta_synthetic < token_min_synthetic || delta_quote < token_min_quote {
+	if delta_a < token_min_synthetic || delta_b < token_min_quote {
 		return Err(ErrorCode::TokenMinSubceeded.into());
 	}
 
@@ -71,7 +70,7 @@ pub fn handle_decrease_liquidity(
 		&ctx.accounts.token_vault_synthetic,
 		&ctx.accounts.token_owner_account_synthetic,
 		&ctx.accounts.token_program,
-		delta_synthetic
+		delta_a
 	)?;
 
 	transfer_from_vault_to_owner(
@@ -79,7 +78,7 @@ pub fn handle_decrease_liquidity(
 		&ctx.accounts.token_vault_quote,
 		&ctx.accounts.token_owner_account_quote,
 		&ctx.accounts.token_program,
-		delta_quote
+		delta_b
 	)?;
 
 	Ok(())

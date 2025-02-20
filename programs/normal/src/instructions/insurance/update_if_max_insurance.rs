@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::load_mut;
 
-use super::AdminUpdateInsurnaceFund;
+use super::initialize_insurance_fund::AdminUpdateInsurnaceFund;
 
 pub fn handle_update_if_max_insurance(
 	ctx: Context<AdminUpdateInsurnaceFund>,

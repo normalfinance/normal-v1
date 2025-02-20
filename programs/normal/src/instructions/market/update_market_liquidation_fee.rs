@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::error::ErrorCode;
+use crate::errors::ErrorCode;
 use super::AdminUpdateMarket;
 
 #[access_control(market_valid(&ctx.accounts.market))]

@@ -1,23 +1,22 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{ self, Token, TokenAccount };
 use anchor_spl::token_interface::TokenAccount as TokenAccountInterface;
-use market::Market;
-use tick::TickArray;
 
-use crate::errors::ErrorCode;
-use crate::manager::liquidity_manager::{
-	calculate_liquidity_token_deltas,
-	calculate_modify_liquidity,
-	sync_modify_liquidity_values,
-};
-use crate::math::{ self, convert_to_liquidity_delta };
-use crate::{ controller, state::* };
-use crate::util::{
-	mint_synthetic_to_vault,
-	to_timestamp_u64,
-	transfer_from_owner_to_vault,
-	verify_position_authority_interface,
-};
+use crate::state::liquidity_position::LiquidityPosition;
+
+// use crate::manager::liquidity_manager::{
+// 	calculate_liquidity_token_deltas,
+// 	calculate_modify_liquidity,
+// 	sync_modify_liquidity_values,
+// };
+// use crate::math::{ self, convert_to_liquidity_delta };
+// use crate::{ controller, state::* };
+// use crate::util::{
+// 	mint_synthetic_to_vault,
+// 	to_timestamp_u64,
+// 	transfer_from_owner_to_vault,
+// 	verify_position_authority_interface,
+// };
 
 #[derive(Accounts)]
 pub struct ModifyLiquidity<'info> {
@@ -30,7 +29,7 @@ pub struct ModifyLiquidity<'info> {
 	pub position_authority: Signer<'info>,
 
 	#[account(mut, has_one = market)]
-	pub position: Account<'info, Position>,
+	pub position: Account<'info, LiquidityPosition>,
 	#[account(
 		constraint = position_token_account.mint == position.position_mint,
 		constraint = position_token_account.amount == 1
@@ -93,7 +92,7 @@ pub fn handle_increase_liquidity(
 		timestamp
 	)?;
 
-	let (delta_synthetic, delta_quote) =
+	let (delta_a, delta_b) =
 		controller::liquidity::calculate_liquidity_token_deltas(
 			ctx.accounts.amm.tick_current_index,
 			ctx.accounts.amm.sqrt_price,
@@ -101,7 +100,7 @@ pub fn handle_increase_liquidity(
 			liquidity_delta
 		)?;
 
-	if delta_synthetic > token_max_synthetic || delta_quote > token_max_quote {
+	if delta_a > token_max_synthetic || delta_b > token_max_quote {
 		return Err(ErrorCode::TokenMaxExceeded.into());
 	}
 
@@ -110,7 +109,7 @@ pub fn handle_increase_liquidity(
 		&ctx.accounts.token_owner_account_synthetic,
 		&ctx.accounts.token_vault_synthetic,
 		&ctx.accounts.token_program,
-		delta_synthetic
+		delta_a
 	)?;
 
 	transfer_from_owner_to_vault(
@@ -118,7 +117,7 @@ pub fn handle_increase_liquidity(
 		&ctx.accounts.token_owner_account_quote,
 		&ctx.accounts.token_vault_quote,
 		&ctx.accounts.token_program,
-		delta_quote
+		delta_b
 	)?;
 
 	Ok(())

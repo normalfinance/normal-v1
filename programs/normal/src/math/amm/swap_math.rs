@@ -20,7 +20,7 @@ pub fn compute_swap(
 	sqrt_price_current: u128,
 	sqrt_price_target: u128,
 	amount_specified_is_input: bool,
-	synthetic_to_quote: bool
+	a_to_b: bool
 ) -> Result<SwapStepComputation, ErrorCode> {
 	// Since SplashPool (aka FullRange only pool) has only 2 initialized ticks at both ends,
 	// the possibility of exceeding u64 when calculating "delta amount" is higher than concentrated pools.
@@ -37,7 +37,7 @@ pub fn compute_swap(
 		sqrt_price_target,
 		liquidity,
 		amount_specified_is_input,
-		synthetic_to_quote
+		a_to_b
 	)?;
 
 	let mut amount_calc = amount_remaining;
@@ -57,7 +57,7 @@ pub fn compute_swap(
 			liquidity,
 			amount_calc,
 			amount_specified_is_input,
-			synthetic_to_quote
+			a_to_b
 		)?
 	};
 
@@ -68,7 +68,7 @@ pub fn compute_swap(
 		next_sqrt_price,
 		liquidity,
 		amount_specified_is_input,
-		synthetic_to_quote
+		a_to_b
 	)?;
 
 	// If the swap is not at the max, we need to readjust the amount of the fixed token we are using
@@ -82,7 +82,7 @@ pub fn compute_swap(
 			next_sqrt_price,
 			liquidity,
 			amount_specified_is_input,
-			synthetic_to_quote
+			a_to_b
 		)?
 	} else {
 		// the result will be in the u64 range.
@@ -123,17 +123,17 @@ fn get_amount_fixed_delta(
 	sqrt_price_target: u128,
 	liquidity: u128,
 	amount_specified_is_input: bool,
-	synthetic_to_quote: bool
+	a_to_b: bool
 ) -> Result<u64, ErrorCode> {
-	if synthetic_to_quote == amount_specified_is_input {
-		get_amount_delta_synthetic(
+	if a_to_b == amount_specified_is_input {
+		get_amount_delta_a(
 			sqrt_price_current,
 			sqrt_price_target,
 			liquidity,
 			amount_specified_is_input
 		)
 	} else {
-		get_amount_delta_quote(
+		get_amount_delta_b(
 			sqrt_price_current,
 			sqrt_price_target,
 			liquidity,
@@ -147,17 +147,17 @@ fn try_get_amount_fixed_delta(
 	sqrt_price_target: u128,
 	liquidity: u128,
 	amount_specified_is_input: bool,
-	synthetic_to_quote: bool
+	a_to_b: bool
 ) -> Result<AmountDeltaU64, ErrorCode> {
-	if synthetic_to_quote == amount_specified_is_input {
-		try_get_amount_delta_synthetic(
+	if a_to_b == amount_specified_is_input {
+		try_get_amount_delta_a(
 			sqrt_price_current,
 			sqrt_price_target,
 			liquidity,
 			amount_specified_is_input
 		)
 	} else {
-		try_get_amount_delta_quote(
+		try_get_amount_delta_b(
 			sqrt_price_current,
 			sqrt_price_target,
 			liquidity,
@@ -171,17 +171,17 @@ fn get_amount_unfixed_delta(
 	sqrt_price_target: u128,
 	liquidity: u128,
 	amount_specified_is_input: bool,
-	synthetic_to_quote: bool
+	a_to_b: bool
 ) -> Result<u64, ErrorCode> {
-	if synthetic_to_quote == amount_specified_is_input {
-		get_amount_delta_quote(
+	if a_to_b == amount_specified_is_input {
+		get_amount_delta_b(
 			sqrt_price_current,
 			sqrt_price_target,
 			liquidity,
 			!amount_specified_is_input
 		)
 	} else {
-		get_amount_delta_synthetic(
+		get_amount_delta_a(
 			sqrt_price_current,
 			sqrt_price_target,
 			liquidity,
@@ -208,7 +208,7 @@ mod fuzz_tests {
             prop_assume!(price_0 != price_1);
 
             // Rather than use logic to correctly input the prices, we just use the distribution to determine direction
-            let synthetic_to_quote = price_0 >= price_1;
+            let a_to_b = price_0 >= price_1;
 
             let swap_computation = compute_swap(
                 amount,
@@ -217,7 +217,7 @@ mod fuzz_tests {
                 price_0,
                 price_1,
                 amount_specified_is_input,
-                synthetic_to_quote,
+                a_to_b,
             ).ok().unwrap();
 
             let amount_in = swap_computation.amount_in;
@@ -258,7 +258,7 @@ mod fuzz_tests {
             prop_assume!(price_0 != price_1);
 
             // Rather than use logic to correctly input the prices, we just use the distribution to determine direction
-            let synthetic_to_quote = price_0 >= price_1;
+            let a_to_b = price_0 >= price_1;
 
             let swap_computation = compute_swap(
                 amount,
@@ -267,7 +267,7 @@ mod fuzz_tests {
                 price_0,
                 price_1,
                 amount_specified_is_input,
-                synthetic_to_quote,
+                a_to_b,
             ).ok().unwrap();
 
             let amount_in = swap_computation.amount_in;
@@ -289,30 +289,30 @@ mod fuzz_tests {
                     price_0,
                     price_1,
                     !amount_specified_is_input,
-                    synthetic_to_quote,
+                    a_to_b,
                 ).ok().unwrap();
 
                 // A to B = price decreasing
 
                 // Case 1
-                // Normal: is_input, synthetic_to_quote
+                // Normal: is_input, a_to_b
                 // Input is fixed, consume all input to produce amount_out
                 // amount_in = fixed, ceil
                 // amount_out = unfixed, floor
 
-                // Inverted: !is_input, synthetic_to_quote
+                // Inverted: !is_input, a_to_b
                 // amount_in = unfixed, ceil
                 // amount_out = fixed, floor
                 // Amount = amount_out, inverted.amount_in and fee <= original input and fee, inverted.amount_out ~~ amount_out, inverted.next_price >= original.next_price
 
 
                 // Case 2
-                // Normal: !is_input, synthetic_to_quote
+                // Normal: !is_input, a_to_b
                 // Find amount required to get amount_out
                 // amount_in = unfixed, ceil
                 // amount_out = fixed, floor
 
-                // Inverted: is_input, synthetic_to_quote
+                // Inverted: is_input, a_to_b
                 // amount_in = fixed, ceil
                 // amount_out = unfixed, floor
                 // Get max amount_out for input, inverted.amount_in + fee ~~ original input and fee, inverted.amount_out >= amount_out, inverted.next_price <= original.next_price
@@ -320,20 +320,20 @@ mod fuzz_tests {
 
                 // Price increasing
                 // Case 3
-                // Normal: is_input, !synthetic_to_quote
+                // Normal: is_input, !a_to_b
                 // Input is fixed, consume all input to produce amount_out
                 // amount_in = fixed, ceil
                 // amount_out = unfixed, floor
 
-                // Inverted: !is_input, !synthetic_to_quote
+                // Inverted: !is_input, !a_to_b
                 // Amount = amount_out, inverted.amount_in and fee <= original input and fee, inverted.amount_out ~~ amount_out, inverted.next_price <= original.next_price
 
                 // Case 4
-                // Normal: !is_input, !synthetic_to_quote
+                // Normal: !is_input, !a_to_b
                 // Find amount required to get amount_out
                 // amount_in = fixed, floor
                 // amount_out = unfixed, ceil
-                // Inverted: is_input, !synthetic_to_quote
+                // Inverted: is_input, !a_to_b
                 // Get max amount_out for input, inverted.amount_in + fee ~~ original input and fee, inverted.amount_out >= amount_out
                 // Since inverted.amount_out >= amount_out and amount in is the same, more of token a is being removed, so
                 // inverted.next_price >= original.next_price
@@ -343,7 +343,7 @@ mod fuzz_tests {
 
                 if inverted.next_price != price_1 {
                     if amount_specified_is_input {
-                        // If synthetic_to_quote, then goes round up => round down,
+                        // If a_to_b, then goes round up => round down,
                         assert!(inverted.amount_in <= amount_in);
                         assert!(inverted.fee_amount <= fee_amount);
                     } else {
@@ -351,7 +351,7 @@ mod fuzz_tests {
                         assert!(inverted.fee_amount >= fee_amount);
                     }
                     assert!(inverted.amount_out >= amount_out);
-                    if synthetic_to_quote == amount_specified_is_input {
+                    if a_to_b == amount_specified_is_input {
                         // Next sqrt price goes from round up to round down
                         assert!(inverted.next_price >= next_price);
                     } else {
@@ -372,7 +372,7 @@ mod fuzz_tests {
                     //         println!("IN < 1/{}", (1 << 64) / ratio_in);
                     //     }
 
-                    //     println!("liq {} | fee {} | price_0 {} | price_1 {} | synthetic_to_quote {}", liquidity, fee_rate, price_0, price_1, synthetic_to_quote);
+                    //     println!("liq {} | fee {} | price_0 {} | price_1 {} | a_to_b {}", liquidity, fee_rate, price_0, price_1, a_to_b);
                     //     println!("Amount {} | is_input {}", amount, amount_specified_is_input);
                     //     println!("Inverted Amount {} | is_input {}", inverted_amount, !amount_specified_is_input);
                     //     println!("{:?}", swap_computation);

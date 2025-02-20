@@ -1,27 +1,13 @@
-use crate::{
-	errors::ErrorCode,
-	math::{
-		tick_index_from_sqrt_price,
-		MAX_FEE_RATE,
-		MAX_PROTOCOL_FEE_RATE,
-		MAX_SQRT_PRICE_X64,
-		MIN_SQRT_PRICE_X64,
-	},
-};
 use anchor_lang::prelude::*;
+use drift_macros::assert_no_slop;
 
 use super::{ oracle::{ HistoricalOracleData, OracleSource } };
 
 #[assert_no_slop]
 #[zero_copy(unsafe)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, AnchorSerialize, AnchorDeserialize, PartialEq, Eq)]
 #[repr(C)]
 pub struct AMM {
-	
-
-	/// the authority that can push or pull quote asset tokens to/from the Vault when price exceed the max_price_deviance
-	pub vault_balance_authority: Pubkey,
-
 	/// Tokens
 	///
 	/// Mint for the synthetic token
@@ -33,14 +19,6 @@ pub struct AMM {
 	pub token_vault_synthetic: Pubkey,
 	/// Vault storing quote tokens (SOL, XLM, USDC)
 	pub token_vault_quote: Pubkey,
-
-	/// Peg
-	///
-	pub fee_authority: Pubkey,
-	/// the maximum percent the pool price can deviate above or below the oracle twap
-	pub max_price_variance: u16,
-	/// volume divided by synthetic token market cap (how much volume is created per $1 of liquidity)
-	pub liquidity_to_volume_multiplier: u64,
 
 	/// Liquidity
 	///
@@ -60,20 +38,42 @@ pub struct AMM {
 	pub fee_rate: u16,
 	// Portion of fee rate taken stored as basis points
 	pub protocol_fee_rate: u16,
-	/// portion of the fee rate sent to the Insurance Fund as basis points
-	pub insurance_fund_fee_rate: u16,
 
-	pub fee_growth_global_synthetic: u128,
-	pub fee_growth_global_quote: u128,
+	pub fee_growth_global_a: u128,
+	pub fee_growth_global_b: u128,
 
-	pub protocol_fee_owed_synthetic: u64,
-	pub protocol_fee_owed_quote: u64,
+	pub protocol_fee_owed_a: u64,
+	pub protocol_fee_owed_b: u64,
+
+	/// The maximum amount of slippage (in bps) that is tolerated during providing liquidity
+	pub max_allowed_slippage_bps: i64,
+	/// the maximum percent the pool price can deviate above or below the oracle twap
+	pub max_allowed_variance_bps: i64,
 
 	/// Rewards
 	///
-	pub reward_authority: Pubkey,
 	pub reward_last_updated_timestamp: u64,
 	pub reward_infos: [AMMRewardInfo; NUM_REWARDS], // 384
+
+	// Oracle
+	//
+	/// the oracle provider information. used to decode/scale the oracle public key
+	pub oracle_source: OracleSource,
+	/// stores historically witnessed oracle data
+	pub historical_oracle_data: HistoricalOracleData,
+	/// the pct size of the oracle confidence interval
+	/// precision: PERCENTAGE_PRECISION
+	pub last_oracle_conf_pct: u64,
+	/// tracks whether the oracle was considered valid at the last AMM update
+	pub last_oracle_valid: bool,
+	/// the last seen oracle price partially shrunk toward the amm reserve price
+	/// precision: PRICE_PRECISION
+	pub last_oracle_normalised_price: i64,
+	/// the gap between the oracle price and the reserve price = y * peg_multiplier / x
+	pub last_oracle_reserve_price_spread_pct: i64,
+	/// estimate of standard deviation of the oracle price at each update
+	/// precision: PRICE_PRECISION
+	pub oracle_std: u64,
 }
 
 impl Default for AMM {
@@ -87,10 +87,6 @@ impl Default for AMM {
 			oracle_std: 0,
 			oracle_source: OracleSource::default(),
 			last_oracle_valid: false,
-
-			fee_authority: Pubkey::default(),
-
-			reward_authority: Pubkey::default(),
 		}
 	}
 }
@@ -111,36 +107,20 @@ impl AMM {
 		}
 	}
 
-	pub fn input_token_mint(&self, synthetic_to_quote: bool) -> Pubkey {
-		if synthetic_to_quote {
-			self.token_mint_synthetic
-		} else {
-			self.token_mint_quote
-		}
+	pub fn input_token_mint(&self, a_to_b: bool) -> Pubkey {
+		if a_to_b { self.token_mint_synthetic } else { self.token_mint_quote }
 	}
 
-	pub fn input_token_vault(&self, synthetic_to_quote: bool) -> Pubkey {
-		if synthetic_to_quote {
-			self.token_vault_synthetic
-		} else {
-			self.token_vault_quote
-		}
+	pub fn input_token_vault(&self, a_to_b: bool) -> Pubkey {
+		if a_to_b { self.token_vault_synthetic } else { self.token_vault_quote }
 	}
 
-	pub fn output_token_mint(&self, synthetic_to_quote: bool) -> Pubkey {
-		if synthetic_to_quote {
-			self.token_mint_quote
-		} else {
-			self.token_mint_synthetic
-		}
+	pub fn output_token_mint(&self, a_to_b: bool) -> Pubkey {
+		if a_to_b { self.token_mint_quote } else { self.token_mint_synthetic }
 	}
 
-	pub fn output_token_vault(&self, synthetic_to_quote: bool) -> Pubkey {
-		if synthetic_to_quote {
-			self.token_vault_quote
-		} else {
-			self.token_vault_synthetic
-		}
+	pub fn output_token_vault(&self, a_to_b: bool) -> Pubkey {
+		if a_to_b { self.token_vault_quote } else { self.token_vault_synthetic }
 	}
 
 	/// Update all reward values for the AMM.
@@ -186,18 +166,18 @@ impl AMM {
 		self.reward_last_updated_timestamp = reward_last_updated_timestamp;
 		if is_token_fee_in_synthetic {
 			// Add fees taken via a
-			self.fee_growth_global_synthetic = fee_growth_global;
-			self.protocol_fee_owed_synthetic += protocol_fee;
+			self.fee_growth_global_a = fee_growth_global;
+			self.protocol_fee_owed_a += protocol_fee;
 		} else {
 			// Add fees taken via b
-			self.fee_growth_global_quote = fee_growth_global;
-			self.protocol_fee_owed_quote += protocol_fee;
+			self.fee_growth_global_b = fee_growth_global;
+			self.protocol_fee_owed_b += protocol_fee;
 		}
 	}
 
 	pub fn reset_protocol_fees_owed(&mut self) {
-		self.protocol_fee_owed_synthetic = 0;
-		self.protocol_fee_owed_quote = 0;
+		self.protocol_fee_owed_a = 0;
+		self.protocol_fee_owed_b = 0;
 	}
 
 	pub fn get_oracle_twap(
@@ -245,7 +225,7 @@ impl AMM {
 		if is_pull_oracle {
 			let price_message = pyth_solana_receiver_sdk::price_update::PriceUpdateV2
 				::try_deserialize(&mut pyth_price_data)
-				.or(Err(crate::error::ErrorCode::UnableToLoadOracle))?;
+				.or(Err(crate::errors::ErrorCode::UnableToLoadOracle))?;
 			oracle_price = price_message.price_message.price;
 			oracle_twap = price_message.price_message.ema_price;
 			oracle_exponent = price_message.price_message.exponent;
@@ -331,13 +311,13 @@ impl AMM {
 			)?
 			.unsigned_abs();
 
-		let oracle_divergence_limit = match self.synthetic_tier {
-			SyntheticTier::A => PERCENTAGE_PRECISION_U64 / 200, // 50 bps
-			SyntheticTier::B => PERCENTAGE_PRECISION_U64 / 200, // 50 bps
-			SyntheticTier::C => PERCENTAGE_PRECISION_U64 / 100, // 100 bps
-			SyntheticTier::Speculative => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
-			SyntheticTier::HighlySpeculative => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
-			SyntheticTier::Isolated => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
+		let oracle_divergence_limit = match self.tier {
+			Tier::A => PERCENTAGE_PRECISION_U64 / 200, // 50 bps
+			Tier::B => PERCENTAGE_PRECISION_U64 / 200, // 50 bps
+			Tier::C => PERCENTAGE_PRECISION_U64 / 100, // 100 bps
+			Tier::Speculative => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
+			Tier::HighlySpeculative => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
+			Tier::Isolated => PERCENTAGE_PRECISION_U64 / 40, // 250 bps
 		};
 
 		if oracle_divergence >= oracle_divergence_limit {
@@ -355,13 +335,13 @@ impl AMM {
 		);
 
 		let std_limit = (
-			match self.synthetic_tier {
-				SyntheticTier::A => min_price / 50, // 200 bps
-				SyntheticTier::B => min_price / 50, // 200 bps
-				SyntheticTier::C => min_price / 20, // 500 bps
-				SyntheticTier::Speculative => min_price / 10, // 1000 bps
-				SyntheticTier::HighlySpeculative => min_price / 10, // 1000 bps
-				SyntheticTier::Isolated => min_price / 10, // 1000 bps
+			match self.tier {
+				Tier::A => min_price / 50, // 200 bps
+				Tier::B => min_price / 50, // 200 bps
+				Tier::C => min_price / 20, // 500 bps
+				Tier::Speculative => min_price / 10, // 1000 bps
+				Tier::HighlySpeculative => min_price / 10, // 1000 bps
+				Tier::Isolated => min_price / 10, // 1000 bps
 			}
 		).unsigned_abs();
 
@@ -380,24 +360,24 @@ impl AMM {
 
 	pub fn get_max_confidence_interval_multiplier(self) -> NormalResult<u64> {
 		// assuming validity_guard_rails max confidence pct is 2%
-		Ok(match self.synthetic_tier {
-			SyntheticTier::A => 1, // 2%
-			SyntheticTier::B => 1, // 2%
-			SyntheticTier::C => 2, // 4%
-			SyntheticTier::Speculative => 10, // 20%
-			SyntheticTier::HighlySpeculative => 50, // 100%
-			SyntheticTier::Isolated => 50, // 100%
+		Ok(match self.tier {
+			Tier::A => 1, // 2%
+			Tier::B => 1, // 2%
+			Tier::C => 2, // 4%
+			Tier::Speculative => 10, // 20%
+			Tier::HighlySpeculative => 50, // 100%
+			Tier::Isolated => 50, // 100%
 		})
 	}
 
 	pub fn get_sanitize_clamp_denominator(self) -> NormalResult<Option<i64>> {
-		Ok(match self.synthetic_tier {
-			SyntheticTier::A => Some(10_i64), // 10%
-			SyntheticTier::B => Some(5_i64), // 20%
-			SyntheticTier::C => Some(2_i64), // 50%
-			SyntheticTier::Speculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
-			SyntheticTier::HighlySpeculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
-			SyntheticTier::Isolated => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+		Ok(match self.tier {
+			Tier::A => Some(10_i64), // 10%
+			Tier::B => Some(5_i64), // 20%
+			Tier::C => Some(2_i64), // 50%
+			Tier::Speculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+			Tier::HighlySpeculative => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
+			Tier::Isolated => None, // DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR
 		})
 	}
 }

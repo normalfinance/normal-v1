@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::TokenInterface;
 
-use crate::{ state::market::AuctionConfig, State };
+use crate::{ State };
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -15,15 +15,6 @@ pub struct Initialize<'info> {
 		payer = admin
 	)]
 	pub state: Box<Account<'info, State>>,
-	#[account(
-		init,
-		seeds = [b"index_fee_vault".as_ref()],
-		bump,
-		payer = admin,
-		token::mint = spot_market_mint,
-		token::authority = drift_signer
-	)]
-	pub index_fee_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 	/// CHECK: checked in `initialize`
 	pub normal_signer: AccountInfo<'info>,
 	pub oracle: AccountInfo<'info>,
@@ -50,7 +41,6 @@ pub fn handle_initialize_state(
 		number_of_authorities: 0,
 		number_of_sub_accounts: 0,
 		number_of_markets: 0,
-		number_of_index_markets: 0,
 		liquidation_margin_buffer_ratio: DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO,
 		signer: normal_signer,
 		signer_nonce: normal_signer_nonce,
@@ -59,13 +49,8 @@ pub fn handle_initialize_state(
 		max_number_of_sub_accounts: 0,
 		max_initialize_user_fee: 0,
 		total_debt_ceiling,
-		debt_auction_config: AuctionConfig::default(),
 		insurance_fund: *ctx.accounts.insurance_fund.key,
-		emergency_oracles: [], // TODO: fix
-		default_index_oracle: *ctx.accounts.oracle.key,
-		max_index_assets,
-		protocol_index_fee_vault: *ctx.accounts.protocol_index_fee_vault.key,
-		protocol_index_fee,
+		super_keepers: [],
 		padding: [0; 10],
 	};
 

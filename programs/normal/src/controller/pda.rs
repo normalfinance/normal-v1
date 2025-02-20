@@ -1,4 +1,4 @@
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::validate;
 use anchor_lang::prelude::{ AccountInfo, Pubkey };
 use solana_program::msg;

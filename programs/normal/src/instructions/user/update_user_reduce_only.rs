@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 
-use super::UpdateUser;
+use crate::{load_mut, validate};
+
+use super::initialize_user::UpdateUser;
 
 pub fn handle_update_user_reduce_only(
 	ctx: Context<UpdateUser>,

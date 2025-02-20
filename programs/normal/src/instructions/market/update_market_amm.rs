@@ -11,7 +11,6 @@ pub struct AdminUpdateMarketAMM<'info> {
 	pub state: Box<Account<'info, State>>,
 	#[account(mut)]
 	pub market: AccountLoader<'info, Market>,
-	pub amm: AccountLoader<'info, AMM>,
 }
 
 #[access_control(market_valid(&ctx.accounts.market))]

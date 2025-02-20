@@ -1,10 +1,31 @@
 use anchor_lang::prelude::*;
 
-use crate::{ errors::ErrorCode, math::MAX_PROTOCOL_FEE_RATE };
+use crate::{ errors::ErrorCode, safe_decrement, safe_increment, validate };
 
 use super::paused_operations::InsuranceFundOperation;
 
+// ################################################################
+//                             Buffer
+// ################################################################
+
 #[account]
+pub struct Buffer {
+	/// The buffer's address.
+	pub pubkey: Pubkey,
+	pub vault: Pubkey,
+	pub quote_token: Pubkey,
+	pub max_balance: i128,
+}
+
+impl Buffer {}
+
+// ################################################################
+//                          Insurance Fund
+// ################################################################
+
+#[account(zero_copy(unsafe))]
+#[derive(Default, Eq, PartialEq, Debug)]
+#[repr(C)]
 pub struct InsuranceFund {
 	/// The insurance fund's address.
 	pub pubkey: Pubkey,
@@ -32,7 +53,7 @@ impl InsuranceFund {
 }
 
 #[zero_copy(unsafe)]
-#[derive(Default, Eq, PartialEq, Debug)]
+#[derive(Default, AnchorSerialize, AnchorDeserialize, Eq, PartialEq, Debug)]
 #[repr(C)]
 pub struct InsuranceClaim {
 	/// The amount of revenue last settled
@@ -88,13 +109,13 @@ impl InsuranceFundStake {
 		}
 	}
 
-	fn validate_base(&self, spot_market: &SpotMarket) -> NormalResult {
+	fn validate_base(&self, insurance_fund: &InsuranceFund) -> NormalResult {
 		validate!(
-			self.if_base == spot_market.insurance_fund.shares_base,
+			self.if_base == insurance_fund.shares_base,
 			ErrorCode::InvalidIFRebase,
 			"if stake bases mismatch. user base: {} market base {}",
 			self.if_base,
-			spot_market.insurance_fund.shares_base
+			insurance_fund.shares_base
 		)?;
 
 		Ok(())
@@ -102,9 +123,9 @@ impl InsuranceFundStake {
 
 	pub fn checked_if_shares(
 		&self,
-		spot_market: &SpotMarket
+		insurance_fund: &InsuranceFund
 	) -> NormalResult<u128> {
-		self.validate_base(spot_market)?;
+		self.validate_base(insurance_fund)?;
 		Ok(self.if_shares)
 	}
 
@@ -115,9 +136,9 @@ impl InsuranceFundStake {
 	pub fn increase_if_shares(
 		&mut self,
 		delta: u128,
-		spot_market: &SpotMarket
+		insurance_fund: &InsuranceFund
 	) -> NormalResult {
-		self.validate_base(spot_market)?;
+		self.validate_base(insurance_fund)?;
 		safe_increment!(self.if_shares, delta);
 		Ok(())
 	}
@@ -125,9 +146,9 @@ impl InsuranceFundStake {
 	pub fn decrease_if_shares(
 		&mut self,
 		delta: u128,
-		spot_market: &SpotMarket
+		insurance_fund: &InsuranceFund
 	) -> NormalResult {
-		self.validate_base(spot_market)?;
+		self.validate_base(insurance_fund)?;
 		safe_decrement!(self.if_shares, delta);
 		Ok(())
 	}
@@ -135,9 +156,9 @@ impl InsuranceFundStake {
 	pub fn update_if_shares(
 		&mut self,
 		new_shares: u128,
-		spot_market: &SpotMarket
+		insurance_fund: &InsuranceFund
 	) -> NormalResult {
-		self.validate_base(spot_market)?;
+		self.validate_base(insurance_fund)?;
 		self.if_shares = new_shares;
 
 		Ok(())

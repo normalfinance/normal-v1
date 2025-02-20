@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-	error::ErrorCode,
+	errors::ErrorCode,
 	instructions::RepegCurve,
 	state::{
 		oracle::{ OraclePriceData, OracleSource },

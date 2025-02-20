@@ -9,14 +9,6 @@ use std::convert::TryFrom;
 
 use crate::errors::ErrorCode;
 
-pub fn verify_position_bundle_authority(
-    position_bundle_token_account: &TokenAccount,
-    position_bundle_authority: &Signer<'_>,
-) -> Result<()> {
-    // use same logic
-    verify_position_authority(position_bundle_token_account, position_bundle_authority)
-}
-
 pub fn verify_position_authority(
     position_token_account: &TokenAccount,
     position_authority: &Signer<'_>,

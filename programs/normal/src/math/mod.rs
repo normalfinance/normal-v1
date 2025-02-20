@@ -6,7 +6,6 @@ mod floor_div;
 pub mod insurance;
 pub mod liquidation;
 pub mod helpers;
-pub mod index;
 pub mod margin;
 pub mod oracle;
 pub mod safe_math;

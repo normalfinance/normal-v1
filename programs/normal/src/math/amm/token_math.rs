@@ -68,20 +68,20 @@ impl AmountDeltaU64 {
 // Δt_a = ((sqrt_price_lower - sqrt_price_upper) / (sqrt_price_upper * sqrt_price_lower)) * liquidity
 
 // Δt_a = (liquidity * (sqrt_price_lower - sqrt_price_upper)) / (sqrt_price_upper * sqrt_price_lower)
-pub fn get_amount_delta_synthetic(
+pub fn get_amount_delta_a(
     sqrt_price_0: u128,
     sqrt_price_1: u128,
     liquidity: u128,
     round_up: bool,
 ) -> Result<u64, ErrorCode> {
-    match try_get_amount_delta_synthetic(sqrt_price_0, sqrt_price_1, liquidity, round_up) {
+    match try_get_amount_delta_a(sqrt_price_0, sqrt_price_1, liquidity, round_up) {
         Ok(AmountDeltaU64::Valid(value)) => Ok(value),
         Ok(AmountDeltaU64::ExceedsMax(error)) => Err(error),
         Err(error) => Err(error),
     }
 }
 
-pub fn try_get_amount_delta_synthetic(
+pub fn try_get_amount_delta_a(
     sqrt_price_0: u128,
     sqrt_price_1: u128,
     liquidity: u128,
@@ -127,20 +127,20 @@ pub fn try_get_amount_delta_synthetic(
 
 // Replace delta
 // Δt_b = (sqrt_price_upper - sqrt_price_lower) * liquidity
-pub fn get_amount_delta_quote(
+pub fn get_amount_delta_b(
     sqrt_price_0: u128,
     sqrt_price_1: u128,
     liquidity: u128,
     round_up: bool,
 ) -> Result<u64, ErrorCode> {
-    match try_get_amount_delta_quote(sqrt_price_0, sqrt_price_1, liquidity, round_up) {
+    match try_get_amount_delta_b(sqrt_price_0, sqrt_price_1, liquidity, round_up) {
         Ok(AmountDeltaU64::Valid(value)) => Ok(value),
         Ok(AmountDeltaU64::ExceedsMax(error)) => Err(error),
         Err(error) => Err(error),
     }
 }
 
-pub fn try_get_amount_delta_quote(
+pub fn try_get_amount_delta_b(
     sqrt_price_0: u128,
     sqrt_price_1: u128,
     liquidity: u128,
@@ -276,28 +276,28 @@ pub fn get_next_sqrt_price(
     liquidity: u128,
     amount: u64,
     amount_specified_is_input: bool,
-    synthetic_to_quote: bool,
+    a_to_b: bool,
 ) -> Result<u128, ErrorCode> {
-    if amount_specified_is_input == synthetic_to_quote {
+    if amount_specified_is_input == a_to_b {
         // We are fixing A
-        // Case 1. amount_specified_is_input = true, synthetic_to_quote = true
+        // Case 1. amount_specified_is_input = true, a_to_b = true
         // We are exchanging A to B with at most _amount_ of A (input)
         //
-        // Case 2. amount_specified_is_input = false, synthetic_to_quote = false
+        // Case 2. amount_specified_is_input = false, a_to_b = false
         // We are exchanging B to A wanting to guarantee at least _amount_ of A (output)
         //
         // In either case we want the sqrt_price to be rounded up.
         //
         // Eq 1. sqrt_price = sqrt( b / a )
         //
-        // Case 1. amount_specified_is_input = true, synthetic_to_quote = true
+        // Case 1. amount_specified_is_input = true, a_to_b = true
         // We are adding token A to the supply, causing price to decrease (Eq 1.)
         // Since we are fixing input, we can not exceed the amount that is being provided by the user.
         // Because a higher price is inversely correlated with an increased supply of A,
         // a higher price means we are adding less A. Thus when performing math, we wish to round the
         // price up, since that means that we are guaranteed to not exceed the fixed amount of A provided.
         //
-        // Case 2. amount_specified_is_input = false, synthetic_to_quote = false
+        // Case 2. amount_specified_is_input = false, a_to_b = false
         // We are removing token A from the supply, causing price to increase (Eq 1.)
         // Since we are fixing output, we want to guarantee that the user is provided at least _amount_ of A
         // Because a higher price is correlated with a decreased supply of A,
@@ -311,24 +311,24 @@ pub fn get_next_sqrt_price(
         )
     } else {
         // We are fixing B
-        // Case 3. amount_specified_is_input = true, synthetic_to_quote = false
+        // Case 3. amount_specified_is_input = true, a_to_b = false
         // We are exchanging B to A using at most _amount_ of B (input)
         //
-        // Case 4. amount_specified_is_input = false, synthetic_to_quote = true
+        // Case 4. amount_specified_is_input = false, a_to_b = true
         // We are exchanging A to B wanting to guarantee at least _amount_ of B (output)
         //
         // In either case we want the sqrt_price to be rounded down.
         //
         // Eq 1. sqrt_price = sqrt( b / a )
         //
-        // Case 3. amount_specified_is_input = true, synthetic_to_quote = false
+        // Case 3. amount_specified_is_input = true, a_to_b = false
         // We are adding token B to the supply, causing price to increase (Eq 1.)
         // Since we are fixing input, we can not exceed the amount that is being provided by the user.
         // Because a lower price is inversely correlated with an increased supply of B,
         // a lower price means that we are adding less B. Thus when performing math, we wish to round the
         // price down, since that means that we are guaranteed to not exceed the fixed amount of B provided.
         //
-        // Case 4. amount_specified_is_input = false, synthetic_to_quote = true
+        // Case 4. amount_specified_is_input = false, a_to_b = true
         // We are removing token B from the supply, causing price to decrease (Eq 1.)
         // Since we are fixing output, we want to guarantee that the user is provided at least _amount_ of B
         // Because a lower price is correlated with a decreased supply of B,
@@ -364,7 +364,7 @@ mod fuzz_tests {
     //      SqrtPriceOutOfBounds
     //          sqrt_price - (amount / liquidity) < 0
     //
-    // get_amount_delta_quote
+    // get_amount_delta_b
     //      TokenMaxExceeded
     //          (price_1 - price_0) * liquidity > 2^64
 
@@ -377,7 +377,7 @@ mod fuzz_tests {
         ) {
             prop_assume!(sqrt_price != 0);
 
-            // Case 1. amount_specified_is_input = true, synthetic_to_quote = true
+            // Case 1. amount_specified_is_input = true, a_to_b = true
             // We are adding token A to the supply, causing price to decrease (Eq 1.)
             // Since we are fixing input, we can not exceed the amount that is being provided by the user.
             // Because a higher price is inversely correlated with an increased supply of A,
@@ -387,9 +387,9 @@ mod fuzz_tests {
             if liquidity.leading_zeros() + sqrt_price.leading_zeros() < Q64_RESOLUTION.into() {
                 assert!(case_1_price.is_err());
             } else {
-                assert!(amount >= get_amount_delta_synthetic(sqrt_price, case_1_price.unwrap(), liquidity, true).unwrap());
+                assert!(amount >= get_amount_delta_a(sqrt_price, case_1_price.unwrap(), liquidity, true).unwrap());
 
-                // Case 2. amount_specified_is_input = false, synthetic_to_quote = false
+                // Case 2. amount_specified_is_input = false, a_to_b = false
                 // We are removing token A from the supply, causing price to increase (Eq 1.)
                 // Since we are fixing output, we want to guarantee that the user is provided at least _amount_ of A
                 // Because a higher price is correlated with a decreased supply of A,
@@ -407,7 +407,7 @@ mod fuzz_tests {
                 if liquidity_x64 <= product {
                     assert!(case_2_price.is_err());
                 } else {
-                    assert!(amount <= get_amount_delta_synthetic(sqrt_price, case_2_price.unwrap(), liquidity, false).unwrap());
+                    assert!(amount <= get_amount_delta_a(sqrt_price, case_2_price.unwrap(), liquidity, false).unwrap());
                     assert!(case_2_price.unwrap() >= sqrt_price);
                 }
 
@@ -425,7 +425,7 @@ mod fuzz_tests {
         ) {
             prop_assume!(sqrt_price != 0);
 
-            // Case 3. amount_specified_is_input = true, synthetic_to_quote = false
+            // Case 3. amount_specified_is_input = true, a_to_b = false
             // We are adding token B to the supply, causing price to increase (Eq 1.)
             // Since we are fixing input, we can not exceed the amount that is being provided by the user.
             // Because a lower price is inversely correlated with an increased supply of B,
@@ -433,9 +433,9 @@ mod fuzz_tests {
             // price down, since that means that we are guaranteed to not exceed the fixed amount of B provided.
             let case_3_price = get_next_sqrt_price_from_b_round_down(sqrt_price, liquidity, amount, true).unwrap();
             assert!(case_3_price >= sqrt_price);
-            assert!(amount >= get_amount_delta_quote(sqrt_price, case_3_price, liquidity, true).unwrap());
+            assert!(amount >= get_amount_delta_b(sqrt_price, case_3_price, liquidity, true).unwrap());
 
-            // Case 4. amount_specified_is_input = false, synthetic_to_quote = true
+            // Case 4. amount_specified_is_input = false, a_to_b = true
             // We are removing token B from the supply, causing price to decrease (Eq 1.)
             // Since we are fixing output, we want to guarantee that the user is provided at least _amount_ of B
             // Because a lower price is correlated with a decreased supply of B,
@@ -451,7 +451,7 @@ mod fuzz_tests {
                 // In Case 4, error if sqrt_price < delta
                 assert!(case_4_price.is_err());
             } else {
-                let calc_delta = get_amount_delta_quote(sqrt_price, case_4_price.unwrap(), liquidity, false);
+                let calc_delta = get_amount_delta_b(sqrt_price, case_4_price.unwrap(), liquidity, false);
                 if calc_delta.is_ok() {
                     assert!(amount <= calc_delta.unwrap());
                 }
@@ -466,23 +466,23 @@ mod fuzz_tests {
 
 
         #[test]
-        fn test_get_amount_delta_synthetic(
+        fn test_get_amount_delta_a(
             sqrt_price_0 in MIN_SQRT_PRICE_X64..MAX_SQRT_PRICE_X64,
             sqrt_price_1 in MIN_SQRT_PRICE_X64..MAX_SQRT_PRICE_X64,
             liquidity in 0..u128::MAX,
         ) {
             let (sqrt_price_lower, sqrt_price_upper) = increasing_price_order(sqrt_price_0, sqrt_price_1);
 
-            let rounded = get_amount_delta_synthetic(sqrt_price_0, sqrt_price_1, liquidity, true);
+            let rounded = get_amount_delta_a(sqrt_price_0, sqrt_price_1, liquidity, true);
 
             if liquidity.leading_zeros() + (sqrt_price_upper - sqrt_price_lower).leading_zeros() < Q64_RESOLUTION.into() {
                 assert!(rounded.is_err())
             } else {
-                let unrounded = get_amount_delta_synthetic(sqrt_price_0, sqrt_price_1, liquidity, false).unwrap();
+                let unrounded = get_amount_delta_a(sqrt_price_0, sqrt_price_1, liquidity, false).unwrap();
 
                 // Price difference symmetry
-                assert_eq!(rounded.unwrap(), get_amount_delta_synthetic(sqrt_price_1, sqrt_price_0, liquidity, true).unwrap());
-                assert_eq!(unrounded, get_amount_delta_synthetic(sqrt_price_1, sqrt_price_0, liquidity, false).unwrap());
+                assert_eq!(rounded.unwrap(), get_amount_delta_a(sqrt_price_1, sqrt_price_0, liquidity, true).unwrap());
+                assert_eq!(unrounded, get_amount_delta_a(sqrt_price_1, sqrt_price_0, liquidity, false).unwrap());
 
                 // Rounded should always be larger
                 assert!(unrounded <= rounded.unwrap());
@@ -493,7 +493,7 @@ mod fuzz_tests {
         }
 
         #[test]
-        fn test_get_amount_delta_quote(
+        fn test_get_amount_delta_b(
             sqrt_price_0 in MIN_SQRT_PRICE_X64..MAX_SQRT_PRICE_X64,
             sqrt_price_1 in MIN_SQRT_PRICE_X64..MAX_SQRT_PRICE_X64,
             liquidity in 0..u128::MAX,
@@ -510,8 +510,8 @@ mod fuzz_tests {
             let has_mod = m % TO_Q64 > U256::zero();
             let round_up_delta = if has_mod { delta + U256::from(1) } else { delta };
 
-            let rounded = get_amount_delta_quote(sqrt_price_0, sqrt_price_1, liquidity, true);
-            let unrounded = get_amount_delta_quote(sqrt_price_0, sqrt_price_1, liquidity, false);
+            let rounded = get_amount_delta_b(sqrt_price_0, sqrt_price_1, liquidity, true);
+            let unrounded = get_amount_delta_b(sqrt_price_0, sqrt_price_1, liquidity, false);
 
             let u64_max_in_u256 = U256::from(u64::MAX);
             if delta > u64_max_in_u256 {
@@ -520,11 +520,11 @@ mod fuzz_tests {
             } else if round_up_delta > u64_max_in_u256 {
                 assert!(rounded.is_err());
                 // Price symmmetry
-                assert_eq!(unrounded.unwrap(), get_amount_delta_quote(sqrt_price_1, sqrt_price_0, liquidity, false).unwrap());
+                assert_eq!(unrounded.unwrap(), get_amount_delta_b(sqrt_price_1, sqrt_price_0, liquidity, false).unwrap());
             } else {
                 // Price difference symmetry
-                assert_eq!(rounded.unwrap(), get_amount_delta_quote(sqrt_price_1, sqrt_price_0, liquidity, true).unwrap());
-                assert_eq!(unrounded.unwrap(), get_amount_delta_quote(sqrt_price_1, sqrt_price_0, liquidity, false).unwrap());
+                assert_eq!(rounded.unwrap(), get_amount_delta_b(sqrt_price_1, sqrt_price_0, liquidity, true).unwrap());
+                assert_eq!(unrounded.unwrap(), get_amount_delta_b(sqrt_price_1, sqrt_price_0, liquidity, false).unwrap());
 
                 // Rounded should always be larger
                 assert!(unrounded.unwrap() <= rounded.unwrap());
@@ -540,36 +540,36 @@ mod fuzz_tests {
 #[cfg(test)]
 mod test_get_amount_delta {
     // Δt_a = ((liquidity * (sqrt_price_lower - sqrt_price_upper)) / sqrt_price_upper) / sqrt_price_lower
-    use super::get_amount_delta_synthetic;
-    use super::get_amount_delta_quote;
+    use super::get_amount_delta_a;
+    use super::get_amount_delta_b;
 
     #[test]
     fn test_get_amount_delta_ok() {
         // A
-        assert_eq!(get_amount_delta_synthetic(4 << 64, 2 << 64, 4, true).unwrap(), 1);
-        assert_eq!(get_amount_delta_synthetic(4 << 64, 2 << 64, 4, false).unwrap(), 1);
+        assert_eq!(get_amount_delta_a(4 << 64, 2 << 64, 4, true).unwrap(), 1);
+        assert_eq!(get_amount_delta_a(4 << 64, 2 << 64, 4, false).unwrap(), 1);
 
         // B
-        assert_eq!(get_amount_delta_quote(4 << 64, 2 << 64, 4, true).unwrap(), 8);
-        assert_eq!(get_amount_delta_quote(4 << 64, 2 << 64, 4, false).unwrap(), 8);
+        assert_eq!(get_amount_delta_b(4 << 64, 2 << 64, 4, true).unwrap(), 8);
+        assert_eq!(get_amount_delta_b(4 << 64, 2 << 64, 4, false).unwrap(), 8);
     }
 
     #[test]
     fn test_get_amount_delta_price_diff_zero_ok() {
         // A
-        assert_eq!(get_amount_delta_synthetic(4 << 64, 4 << 64, 4, true).unwrap(), 0);
-        assert_eq!(get_amount_delta_synthetic(4 << 64, 4 << 64, 4, false).unwrap(), 0);
+        assert_eq!(get_amount_delta_a(4 << 64, 4 << 64, 4, true).unwrap(), 0);
+        assert_eq!(get_amount_delta_a(4 << 64, 4 << 64, 4, false).unwrap(), 0);
 
         // B
-        assert_eq!(get_amount_delta_quote(4 << 64, 4 << 64, 4, true).unwrap(), 0);
-        assert_eq!(get_amount_delta_quote(4 << 64, 4 << 64, 4, false).unwrap(), 0);
+        assert_eq!(get_amount_delta_b(4 << 64, 4 << 64, 4, true).unwrap(), 0);
+        assert_eq!(get_amount_delta_b(4 << 64, 4 << 64, 4, false).unwrap(), 0);
     }
 
     #[test]
-    fn test_get_amount_delta_synthetic_overflow() {
-        assert!(get_amount_delta_synthetic(1 << 64, 2 << 64, u128::MAX, true).is_err());
-        assert!(get_amount_delta_synthetic(1 << 64, 2 << 64, (u64::MAX as u128) << (1 + 1), true).is_err());
-        assert!(get_amount_delta_synthetic(1 << 64, 2 << 64, (u64::MAX as u128) << 1, true).is_ok());
-        assert!(get_amount_delta_synthetic(1 << 64, 2 << 64, u64::MAX as u128, true).is_ok());
+    fn test_get_amount_delta_a_overflow() {
+        assert!(get_amount_delta_a(1 << 64, 2 << 64, u128::MAX, true).is_err());
+        assert!(get_amount_delta_a(1 << 64, 2 << 64, (u64::MAX as u128) << (1 + 1), true).is_err());
+        assert!(get_amount_delta_a(1 << 64, 2 << 64, (u64::MAX as u128) << 1, true).is_ok());
+        assert!(get_amount_delta_a(1 << 64, 2 << 64, u64::MAX as u128, true).is_ok());
     }
 }

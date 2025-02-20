@@ -1,9 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
 
-use crate::state::user::ReferrerName;
+use crate::errors::ErrorCode;
+use crate::load;
+use crate::load_mut;
+use crate::safe_increment;
 use crate::state::user::User;
-use crate::state::user::UserStats;
+use crate::state::user_stats::UserStats;
+use crate::validate;
 use crate::State;
 
 #[derive(Accounts)]
@@ -139,4 +143,18 @@ pub fn handle_initialize_user<'c: 'info, 'info>(
 	}
 
 	Ok(())
+}
+
+#[derive(Accounts)]
+#[instruction(
+    sub_account_id: u16,
+)]
+pub struct UpdateUser<'info> {
+	#[account(
+        mut,
+        seeds = [b"user", authority.key.as_ref(), sub_account_id.to_le_bytes().as_ref()],
+        bump,
+    )]
+	pub user: AccountLoader<'info, User>,
+	pub authority: Signer<'info>,
 }

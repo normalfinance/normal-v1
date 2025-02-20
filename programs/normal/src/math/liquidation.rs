@@ -1,6 +1,6 @@
 use std::u32;
 
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::math::constants::{
 	AMM_RESERVE_PRECISION_I128,

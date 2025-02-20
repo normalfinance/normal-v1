@@ -1,9 +1,10 @@
 use anchor_lang::prelude::*;
-use anchor_lang::Discriminator;
 
-use crate::state::user::ReferrerName;
+use crate::errors::ErrorCode;
+use crate::load;
 use crate::state::user::User;
-use crate::state::user::UserStats;
+use crate::state::user_stats::UserStats;
+use crate::validate;
 use crate::State;
 
 #[derive(Accounts)]

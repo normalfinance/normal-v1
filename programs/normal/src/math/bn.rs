@@ -4,13 +4,13 @@
 #![allow(clippy::ptr_offset_with_cast)]
 #![allow(clippy::manual_range_contains)]
 
-use crate::error::ErrorCode::BnConversionError;
+use crate::errors::ErrorCode::BnConversionError;
 use std::borrow::BorrowMut;
 use std::convert::TryInto;
 use std::mem::size_of;
 use uint::construct_uint;
 
-use crate::error::NormalResult;
+use crate::errors::NormalResult;
 
 construct_uint! {
     /// 256-bit unsigned integer.

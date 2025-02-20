@@ -1,5 +1,5 @@
 use crate::controller::position::PositionDirection;
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::math::constants::MAX_BASE_ASSET_AMOUNT_WITH_AMM;
 use crate::math::safe_math::SafeMath;
@@ -55,11 +55,7 @@ pub fn validate_market(market: &Market) -> NormalResult {
 	// 	amm.base_asset_amount_with_amm
 	// )?;
 
-	// validate!(
-	// 	amm.peg_multiplier > 0,
-	// 	ErrorCode::InvalidAmmDetected,
-	// 	"peg_multiplier out of wack"
-	// )?;
+	
 
 	if market.status != MarketStatus::ReduceOnly {
 		validate!(
@@ -71,23 +67,7 @@ pub fn validate_market(market: &Market) -> NormalResult {
 		)?;
 	}
 
-	// validate!(
-	// 	amm.sqrt_k >= amm.base_asset_reserve ||
-	// 		amm.sqrt_k >= amm.quote_asset_reserve,
-	// 	ErrorCode::InvalidAmmDetected,
-	// 	"k out of wack: k={}, bar={}, qar={}",
-	// 	amm.sqrt_k,
-	// 	amm.base_asset_reserve,
-	// 	amm.quote_asset_reserve
-	// )?;
 
-	// validate!(
-	// 	amm.sqrt_k >= amm.user_lp_shares,
-	// 	ErrorCode::InvalidAmmDetected,
-	// 	"amm.sqrt_k < amm.user_lp_shares: {} < {}",
-	// 	amm.sqrt_k,
-	// 	amm.user_lp_shares
-	// )?;
 
 	// let invariant_sqrt_u192 = crate::bn::U192::from(amm.sqrt_k);
 	// let invariant = invariant_sqrt_u192.safe_mul(invariant_sqrt_u192)?;
@@ -183,14 +163,7 @@ pub fn validate_market(market: &Market) -> NormalResult {
 	// 	)?;
 	// }
 
-	// if amm.base_spread > 0 {
-	// 	validate!(
-	// 		amm.max_spread > amm.base_spread &&
-	// 			amm.max_spread < market.margin_ratio_initial * 100,
-	// 		ErrorCode::InvalidAmmDetected,
-	// 		"invalid max_spread"
-	// 	)?;
-	// }
+
 
 	validate!(
 		market.insurance_claim.max_revenue_withdraw_per_period >=
@@ -203,21 +176,7 @@ pub fn validate_market(market: &Market) -> NormalResult {
 		market.insurance_claim.revenue_withdraw_since_last_settle.unsigned_abs()
 	)?;
 
-	// validate!(
-	// 	amm.base_asset_amount_per_lp <
-	// 		(MAX_BASE_ASSET_AMOUNT_WITH_AMM as i128),
-	// 	ErrorCode::InvalidAmmDetected,
-	// 	"amm.base_asset_amount_per_lp too large: {}",
-	// 	amm.base_asset_amount_per_lp
-	// )?;
-
-	// validate!(
-	// 	amm.quote_asset_amount_per_lp <
-	// 		(MAX_BASE_ASSET_AMOUNT_WITH_AMM as i128),
-	// 	ErrorCode::InvalidAmmDetected,
-	// 	"amm.quote_asset_amount_per_lp too large: {}",
-	// 	amm.quote_asset_amount_per_lp
-	// )?;
+	
 
 	Ok(())
 }

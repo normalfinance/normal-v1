@@ -35,7 +35,7 @@ pub fn handle_collect_protocol_fees(
 		&ctx.accounts.token_vault_synthetic,
 		&ctx.accounts.token_destination_a,
 		&ctx.accounts.token_program,
-		amm.protocol_fee_owed_synthetic
+		amm.protocol_fee_owed_a
 	)?;
 
 	transfer_from_vault_to_owner(
@@ -43,7 +43,7 @@ pub fn handle_collect_protocol_fees(
 		&ctx.accounts.token_vault_quote,
 		&ctx.accounts.token_destination_b,
 		&ctx.accounts.token_program,
-		amm.protocol_fee_owed_quote
+		amm.protocol_fee_owed_b
 	)?;
 
 	ctx.accounts.amm.reset_protocol_fees_owed();

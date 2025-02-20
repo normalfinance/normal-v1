@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use lp::LP;
+use liquidity_position::LP;
 use market::Market;
 use tick::TickArray;
 

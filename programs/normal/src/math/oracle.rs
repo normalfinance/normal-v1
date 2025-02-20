@@ -3,7 +3,7 @@ use std::cmp::max;
 use borsh::{ BorshDeserialize, BorshSerialize };
 use solana_program::msg;
 
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::amm;
 use crate::math::casting::Cast;
 use crate::constants::main::BID_ASK_SPREAD_PRECISION;
@@ -69,12 +69,7 @@ impl fmt::Display for OracleValidity {
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
 pub enum NormalAction {
-	SettlePnl,
-	TriggerOrder,
-	FillOrderMatch,
-	FillOrderAmm,
 	UpdateTwap,
-	UpdateAMMCurve,
 	OracleOrderPrice,
 }
 
@@ -96,21 +91,7 @@ pub fn is_oracle_valid_for_action(
 							OracleValidity::InsufficientDataPoints
 					)
 				}
-				NormalAction::TriggerOrder =>
-					!matches!(
-						oracle_validity,
-						OracleValidity::NonPositive | OracleValidity::TooVolatile
-					),
-				NormalAction::FillOrderMatch =>
-					!matches!(
-						oracle_validity,
-						OracleValidity::NonPositive |
-							OracleValidity::TooVolatile |
-							OracleValidity::TooUncertain
-					),
 				NormalAction::UpdateTwap =>
-					!matches!(oracle_validity, OracleValidity::NonPositive),
-				NormalAction::UpdateAMMCurve =>
 					!matches!(oracle_validity, OracleValidity::NonPositive),
 			}
 		None => { matches!(oracle_validity, OracleValidity::Valid) }
@@ -280,7 +261,7 @@ pub fn oracle_validity(
 
 pub fn get_timestamp_from_price_feed_account(
 	price_feed_account: &AccountInfo
-) -> Result<i64> {
+) -> NormalResult<i64> {
 	if price_feed_account.data_is_empty() {
 		Ok(0)
 	} else {
@@ -294,7 +275,7 @@ pub fn get_timestamp_from_price_feed_account(
 
 pub fn get_timestamp_from_price_update_message(
 	update_message: &PrefixedVec<u16, u8>
-) -> Result<i64> {
+) -> NormalResult<i64> {
 	let message = from_slice::<byteorder::BE, Message>(
 		update_message.as_ref()
 	).map_err(|_| ErrorCode::OracleDeserializeMessageFailed)?;

@@ -40,11 +40,11 @@ impl<'a> ProxiedTickArray<'a> {
 		&self,
 		tick_index: i32,
 		tick_spacing: u16,
-		synthetic_to_quote: bool
+		a_to_b: bool
 	) -> Result<Option<i32>> {
 		self
 			.as_ref()
-			.get_next_init_tick_index(tick_index, tick_spacing, synthetic_to_quote)
+			.get_next_init_tick_index(tick_index, tick_spacing, a_to_b)
 	}
 
 	pub fn get_tick(&self, tick_index: i32, tick_spacing: u16) -> Result<&Tick> {
@@ -124,7 +124,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 	///
 	/// # Parameters
 	/// - `amm` - AMM account
-	/// - `synthetic_to_quote` - Direction of the swap
+	/// - `a_to_b` - Direction of the swap
 	/// - `static_tick_array_account_infos` - TickArray accounts provided through required accounts
 	/// - `supplemental_tick_array_account_infos` - TickArray accounts provided through remaining accounts
 	///
@@ -137,7 +137,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 	/// - `AccountDiscriminatorMismatch` - If the provided TickArray account has a mismatched discriminator
 	pub fn try_from(
 		amm: &Account<'info, AMM>,
-		synthetic_to_quote: bool,
+		a_to_b: bool,
 		static_tick_array_account_infos: Vec<AccountInfo<'info>>,
 		supplemental_tick_array_account_infos: Option<Vec<AccountInfo<'info>>>
 	) -> Result<Self> {
@@ -189,7 +189,7 @@ impl<'info> SparseSwapTickSequenceBuilder<'info> {
 			}
 		}
 
-		let start_tick_indexes = get_start_tick_indexes(market, synthetic_to_quote);
+		let start_tick_indexes = get_start_tick_indexes(market, a_to_b);
 
 		let mut tick_array_accounts: Vec<TickArrayAccount> = vec![];
 		for start_tick_index in start_tick_indexes.iter() {
@@ -337,7 +337,7 @@ fn peek_tick_array(
 
 fn get_start_tick_indexes(
 	market: &Account<Market>,
-	synthetic_to_quote: bool
+	a_to_b: bool
 ) -> Vec<i32> {
 	let tick_current_index = amm.tick_current_index;
 	let tick_spacing_u16 = amm.tick_spacing;
@@ -346,7 +346,7 @@ fn get_start_tick_indexes(
 
 	let start_tick_index_base =
 		floor_division(tick_current_index, ticks_in_array) * ticks_in_array;
-	let offset = if synthetic_to_quote {
+	let offset = if a_to_b {
 		[0, -1, -2]
 	} else {
 		let shifted =

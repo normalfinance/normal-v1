@@ -1,4 +1,4 @@
-use crate::error::{NormalResult, ErrorCode};
+use crate::errors::{NormalResult, ErrorCode};
 use crate::math::bn::U192;
 use solana_program::msg;
 use std::convert::TryInto;

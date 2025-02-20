@@ -1,8 +1,8 @@
-use crate::state::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{ self, Mint, Token, TokenAccount };
-use insurance::InsuranceFund;
 
+use crate::load_mut;
+
+use super::initialize_insurance_fund::AdminUpdateInsurnaceFund;
 
 pub fn handle_set_if_unstaking_period(
 	ctx: Context<AdminUpdateInsurnaceFund>,

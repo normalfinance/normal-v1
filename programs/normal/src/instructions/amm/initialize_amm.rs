@@ -117,10 +117,10 @@ pub fn handle_initialize_amm(
 		// Fees
 		fee_rate,
 		protocol_fee_rate,
-		protocol_fee_owed_synthetic: 0,
-		protocol_fee_owed_quote: 0,
-		fee_growth_global_synthetic: 0,
-		fee_growth_global_quote: 0,
+		protocol_fee_owed_a: 0,
+		protocol_fee_owed_b: 0,
+		fee_growth_global_a: 0,
+		fee_growth_global_b: 0,
 
 		// Rewards
 		reward_infos: [

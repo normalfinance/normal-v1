@@ -16,18 +16,18 @@ pub fn next_position_modify_liquidity_update(
     // Calculate fee deltas.
     // If fee deltas overflow, default to a zero value. This means the position loses
     // all fees earned since the last time the position was modified or fees collected.
-    let growth_delta_synthetic = fee_growth_inside_synthetic.wrapping_sub(position.fee_growth_checkpoint_a);
-    let fee_delta_synthetic = checked_mul_shift_right(position.liquidity, growth_delta_synthetic).unwrap_or(0);
+    let growth_delta_a = fee_growth_inside_synthetic.wrapping_sub(position.fee_growth_checkpoint_a);
+    let fee_delta_a = checked_mul_shift_right(position.liquidity, growth_delta_a).unwrap_or(0);
 
-    let growth_delta_quote = fee_growth_inside_quote.wrapping_sub(position.fee_growth_checkpoint_b);
-    let fee_delta_quote = checked_mul_shift_right(position.liquidity, growth_delta_quote).unwrap_or(0);
+    let growth_delta_b = fee_growth_inside_quote.wrapping_sub(position.fee_growth_checkpoint_b);
+    let fee_delta_b = checked_mul_shift_right(position.liquidity, growth_delta_b).unwrap_or(0);
 
     update.fee_growth_checkpoint_a = fee_growth_inside_synthetic;
     update.fee_growth_checkpoint_b = fee_growth_inside_quote;
 
     // Overflows allowed. Must collect fees owed before overflow.
-    update.fee_owed_a = position.fee_owed_a.wrapping_add(fee_delta_synthetic);
-    update.fee_owed_b = position.fee_owed_b.wrapping_add(fee_delta_quote);
+    update.fee_owed_a = position.fee_owed_a.wrapping_add(fee_delta_a);
+    update.fee_owed_b = position.fee_owed_b.wrapping_add(fee_delta_b);
 
     for (i, update) in update.reward_infos.iter_mut().enumerate() {
         let reward_growth_inside = reward_growths_inside[i];

@@ -1,19 +1,10 @@
 use anchor_lang::prelude::*;
 use enumflags2::BitFlags;
 
-use crate::error::NormalResult;
-use crate::constants::main::{
-	FEE_DENOMINATOR,
-	FEE_PERCENTAGE_DENOMINATOR,
-	MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND,
-};
-use crate::math::amm::MAX_PROTOCOL_FEE_RATE;
+use crate::errors::NormalResult;
 use crate::math::safe_math::SafeMath;
 use crate::math::safe_unwrap::SafeUnwrap;
 use crate::state::traits::Size;
-use crate::{ LAMPORTS_PER_SOL_U64, PERCENTAGE_PRECISION_U64 };
-
-use super::market::AuctionConfig;
 
 #[account]
 #[derive(Default)]
@@ -29,7 +20,7 @@ pub struct State {
 	// validations to ensure oracle prices are accurate and reliable
 	pub oracle_guard_rails: OracleGuardRails,
 	// set of elected keepers who can freeze/update oracles in an emergency
-	pub emergency_oracles: Vec<>,
+	pub super_keepers: Vec<Pubkey>,
 
 	// Exchange/AMMs
 	//
@@ -63,9 +54,6 @@ pub struct State {
 	pub liquidation_margin_buffer_ratio: u32,
 	pub liquidation_duration: u8,
 	pub initial_pct_to_liquidate: u16,
-
-	// Debt Auctions
-	pub debt_auction_config: AuctionConfig,
 
 	pub padding: [u8; 10],
 }

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use super::AdminUpdateState;
+use super::update_oracle_guard_rails::AdminUpdateState;
 
 pub fn handle_update_state_max_number_of_sub_accounts(
 	ctx: Context<AdminUpdateState>,

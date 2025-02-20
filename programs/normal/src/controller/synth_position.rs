@@ -2,8 +2,8 @@ use solana_program::msg;
 
 use crate::controller::position::PositionDirection;
 use crate::controller::spot_balance::{update_revenue_pool_balances, update_spot_balances};
-use crate::error::NormalResult;
-use crate::error::ErrorCode;
+use crate::errors::NormalResult;
+use crate::errors::ErrorCode;
 use crate::math::casting::Cast;
 use crate::math::safe_math::SafeMath;
 use crate::math::spot_withdraw::check_withdraw_limits;

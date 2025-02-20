@@ -9,7 +9,7 @@ use anchor_lang::prelude::AccountInfo;
 use anchor_lang::Discriminator;
 use arrayref::array_ref;
 
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::state::market::Market;
 
 use crate::math::safe_unwrap::SafeUnwrap;

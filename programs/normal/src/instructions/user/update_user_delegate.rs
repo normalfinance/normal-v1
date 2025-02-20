@@ -1,6 +1,8 @@
 use anchor_lang::prelude::*;
 
-use super::UpdateUser;
+use crate::load_mut;
+
+use super::initialize_user::UpdateUser;
 
 pub fn handle_update_user_delegate(
 	ctx: Context<UpdateUser>,

@@ -1,16 +1,12 @@
 use solana_program::msg;
 
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::math::helpers::{ get_proportion_u128, log10_iter };
 use crate::math::safe_math::SafeMath;
 
-use crate::state::insurance::InsuranceFund;
-use crate::state::insurance_fund_stake::InsuranceFundStake;
+use crate::state::insurance::{InsuranceFund, InsuranceFundStake};
 use crate::validate;
-
-// #[cfg(test)]
-// mod tests;
 
 pub fn vault_amount_to_if_shares(
 	amount: u64,

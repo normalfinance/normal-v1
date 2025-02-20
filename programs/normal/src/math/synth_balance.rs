@@ -1,4 +1,4 @@
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::math::constants::{
 	ONE_YEAR,
@@ -8,7 +8,7 @@ use crate::math::constants::{
 };
 use crate::math::safe_math::{ SafeDivFloor, SafeMath };
 use crate::state::oracle::{ OraclePriceData, StrictOraclePrice };
-use crate::state::position::Position;
+use crate::state::collateral_position::Position;
 use crate::state::market::Market;
 use crate::state::user::SpotPosition;
 

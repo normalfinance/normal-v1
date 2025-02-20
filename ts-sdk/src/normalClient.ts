@@ -4352,7 +4352,7 @@ export class NormalClient {
 				quoteAccount,
 				SpotBalanceType.DEPOSIT
 			),
-			syntheticTier: marketAccount.syntheticTier,
+			Tier: marketAccount.Tier,
 			availableInsurance: calculateMarketMaxAvailableInsurance(
 				marketAccount,
 				quoteAccount

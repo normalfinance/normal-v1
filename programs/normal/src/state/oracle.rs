@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
-use std::cell::Ref;
 
-use crate::error::{ NormalResult, ErrorCode };
+use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::constants::main::{
 	PRICE_PRECISION,
@@ -10,13 +9,9 @@ use crate::constants::main::{
 };
 use crate::math::safe_math::SafeMath;
 
-use crate::error::ErrorCode::{ InvalidOracle, UnableToLoadOracle };
+use crate::errors::ErrorCode::{ InvalidOracle, UnableToLoadOracle };
 use crate::math::safe_unwrap::SafeUnwrap;
-use crate::state::load_ref::load_ref;
-use crate::state::market::Market;
-use crate::state::traits::Size;
 use crate::validate;
-use crate::state::oracles::index_fund::get_index_fund_price;
 
 // #[cfg(test)]
 // mod tests;
@@ -76,50 +71,6 @@ impl HistoricalOracleData {
 			// last_oracle_price_twap_ts: now,
 			..HistoricalOracleData::default()
 		}
-	}
-}
-
-#[derive(
-	Default,
-	AnchorSerialize,
-	AnchorDeserialize,
-	Clone,
-	Copy,
-	Eq,
-	PartialEq,
-	Debug
-)]
-pub struct HistoricalIndexData {
-	/// precision: PRICE_PRECISION
-	pub last_index_bid_price: u64,
-	/// precision: PRICE_PRECISION
-	pub last_index_ask_price: u64,
-	/// precision: PRICE_PRECISION
-	pub last_index_price_twap_5min: u64,
-	/// unix_timestamp of last snapshot
-	pub last_index_price_twap_ts: i64,
-}
-
-impl HistoricalIndexData {
-	pub fn default_quote_oracle() -> Self {
-		HistoricalIndexData {
-			last_index_bid_price: PRICE_PRECISION_U64,
-			last_index_ask_price: PRICE_PRECISION_U64,
-			last_index_price_twap_5min: PRICE_PRECISION_U64,
-			..HistoricalIndexData::default()
-		}
-	}
-
-	pub fn default_with_current_oracle(
-		oracle_price_data: OraclePriceData
-	) -> NormalResult<Self> {
-		let price = oracle_price_data.price.cast::<u64>().safe_unwrap()?;
-		Ok(HistoricalIndexData {
-			last_index_bid_price: price,
-			last_index_ask_price: price,
-			last_index_price_twap_5min: price,
-			..HistoricalIndexData::default()
-		})
 	}
 }
 
@@ -205,7 +156,7 @@ pub fn get_pyth_price(
 ) -> NormalResult<OraclePriceData> {
 	let mut pyth_price_data: &[u8] = &price_oracle
 		.try_borrow_data()
-		.or(Err(crate::error::ErrorCode::UnableToLoadOracle))?;
+		.or(Err(crate::errors::ErrorCode::UnableToLoadOracle))?;
 
 	let oracle_price: i64;
 	let oracle_conf: u64;
@@ -245,7 +196,7 @@ pub fn get_pyth_price(
 
 	if oracle_precision <= multiple {
 		msg!("Multiple larger than oracle precision");
-		return Err(crate::error::ErrorCode::InvalidOracle);
+		return Err(crate::errors::ErrorCode::InvalidOracle);
 	}
 	oracle_precision = oracle_precision.safe_div(multiple)?;
 

@@ -1,16 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{ TokenAccount, TokenInterface };
 
-use crate::error::ErrorCode;
-use crate::instructions::constraints::*;
-use crate::optional_accounts::get_token_mint;
+use crate::errors::ErrorCode;
 use crate::state::insurance::{ InsuranceFund, InsuranceFundStake };
 use crate::state::paused_operations::InsuranceFundOperation;
 use crate::state::state::State;
-use crate::state::traits::Size;
-use crate::util::transfer_from_owner_to_vault;
 use crate::validate;
-use crate::{ controller, math };
+use crate::controller;
 use crate::load_mut;
 
 #[derive(Accounts)]

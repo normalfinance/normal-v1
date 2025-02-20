@@ -1,11 +1,14 @@
 use anchor_lang::prelude::*;
 use anchor_lang::Discriminator;
 
+use crate::errors::ErrorCode;
 use crate::instructions::constraints::*;
 
-use crate::state::user::ReferrerName;
+use crate::load;
+use crate::state::referral::ReferrerName;
 use crate::state::user::User;
-use crate::state::user::UserStats;
+use crate::state::user_stats::UserStats;
+use crate::validate;
 
 #[derive(Accounts)]
 #[instruction(

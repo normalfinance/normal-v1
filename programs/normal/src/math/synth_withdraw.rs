@@ -1,6 +1,6 @@
 use solana_program::msg;
 
-use crate::error::{NormalResult, ErrorCode};
+use crate::errors::{NormalResult, ErrorCode};
 use crate::math::casting::Cast;
 use crate::math::safe_math::SafeMath;
 

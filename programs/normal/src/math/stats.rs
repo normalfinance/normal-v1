@@ -1,4 +1,4 @@
-use crate::error::NormalResult;
+use crate::errors::NormalResult;
 use crate::math::casting::Cast;
 use crate::math::safe_math::SafeMath;
 use std::cmp::max;

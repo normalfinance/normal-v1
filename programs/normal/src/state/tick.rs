@@ -1,6 +1,6 @@
-use crate::errors::ErrorCode;
-use crate::state::NUM_REWARDS;
 use anchor_lang::prelude::*;
+
+use crate::errors::ErrorCode;
 
 // Max & min tick index based on sqrt(1.0001) & max.min price of 2^64
 pub const MAX_TICK_INDEX: i32 = 443636;
@@ -151,7 +151,7 @@ pub trait TickArrayType {
 		&self,
 		tick_index: i32,
 		tick_spacing: u16,
-		synthetic_to_quote: bool
+		a_to_b: bool
 	) -> Result<Option<i32>>;
 
 	fn get_tick(&self, tick_index: i32, tick_spacing: u16) -> Result<&Tick>;
@@ -168,9 +168,9 @@ pub trait TickArrayType {
 	/// unshifted checks on [start, start + TICK_ARRAY_SIZE * tick_spacing)
 	/// shifted checks on [start - tick_spacing, start + (TICK_ARRAY_SIZE - 1) * tick_spacing) (adjusting range by -tick_spacing)
 	///
-	/// shifted == !synthetic_to_quote
+	/// shifted == !a_to_b
 	///
-	/// For synthetic_to_quote swaps, price moves left. All searchable ticks in this tick-array's range will end up in this tick's usable ticks.
+	/// For a_to_b swaps, price moves left. All searchable ticks in this tick-array's range will end up in this tick's usable ticks.
 	/// The search range is therefore the range of the tick-array.
 	///
 	/// For b_to_a swaps, this tick-array's left-most ticks can be the 'next' usable tick-index of the previous tick-array.
@@ -260,7 +260,7 @@ impl TickArrayType for TickArray {
 	/// # Parameters
 	/// - `tick_index` - A i32 integer representing the tick index to start searching for
 	/// - `tick_spacing` - A u8 integer of the tick spacing for this amm
-	/// - `synthetic_to_quote` - If the trade is from synthetic_to_quote, the search will move to the left and the starting search tick is inclusive.
+	/// - `a_to_b` - If the trade is from a_to_b, the search will move to the left and the starting search tick is inclusive.
 	///              If the trade is from b_to_a, the search will move to the right and the starting search tick is not inclusive.
 	///
 	/// # Returns
@@ -272,9 +272,9 @@ impl TickArrayType for TickArray {
 		&self,
 		tick_index: i32,
 		tick_spacing: u16,
-		synthetic_to_quote: bool
+		a_to_b: bool
 	) -> Result<Option<i32>> {
-		if !self.in_search_range(tick_index, tick_spacing, !synthetic_to_quote) {
+		if !self.in_search_range(tick_index, tick_spacing, !a_to_b) {
 			return Err(ErrorCode::InvalidTickArraySequence.into());
 		}
 
@@ -285,9 +285,9 @@ impl TickArrayType for TickArray {
 			}
 		};
 
-		// For synthetic_to_quote searches, the search moves to the left. The next possible init-tick can be the 1st tick in the current offset
+		// For a_to_b searches, the search moves to the left. The next possible init-tick can be the 1st tick in the current offset
 		// For b_to_a searches, the search moves to the right. The next possible init-tick cannot be within the current offset
-		if !synthetic_to_quote {
+		if !a_to_b {
 			curr_offset += 1;
 		}
 
@@ -299,7 +299,7 @@ impl TickArrayType for TickArray {
 				);
 			}
 
-			curr_offset = if synthetic_to_quote {
+			curr_offset = if a_to_b {
 				curr_offset - 1
 			} else {
 				curr_offset + 1
@@ -388,9 +388,9 @@ impl TickArrayType for ZeroedTickArray {
 		&self,
 		tick_index: i32,
 		tick_spacing: u16,
-		synthetic_to_quote: bool
+		a_to_b: bool
 	) -> Result<Option<i32>> {
-		if !self.in_search_range(tick_index, tick_spacing, !synthetic_to_quote) {
+		if !self.in_search_range(tick_index, tick_spacing, !a_to_b) {
 			return Err(ErrorCode::InvalidTickArraySequence.into());
 		}
 

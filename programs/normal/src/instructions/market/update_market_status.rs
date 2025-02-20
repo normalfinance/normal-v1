@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-	error::ErrorCode,
+	errors::ErrorCode,
 	state::market::MarketStatus,
 	instructions::constraints::market_valid,
 };

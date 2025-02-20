@@ -1,7 +1,12 @@
 use anchor_lang::prelude::*;
 
-use crate::State;
-use crate::state::user::{ MarketType, User, UserStats };
+use crate::{
+	errors::ErrorCode,
+	safe_increment,
+	state::user_stats::UserStats,
+	validate,
+	State,
+};
 
 #[derive(Accounts)]
 pub struct InitializeUserStats<'info> {
