@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
 use borsh::{ BorshDeserialize, BorshSerialize };
 
-use crate::{ math::{ margin::MarginRequirementType, MAX_PROTOCOL_FEE_RATE } };
 use drift_macros::assert_no_slop;
 use super::{ amm::AMM, insurance::{ InsuranceClaim }, oracle::OracleSource };
 

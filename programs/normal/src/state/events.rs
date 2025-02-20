@@ -1,11 +1,8 @@
 use anchor_lang::prelude::*;
 use borsh::{ BorshDeserialize, BorshSerialize };
 
-use crate::controller::position::PositionDirection;
-use crate::errors::{ NormalResult, ErrorCode::InvalidOrder };
-use crate::math::casting::Cast;
+use crate::errors::{ NormalResult};
 use crate::math::safe_unwrap::SafeUnwrap;
-use crate::state::traits::Size;
 use anchor_lang::Discriminator;
 use std::io::Write;
 

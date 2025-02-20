@@ -1,5 +1,7 @@
 use anchor_lang::prelude::*;
 
+use crate::errors::ErrorCode;
+
 use super::{ market::Market, tick::Tick };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, Copy)]
@@ -59,7 +61,7 @@ impl LiquidityPosition {
 		tick_upper_index: i32
 	) -> Result<()> {
 		if
-			!Tick::check_is_usable_tick(tick_lower_index, amm.tick_spacing) ||
+			!Tick::check_is_usable_tick(tick_lower_index, market.amm.tick_spacing) ||
 			!Tick::check_is_usable_tick(tick_upper_index, amm.tick_spacing) ||
 			tick_lower_index >= tick_upper_index
 		{

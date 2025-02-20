@@ -11,20 +11,8 @@ use crate::math::constants::{
 	THIRTY_DAY,
 };
 use crate::math::margin::MarginRequirementType;
-use crate::math::position::{
-	calculate_base_asset_value_and_pnl_with_oracle_price,
-	calculate_base_asset_value_with_oracle_price,
-	calculate_perp_liability_value,
-};
+
 use crate::math::safe_math::SafeMath;
-use crate::math::synth_balance::{
-	get_signed_token_amount,
-	get_strict_token_value,
-	get_token_amount,
-	get_token_value,
-};
-use crate::math::stats::calculate_rolling_sum;
-use crate::state::oracle::StrictOraclePrice;
 use crate::state::traits::Size;
 use crate::{ get_then_update_id, QUOTE_PRECISION_U64 };
 use crate::{ math_error, SPOT_WEIGHT_PRECISION_I128 };
@@ -33,14 +21,9 @@ use crate::{ validate, MAX_PREDICTION_MARKET_PRICE };
 use anchor_lang::prelude::*;
 use borsh::{ BorshDeserialize, BorshSerialize };
 use solana_program::msg;
-use std::cmp::max;
-use std::fmt;
-use std::ops::Neg;
-use std::panic::Location;
 
 use crate::math::margin::{
 	calculate_margin_requirement_and_total_collateral_and_liability_info,
-	validate_any_isolated_tier_requirements,
 };
 use crate::state::margin_calculation::{ MarginCalculation, MarginContext };
 use crate::state::oracle_map::OracleMap;
@@ -79,6 +62,12 @@ pub struct User {
 	/// The total values of withdrawals the user has made
 	/// precision: QUOTE_PRECISION
 	pub total_withdraws: u64,
+	/// The total socialized loss the users has incurred upon the protocol
+	/// precision: QUOTE_PRECISION
+	pub total_social_loss: u64,
+	/// Fees (taker fees, maker rebate, filler reward) for spot
+	/// precision: QUOTE_PRECISION
+	pub cumulative_swap_fees: i64,
 	/// The amount of margin freed during liquidation. Used to force the liquidation to occur over a period of time
 	/// Defaults to zero when not being liquidated
 	/// precision: QUOTE_PRECISION
@@ -101,8 +90,6 @@ pub struct User {
 }
 
 impl User {
-	// Status
-
 	pub fn is_being_liquidated(&self) -> bool {
 		self.status &
 			((UserStatus::BeingLiquidated as u8) | (UserStatus::Bankrupt as u8)) > 0
@@ -222,7 +209,7 @@ impl User {
 		price: i64,
 		precision: u128
 	) -> NormalResult {
-		let value = self.get_deposit_value(amount, price, precision);
+		let value = self.get_deposit_value(amount, price, precision)?;
 		self.total_deposits = self.total_deposits.saturating_add(value);
 
 		Ok(())
@@ -234,13 +221,23 @@ impl User {
 		price: i64,
 		precision: u128
 	) -> NormalResult {
-		let value = amount
-			.cast::<u128>()?
-			.safe_mul(price.cast()?)?
-			.safe_div(precision)?
-			.cast::<u64>()?;
+		let value = self.get_deposit_value(amount, price, precision)?;
 		self.total_withdraws = self.total_withdraws.saturating_add(value);
 
+		Ok(())
+	}
+
+	pub fn increment_total_socialized_loss(
+		&mut self,
+		value: u64
+	) -> NormalResult {
+		self.total_social_loss = self.total_social_loss.saturating_add(value);
+
+		Ok(())
+	}
+
+	pub fn update_cumulative_swap_fees(&mut self, amount: i64) -> NormalResult {
+		safe_increment!(self.cumulative_swap_fees, amount);
 		Ok(())
 	}
 
@@ -283,6 +280,23 @@ impl User {
 			self.last_active_slot = slot;
 		}
 		self.idle = false;
+	}
+
+	pub fn qualifies_for_withdraw_fee(
+		&self,
+		user_stats: &UserStats,
+		slot: u64
+	) -> bool {
+		// only qualifies for user with recent last_active_slot (~25 seconds)
+		if slot.saturating_sub(self.last_active_slot) >= 50 {
+			return false;
+		}
+
+		let min_total_withdraws = 10_000_000 * QUOTE_PRECISION_U64; // $10M
+
+		// if total withdraws are greater than $10M and user has paid more than %.01 of it in fees
+		self.total_withdraws >= min_total_withdraws &&
+			self.total_withdraws / user_stats.fees.total_fee_paid.max(1) > 10_000
 	}
 
 	pub fn update_reduce_only_status(
@@ -362,25 +376,4 @@ impl User {
 
 		Ok(true)
 	}
-}
-
-#[zero_copy(unsafe)]
-#[derive(Default, Eq, PartialEq, Debug)]
-#[repr(C)]
-pub struct UserFees {
-	/// Total taker fee paid
-	/// precision: QUOTE_PRECISION
-	pub total_fee_paid: u64,
-	/// Total index management fee paid
-	/// precision: QUOTE_PRECISION
-	pub total_expense_ratio_paid: u64,
-	/// Total discount from being referred
-	/// precision: QUOTE_PRECISION
-	pub total_referee_discount: u64,
-	/// Total reward to referrer
-	/// precision: QUOTE_PRECISION
-	pub total_referrer_reward: u64,
-	/// Total reward to referrer this epoch
-	/// precision: QUOTE_PRECISION
-	pub current_epoch_referrer_reward: u64,
 }

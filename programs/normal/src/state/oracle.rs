@@ -1,20 +1,12 @@
 use anchor_lang::prelude::*;
 
+use crate::constants::main::{ PRICE_PRECISION, PRICE_PRECISION_I64 };
 use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
-use crate::constants::main::{
-	PRICE_PRECISION,
-	PRICE_PRECISION_I64,
-	PRICE_PRECISION_U64,
-};
+
 use crate::math::safe_math::SafeMath;
 
-use crate::errors::ErrorCode::{ InvalidOracle, UnableToLoadOracle };
-use crate::math::safe_unwrap::SafeUnwrap;
 use crate::validate;
-
-// #[cfg(test)]
-// mod tests;
 
 #[derive(
 	Default,
@@ -129,7 +121,7 @@ pub fn get_oracle_price(
 			get_pyth_price(price_oracle, clock_slot, 1000000, false),
 		OracleSource::PythStableCoin =>
 			get_pyth_stable_coin_price(price_oracle, clock_slot, false),
-	
+
 		OracleSource::QuoteAsset =>
 			Ok(OraclePriceData {
 				price: PRICE_PRECISION_I64,
@@ -156,7 +148,7 @@ pub fn get_pyth_price(
 ) -> NormalResult<OraclePriceData> {
 	let mut pyth_price_data: &[u8] = &price_oracle
 		.try_borrow_data()
-		.or(Err(crate::errors::ErrorCode::UnableToLoadOracle))?;
+		.or(Err(ErrorCode::UnableToLoadOracle))?;
 
 	let oracle_price: i64;
 	let oracle_conf: u64;
@@ -196,7 +188,7 @@ pub fn get_pyth_price(
 
 	if oracle_precision <= multiple {
 		msg!("Multiple larger than oracle precision");
-		return Err(crate::errors::ErrorCode::InvalidOracle);
+		return Err(ErrorCode::InvalidOracle);
 	}
 	oracle_precision = oracle_precision.safe_div(multiple)?;
 
@@ -258,7 +250,6 @@ pub fn get_pyth_stable_coin_price(
 
 	Ok(oracle_price_data)
 }
-
 
 #[derive(Clone, Copy)]
 pub struct StrictOraclePrice {

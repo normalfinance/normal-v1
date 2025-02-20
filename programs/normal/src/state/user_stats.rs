@@ -1,5 +1,28 @@
 use anchor_lang::prelude::*;
-use borsh::{ BorshDeserialize, BorshSerialize };
+
+#[zero_copy(unsafe)]
+#[derive(Default, Eq, PartialEq, Debug)]
+#[repr(C)]
+pub struct UserFees {
+	/// Total taker fee paid
+	/// precision: QUOTE_PRECISION
+	pub total_fee_paid: u64,
+	/// Total maker fee rebate
+	/// precision: QUOTE_PRECISION
+	pub total_fee_rebate: u64,
+	/// Total discount from holding token
+	/// precision: QUOTE_PRECISION
+	pub total_token_discount: u64,
+	/// Total discount from being referred
+	/// precision: QUOTE_PRECISION
+	pub total_referee_discount: u64,
+	/// Total reward to referrer
+	/// precision: QUOTE_PRECISION
+	pub total_referrer_reward: u64,
+	/// Total reward to referrer this epoch
+	/// precision: QUOTE_PRECISION
+	pub current_epoch_referrer_reward: u64,
+}
 
 #[account(zero_copy(unsafe))]
 #[derive(Eq, PartialEq, Debug)]
@@ -12,24 +35,21 @@ pub struct UserStats {
 	pub referrer: Pubkey,
 	/// Stats on the fees paid by the user
 	pub fees: UserFees,
-
 	/// The timestamp of the next epoch
 	/// Epoch is used to limit referrer rewards earned in single epoch
 	pub next_epoch_ts: i64,
-
-	/// Rolling 30day collateral volume for user
+	/// Rolling 30day maker volume for user
 	/// precision: QUOTE_PRECISION
-	pub collateral_volume_30d: u64,
-	/// Rolling 30day trade volume for user
+	pub maker_volume_30d: u64,
+	/// Rolling 30day taker volume for user
 	/// precision: QUOTE_PRECISION
-	pub trade_volume_30d: u64,
-	/// last time the collateral volume was updated
-	pub last_collateral_volume_30d_ts: i64,
-	/// last time the trade volume was updated
-	pub last_trade_volume_30d_ts: i64,
-
-	/// The amount of tokens staked in the quote spot markets if
-	pub if_staked_quote_asset_amount: u64,
+	pub taker_volume_30d: u64,
+	/// last time the maker volume was updated
+	pub last_maker_volume_30d_ts: i64,
+	/// last time the taker volume was updated
+	pub last_taker_volume_30d_ts: i64,
+	/// The amount of tokens staked in the if
+	pub if_staked_asset_amount: u64,
 	/// The current number of sub accounts
 	pub number_of_sub_accounts: u16,
 	/// The number of sub accounts created. Can be greater than the number of sub accounts if user
@@ -37,6 +57,7 @@ pub struct UserStats {
 	pub number_of_sub_accounts_created: u16,
 	/// Whether the user is a referrer. Sub account 0 can not be deleted if user is a referrer
 	pub is_referrer: bool,
+	pub disable_update_perp_bid_ask_twap: bool,
 	pub padding: [u8; 12],
 }
 
@@ -45,47 +66,50 @@ impl Size for UserStats {
 }
 
 impl UserStats {
-	pub fn update_collateral_volume_30d(
+	pub fn update_maker_volume_30d(
 		&mut self,
 		quote_asset_amount: u64,
 		now: i64
 	) -> NormalResult {
-		let since_last = max(
-			1_i64,
-			now.safe_sub(self.last_collateral_volume_30d_ts)?
-		);
+		let since_last = max(1_i64, now.safe_sub(self.last_maker_volume_30d_ts)?);
 
-		self.collateral_volume_30d = calculate_rolling_sum(
-			self.collateral_volume_30d,
+		self.maker_volume_30d = calculate_rolling_sum(
+			self.maker_volume_30d,
 			quote_asset_amount,
 			since_last,
 			THIRTY_DAY
 		)?;
-		self.last_collateral_volume_30d_ts = now;
+		self.last_maker_volume_30d_ts = now;
 
 		Ok(())
 	}
 
-	pub fn update_trade_volume_30d(
+	pub fn update_taker_volume_30d(
 		&mut self,
 		quote_asset_amount: u64,
 		now: i64
 	) -> NormalResult {
-		let since_last = max(1_i64, now.safe_sub(self.last_trade_volume_30d_ts)?);
+		let since_last = max(1_i64, now.safe_sub(self.last_taker_volume_30d_ts)?);
 
-		self.trade_volume_30d = calculate_rolling_sum(
-			self.trade_volume_30d,
+		self.taker_volume_30d = calculate_rolling_sum(
+			self.taker_volume_30d,
 			quote_asset_amount,
 			since_last,
 			THIRTY_DAY
 		)?;
-		self.last_trade_volume_30d_ts = now;
+		self.last_taker_volume_30d_ts = now;
 
 		Ok(())
 	}
 
 	pub fn increment_total_fees(&mut self, fee: u64) -> NormalResult {
 		self.fees.total_fee_paid = self.fees.total_fee_paid.safe_add(fee)?;
+
+		Ok(())
+	}
+
+	pub fn increment_total_rebate(&mut self, fee: u64) -> NormalResult {
+		self.fees.total_fee_rebate = self.fees.total_fee_rebate.safe_add(fee)?;
 
 		Ok(())
 	}
@@ -132,14 +156,14 @@ impl UserStats {
 	}
 
 	pub fn get_total_30d_volume(&self) -> NormalResult<u64> {
-		self.trade_volume_30d.safe_add(self.collateral_volume_30d)
+		self.taker_volume_30d.safe_add(self.maker_volume_30d)
 	}
 
 	pub fn get_age_ts(&self, now: i64) -> i64 {
 		// upper bound of age of the user stats account
-		let min_action_ts: i64 = self.last_collateral_volume_30d_ts.min(
-			self.last_trade_volume_30d_ts
-		);
+		let min_action_ts: i64 = self.last_filler_volume_30d_ts
+			.min(self.last_maker_volume_30d_ts)
+			.min(self.last_taker_volume_30d_ts);
 		now.saturating_sub(min_action_ts).max(0)
 	}
 }

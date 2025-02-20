@@ -2,12 +2,7 @@ use crate::errors::{ NormalResult, ErrorCode };
 use crate::math::casting::Cast;
 use crate::math::margin::MarginRequirementType;
 use crate::math::safe_math::SafeMath;
-use crate::state::user::{ User };
-use crate::{
-	validate,
-	AMM_RESERVE_PRECISION_I128,
-	MARGIN_PRECISION_U128,
-};
+
 use anchor_lang::{ prelude::*, solana_program::msg };
 
 #[derive(Clone, Copy, Debug)]
