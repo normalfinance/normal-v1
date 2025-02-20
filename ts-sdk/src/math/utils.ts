@@ -1,4 +1,4 @@
-import { BN, ONE, ZERO } from '../';
+import { BN, ONE, ZERO } from '..';
 
 export function clampBN(x: BN, min: BN, max: BN): BN {
 	return BN.max(min, BN.min(x, max));

@@ -7,7 +7,7 @@ import {
 	NotSubscribedError,
 	ResubOpts,
 } from './types';
-import { MarketAccount, VaultAccount, StateAccount } from '../types';
+import { MarketAccount, StateAccount, InsuranceFundAccount } from '../types';
 import { Program } from '@coral-xyz/anchor';
 import StrictEventEmitter from 'strict-event-emitter-types';
 import { EventEmitter } from 'events';
@@ -15,8 +15,6 @@ import {
 	getNormalStateAccountPublicKey,
 	getMarketPublicKey,
 	getMarketPublicKeySync,
-	getVaultPublicKey,
-	getVaultPublicKeySync,
 } from '../addresses/pda';
 import { WebSocketAccountSubscriber } from './webSocketAccountSubscriber';
 import { Commitment, PublicKey } from '@solana/web3.js';
@@ -36,7 +34,6 @@ export class WebSocketNormalClientAccountSubscriber
 	program: Program;
 	commitment?: Commitment;
 	marketIndexes: number[];
-	vaultIndexes: number[];
 	oracleInfos: OracleInfo[];
 	oracleClientCache = new OracleClientCache();
 
@@ -51,14 +48,11 @@ export class WebSocketNormalClientAccountSubscriber
 	>();
 	oracleMap = new Map<number, PublicKey>();
 	oracleStringMap = new Map<number, string>();
-	vaultAccountSubscribers = new Map<number, AccountSubscriber<VaultAccount>>();
-	vaultOracleMap = new Map<number, PublicKey>();
-	vaultOracleStringMap = new Map<number, string>();
+
 	oracleSubscribers = new Map<string, AccountSubscriber<OraclePriceData>>();
 	delistedMarketSetting: DelistedMarketSetting;
 
 	initialMarketAccountData: Map<number, MarketAccount>;
-	initialVaultAccountData: Map<number, VaultAccount>;
 	initialOraclePriceData: Map<string, OraclePriceData>;
 
 	private isSubscribing = false;
@@ -68,7 +62,6 @@ export class WebSocketNormalClientAccountSubscriber
 	public constructor(
 		program: Program,
 		marketIndexes: number[],
-		vaultIndexes: number[],
 		oracleInfos: OracleInfo[],
 		shouldFindAllMarketsAndOracles: boolean,
 		delistedMarketSetting: DelistedMarketSetting,
@@ -79,12 +72,19 @@ export class WebSocketNormalClientAccountSubscriber
 		this.program = program;
 		this.eventEmitter = new EventEmitter();
 		this.marketIndexes = marketIndexes;
-		this.vaultIndexes = vaultIndexes;
 		this.oracleInfos = oracleInfos;
 		this.shouldFindAllMarketsAndOracles = shouldFindAllMarketsAndOracles;
 		this.delistedMarketSetting = delistedMarketSetting;
 		this.resubOpts = resubOpts;
 		this.commitment = commitment;
+	}
+	getOraclePriceDataAndSlotForVault(
+		vaultIndex: number
+	): DataAndSlot<OraclePriceData> | undefined {
+		throw new Error('Method not implemented.');
+	}
+	getInsuranceAccountAndSlot(): DataAndSlot<InsuranceFundAccount> {
+		throw new Error('Method not implemented.');
 	}
 	getOraclePriceDataAndSlotForPerpMarket(
 		marketIndex: number
@@ -114,22 +114,13 @@ export class WebSocketNormalClientAccountSubscriber
 		});
 
 		if (this.shouldFindAllMarketsAndOracles) {
-			const {
-				marketIndexes,
-				marketAccounts,
-				vaultIndexes,
-				vaultAccounts,
-				oracleInfos,
-			} = await findAllMarketAndOracles(this.program);
+			const { marketIndexes, marketAccounts, oracleInfos } =
+				await findAllMarketAndOracles(this.program);
 			this.marketIndexes = marketIndexes;
-			this.vaultIndexes = vaultIndexes;
 			this.oracleInfos = oracleInfos;
 			// front run and set the initial data here to save extra gma call in set initial data
 			this.initialMarketAccountData = new Map(
 				marketAccounts.map((market) => [market.marketIndex, market])
-			);
-			this.initialVaultAccountData = new Map(
-				vaultAccounts.map((vault) => [vault.vaultIndex, vault])
 			);
 		}
 
@@ -157,8 +148,6 @@ export class WebSocketNormalClientAccountSubscriber
 		await Promise.all([
 			// subscribe to market accounts
 			this.subscribeToMarketAccounts(),
-			// subscribe to spot market accounts
-			this.subscribeToVaultAccounts(),
 			// subscribe to oracles
 			this.subscribeToOracles(),
 		]);
@@ -167,7 +156,7 @@ export class WebSocketNormalClientAccountSubscriber
 
 		await this.handleDelistedMarkets();
 
-		await Promise.all([this.setOracleMap(), this.setVaultOracleMap()]);
+		await Promise.all([this.setOracleMap()]);
 
 		this.isSubscribing = false;
 		this.isSubscribed = true;
@@ -202,26 +191,6 @@ export class WebSocketNormalClientAccountSubscriber
 			);
 		}
 
-		if (!this.initialVaultAccountData) {
-			const vaultPublicKeys = this.vaultIndexes.map((marketIndex) =>
-				getVaultPublicKeySync(this.program.programId, marketIndex)
-			);
-			const vaultAccountInfos = await connection.getMultipleAccountsInfo(
-				vaultPublicKeys
-			);
-			this.initialVaultAccountData = new Map(
-				vaultAccountInfos
-					.filter((accountInfo) => !!accountInfo)
-					.map((accountInfo) => {
-						const vault = this.program.coder.accounts.decode(
-							'Vault',
-							accountInfo.data
-						);
-						return [vault.marketIndex, vault];
-					})
-			);
-		}
-
 		const oracleAccountInfos = await connection.getMultipleAccountsInfo(
 			this.oracleInfos.map((oracleInfo) => oracleInfo.publicKey)
 		);
@@ -233,8 +202,7 @@ export class WebSocketNormalClientAccountSubscriber
 
 				const oracleClient = this.oracleClientCache.get(
 					oracleInfo.source,
-					connection,
-					this.program
+					connection
 				);
 
 				const oraclePriceData = oracleClient.getOraclePriceDataFromBuffer(
@@ -249,7 +217,6 @@ export class WebSocketNormalClientAccountSubscriber
 
 	removeInitialData() {
 		this.initialMarketAccountData = new Map();
-		this.initialVaultAccountData = new Map();
 		this.initialOraclePriceData = new Map();
 	}
 
@@ -284,37 +251,6 @@ export class WebSocketNormalClientAccountSubscriber
 		return true;
 	}
 
-	async subscribeToVaultAccounts(): Promise<boolean> {
-		await Promise.all(
-			this.vaultIndexes.map((marketIndex) =>
-				this.subscribeToVaultAccount(marketIndex)
-			)
-		);
-		return true;
-	}
-
-	async subscribeToVaultAccount(vaultIndex: number): Promise<boolean> {
-		const marketPublicKey = await getVaultPublicKey(
-			this.program.programId,
-			vaultIndex
-		);
-		const accountSubscriber = new WebSocketAccountSubscriber<VaultAccount>(
-			'vault',
-			this.program,
-			marketPublicKey,
-			undefined,
-			this.resubOpts,
-			this.commitment
-		);
-		accountSubscriber.setData(this.initialVaultAccountData.get(vaultIndex));
-		await accountSubscriber.subscribe((data: VaultAccount) => {
-			this.eventEmitter.emit('vaultAccountUpdate', data);
-			this.eventEmitter.emit('update');
-		});
-		this.vaultAccountSubscribers.set(vaultIndex, accountSubscriber);
-		return true;
-	}
-
 	async subscribeToOracles(): Promise<boolean> {
 		await Promise.all(
 			this.oracleInfos
@@ -329,8 +265,7 @@ export class WebSocketNormalClientAccountSubscriber
 		const oracleString = oracleInfo.publicKey.toString();
 		const client = this.oracleClientCache.get(
 			oracleInfo.source,
-			this.program.provider.connection,
-			this.program
+			this.program.provider.connection
 		);
 		const accountSubscriber = new WebSocketAccountSubscriber<OraclePriceData>(
 			'oracle',
@@ -364,14 +299,6 @@ export class WebSocketNormalClientAccountSubscriber
 		);
 	}
 
-	async unsubscribeFromVaultAccounts(): Promise<void> {
-		await Promise.all(
-			Array.from(this.vaultAccountSubscribers.values()).map(
-				(accountSubscriber) => accountSubscriber.unsubscribe()
-			)
-		);
-	}
-
 	async unsubscribeFromOracles(): Promise<void> {
 		await Promise.all(
 			Array.from(this.oracleSubscribers.values()).map((accountSubscriber) =>
@@ -385,17 +312,11 @@ export class WebSocketNormalClientAccountSubscriber
 			return;
 		}
 
-		const promises = [this.stateAccountSubscriber.fetch()]
-			.concat(
-				Array.from(this.marketAccountSubscribers.values()).map((subscriber) =>
-					subscriber.fetch()
-				)
+		const promises = [this.stateAccountSubscriber.fetch()].concat(
+			Array.from(this.marketAccountSubscribers.values()).map((subscriber) =>
+				subscriber.fetch()
 			)
-			.concat(
-				Array.from(this.vaultAccountSubscribers.values()).map((subscriber) =>
-					subscriber.fetch()
-				)
-			);
+		);
 
 		await Promise.all(promises);
 	}
@@ -408,19 +329,9 @@ export class WebSocketNormalClientAccountSubscriber
 		await this.stateAccountSubscriber.unsubscribe();
 
 		await this.unsubscribeFromMarketAccounts();
-		await this.unsubscribeFromVaultAccounts();
 		await this.unsubscribeFromOracles();
 
 		this.isSubscribed = false;
-	}
-
-	async addVault(vaultIndex: number): Promise<boolean> {
-		if (this.vaultAccountSubscribers.has(vaultIndex)) {
-			return true;
-		}
-		const subscriptionSuccess = this.subscribeToVaultAccount(vaultIndex);
-		await this.setVaultOracleMap();
-		return subscriptionSuccess;
 	}
 
 	async addMarket(marketIndex: number): Promise<boolean> {
@@ -468,38 +379,13 @@ export class WebSocketNormalClientAccountSubscriber
 		await Promise.all(addOraclePromises);
 	}
 
-	async setVaultOracleMap() {
-		const vaults = this.getVaultAccountsAndSlots();
-		const addOraclePromises = [];
-		for (const vault of vaults) {
-			if (!vault || !vault.data) {
-				continue;
-			}
-			const vaultAccount = vault.data;
-			const vaultIndex = vaultAccount.vaultIndex;
-			const oracle = vaultAccount.oracle;
-			if (!this.oracleSubscribers.has(oracle.toBase58())) {
-				addOraclePromises.push(
-					this.addOracle({
-						publicKey: oracle,
-						source: vaultAccount.oracleSource,
-					})
-				);
-			}
-			this.vaultOracleMap.set(vaultIndex, oracle);
-			this.vaultOracleStringMap.set(vaultIndex, oracle.toBase58());
-		}
-		await Promise.all(addOraclePromises);
-	}
-
 	async handleDelistedMarkets(): Promise<void> {
 		if (this.delistedMarketSetting === DelistedMarketSetting.Subscribe) {
 			return;
 		}
 
 		const { marketIndexes, oracles } = findDelistedMarketsAndOracles(
-			this.getMarketAccountsAndSlots(),
-			this.getVaultAccountsAndSlots()
+			this.getMarketAccountsAndSlots()
 		);
 
 		for (const marketIndex of marketIndexes) {
@@ -543,19 +429,6 @@ export class WebSocketNormalClientAccountSubscriber
 		);
 	}
 
-	public getVaultAccountAndSlot(
-		vaultIndex: number
-	): DataAndSlot<VaultAccount> | undefined {
-		this.assertIsSubscribed();
-		return this.vaultAccountSubscribers.get(vaultIndex).dataAndSlot;
-	}
-
-	public getVaultAccountsAndSlots(): DataAndSlot<VaultAccount>[] {
-		return Array.from(this.vaultAccountSubscribers.values()).map(
-			(subscriber) => subscriber.dataAndSlot
-		);
-	}
-
 	public getOraclePriceDataAndSlot(
 		oraclePublicKey: PublicKey | string
 	): DataAndSlot<OraclePriceData> | undefined {
@@ -586,24 +459,6 @@ export class WebSocketNormalClientAccountSubscriber
 		if (!marketAccount.data.amm.oracle.equals(oracle)) {
 			// If the oracle has changed, we need to update the oracle map in background
 			this.setOracleMap();
-		}
-
-		return this.getOraclePriceDataAndSlot(oracleString);
-	}
-
-	public getOraclePriceDataAndSlotForVault(
-		vaultIndex: number
-	): DataAndSlot<OraclePriceData> | undefined {
-		const vaultAccount = this.getVaultAccountAndSlot(vaultIndex);
-		const oracle = this.vaultOracleMap.get(vaultIndex);
-		const oracleString = this.vaultOracleStringMap.get(vaultIndex);
-		if (!vaultAccount || !oracle) {
-			return undefined;
-		}
-
-		if (!vaultAccount.data.oracle.equals(oracle)) {
-			// If the oracle has changed, we need to update the oracle map in background
-			this.setVaultOracleMap();
 		}
 
 		return this.getOraclePriceDataAndSlot(oracleString);

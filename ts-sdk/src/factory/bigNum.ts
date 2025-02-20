@@ -1,6 +1,6 @@
 import { BN } from '@coral-xyz/anchor';
 import { assert } from '../assert/assert';
-import { ZERO } from './../constants/numericConstants';
+import { ZERO } from '../constants/numericConstants';
 
 export class BigNum {
 	val: BN;

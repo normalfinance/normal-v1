@@ -1,6 +1,6 @@
 {
-	"name": "@normalfinance/sdk",
-	"version": "0.1.0",
+	"name": "@normalfinance/solana-sdk",
+	"version": "0.0.1",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
 	"contributors": [
@@ -10,7 +10,7 @@
 	"homepage": "https://www.normalfinance.io/",
 	"repository": {
 		"type": "git",
-		"url": "git@github.com:normalfinance/protocol-v1.git"
+		"url": "git@github.com:normalfinance/normal-v1.git"
 	},
 	"scripts": {
 		"lint": "eslint './**/*.{ts,tsx}' --quiet",
@@ -28,7 +28,7 @@
 		"normal finance",
 		"normal",
 		"solana",
-		"amm"
+		"defi"
 	],
 	"license": "Apache-2.0",
 	"directories": {

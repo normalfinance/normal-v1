@@ -4,7 +4,6 @@ import {
 	UserAccount,
 	WrappedEvent,
 	NewUserRecord,
-	LPRecord,
 	StateAccount,
 	BN,
 	UserSubscriptionConfig,
@@ -268,10 +267,11 @@ export class UserMap implements UserMapInterface {
 		if (record.eventType === 'NewUserRecord') {
 			const newUserRecord = record as NewUserRecord;
 			await this.mustGet(newUserRecord.user.toString());
-		} else if (record.eventType === 'LPRecord') {
-			const lpRecord = record as LPRecord;
-			await this.mustGet(lpRecord.user.toString());
 		}
+		// else if (record.eventType === 'LPRecord') {
+		// 	const lpRecord = record as LPRecord;
+		// 	await this.mustGet(lpRecord.user.toString());
+		// }
 	}
 
 	public *values(): IterableIterator<User> {
@@ -306,9 +306,9 @@ export class UserMap implements UserMapInterface {
 	): PublicKey[] {
 		const usersMeetingCriteria = Array.from(this.values()).filter((user) => {
 			let pass = true;
-			if (filterCriteria && filterCriteria.hasOpenOrders) {
-				pass = pass && user.getUserAccount().hasOpenOrder;
-			}
+			// if (filterCriteria && filterCriteria.hasOpenOrders) {
+			// 	pass = pass && user.getUserAccount().hasOpenOrder;
+			// }
 			return pass;
 		});
 		const userAuths = new Set(

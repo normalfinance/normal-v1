@@ -1,7 +1,7 @@
 import { UserAccount } from '../types';
 import { PublicKey } from '@solana/web3.js';
-import { BN, VaultPosition } from '../';
-import { ZERO } from '../';
+import { BN } from '..';
+import { ZERO } from '..';
 
 function readUnsignedBigInt64LE(buffer: Buffer, offset: number): BN {
 	return new BN(buffer.subarray(offset, offset + 8), 10, 'le');
@@ -29,7 +29,7 @@ export function decodeUser(buffer: Buffer): UserAccount {
 	}
 	offset += 32;
 
-	const vaultPositions: VaultPosition[] = [];
+	const vaultPositions: any[] = [];
 	for (let i = 0; i < 8; i++) {
 		const baseAssetAmount = readSignedBigInt64LE(buffer, offset + 8);
 		const quoteAssetAmount = readSignedBigInt64LE(buffer, offset + 16);
@@ -105,7 +105,6 @@ export function decodeUser(buffer: Buffer): UserAccount {
 		authority,
 		delegate,
 		name,
-		vaultPositions,
 		lastActiveSlot,
 		subAccountId,
 		status,

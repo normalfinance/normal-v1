@@ -1,13 +1,8 @@
 import { Commitment, PublicKey, TransactionSignature } from '@solana/web3.js';
 import {
-	DepositRecord,
-	LiquidationRecord,
 	NewUserRecord,
-	LPRecord,
 	InsuranceFundRecord,
 	InsuranceFundStakeRecord,
-	SwapRecord,
-	SpotMarketVaultDepositRecord,
 } from '../index';
 import { EventEmitter } from 'events';
 
@@ -27,14 +22,9 @@ export type EventSubscriptionOptions = {
 
 export const DefaultEventSubscriptionOptions: EventSubscriptionOptions = {
 	eventTypes: [
-		'DepositRecord',
-		'LiquidationRecord',
 		'NewUserRecord',
-		'LPRecord',
 		'InsuranceFundRecord',
 		'InsuranceFundStakeRecord',
-		'SwapRecord',
-		'SpotMarketVaultDepositRecord',
 	],
 	maxEventsPerType: 4096,
 	orderBy: 'blockchain',
@@ -63,27 +53,17 @@ export type WrappedEvent<Type extends EventType> = EventMap[Type] & {
 export type WrappedEvents = WrappedEvent<EventType>[];
 
 export type EventMap = {
-	DepositRecord: Event<DepositRecord>;
-	LiquidationRecord: Event<LiquidationRecord>;
 	NewUserRecord: Event<NewUserRecord>;
-	LPRecord: Event<LPRecord>;
 	InsuranceFundRecord: Event<InsuranceFundRecord>;
 	InsuranceFundStakeRecord: Event<InsuranceFundStakeRecord>;
-	SwapRecord: Event<SwapRecord>;
-	SpotMarketVaultDepositRecord: Event<SpotMarketVaultDepositRecord>;
 };
 
 export type EventType = keyof EventMap;
 
 export type NormalEvent =
-	| Event<DepositRecord>
-	| Event<LiquidationRecord>
 	| Event<NewUserRecord>
-	| Event<LPRecord>
 	| Event<InsuranceFundRecord>
-	| Event<InsuranceFundStakeRecord>
-	| Event<SwapRecord>
-	| Event<SpotMarketVaultDepositRecord>;
+	| Event<InsuranceFundStakeRecord>;
 
 export interface EventSubscriberEvents {
 	newEvent: (event: WrappedEvent<EventType>) => void;

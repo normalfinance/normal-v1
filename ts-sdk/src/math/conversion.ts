@@ -1,4 +1,4 @@
-import { BN } from '../';
+import { BN } from '..';
 import { PRICE_PRECISION } from '../constants/numericConstants';
 
 export const convertToNumber = (

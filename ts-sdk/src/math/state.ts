@@ -1,5 +1,5 @@
 import { StateAccount } from '../types';
-import { BN, LAMPORTS_PRECISION, PERCENTAGE_PRECISION, ZERO } from '../';
+import { BN, LAMPORTS_PRECISION, PERCENTAGE_PRECISION, ZERO } from '..';
 
 export function calculateInitUserFee(stateAccount: StateAccount): BN {
 	const maxInitFee = new BN(stateAccount.maxInitializeUserFee)

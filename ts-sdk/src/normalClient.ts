@@ -19,39 +19,17 @@ import {
 } from '@solana/spl-token';
 import {
 	NormalClientMetricsEvents,
-	isVariant,
 	IWallet,
-	MakerInfo,
-	MappedRecord,
-	MarketType,
-	ModifyOrderParams,
-	ModifyOrderPolicy,
-	OpenbookV2FulfillmentConfigAccount,
-	OptionalOrderParams,
-	Order,
-	OrderParams,
-	OrderTriggerCondition,
-	OrderType,
-	MarketAccount,
-	MarketExtendedInfo,
-	PhoenixV1FulfillmentConfigAccount,
-	PlaceAndTakeOrderSuccessCondition,
-	PositionDirection,
 	ReferrerInfo,
 	ReferrerNameAccount,
-	SerumV3FulfillmentConfigAccount,
-	SettlePnlMode,
 	SignedTxData,
-	SpotBalanceType,
-	SpotMarketAccount,
-	SpotPosition,
 	StateAccount,
-	SwapReduceOnly,
-	TakerInfo,
 	TxParams,
 	UserAccount,
 	UserStatsAccount,
 	InsuranceFundAccount,
+	MarketAccount,
+	isVariant,
 } from './types';
 import normalIDL from './idl/normal.json';
 
@@ -82,14 +60,8 @@ import {
 	getNormalSignerPublicKey,
 	getNormalStateAccountPublicKey,
 	getInsuranceFundStakeAccountPublicKey,
-	getOpenbookV2FulfillmentConfigPublicKey,
-	getMarketPublicKey,
-	getPhoenixFulfillmentConfigPublicKey,
 	getPythPullOraclePublicKey,
 	getReferrerNamePublicKeySync,
-	getSerumFulfillmentConfigPublicKey,
-	getSerumSignerPublicKey,
-	getSpotMarketPublicKey,
 	getUserAccountPublicKey,
 	getUserAccountPublicKeySync,
 	getUserStatsAccountPublicKey,
@@ -103,14 +75,11 @@ import {
 import { TxSender, TxSigAndSlot } from './tx/types';
 import {
 	BASE_PRECISION,
-	GOV_SPOT_MARKET_INDEX,
 	PRICE_PRECISION,
 	QUOTE_PRECISION,
 	QUOTE_SPOT_MARKET_INDEX,
 	ZERO,
 } from './constants/numericConstants';
-import { findDirectionToClose, positionIsAvailable } from './math/position';
-import { getSignedTokenAmount, getTokenAmount } from './math/spotBalance';
 import { decodeName, DEFAULT_USER_NAME, encodeName } from './userName';
 import { OraclePriceData } from './oracles/types';
 import { NormalClientConfig } from './normalClientConfig';
@@ -121,29 +90,19 @@ import { User } from './user';
 import { UserSubscriptionConfig } from './userConfig';
 import {
 	configs,
-	DRIFT_ORACLE_RECEIVER_ID,
+	NORMAL_ORACLE_RECEIVER_ID,
 	DEFAULT_CONFIRMATION_OPTS,
-	DRIFT_PROGRAM_ID,
+	NORMAL_PROGRAM_ID,
 } from './config';
-import { WRAPPED_SOL_MINT } from './constants/spotMarkets';
+import { WRAPPED_SOL_MINT } from './constants/markets';
 import { UserStats } from './userStats';
-import { isSpotPositionAvailable } from './math/spotPosition';
-import { calculateMarketMaxAvailableInsurance } from './math/market';
 import { fetchUserStatsAccount } from './accounts/fetch';
-import { castNumberToSpotPrecision } from './math/spotMarket';
-import {
-	JupiterClient,
-	QuoteResponse,
-	Route,
-	SwapMode,
-} from './jupiter/jupiterClient';
+
 import { getNonIdleUserFilter } from './memcmp';
 import { UserStatsSubscriptionConfig } from './userStatsConfig';
-import { getMarinadeDepositIx, getMarinadeFinanceProgram } from './marinade';
-import { getOrderParams } from './orderParams';
 import { numberToSafeBN } from './math/utils';
 import { TransactionParamProcessor } from './tx/txParamProcessor';
-import { isOracleValid, trimVaaSignatures } from './math/oracles';
+import { trimVaaSignatures } from './math/oracles';
 import { TxHandler } from './tx/txHandler';
 import {
 	DEFAULT_RECEIVER_PROGRAM_ID,
@@ -164,9 +123,7 @@ import * as ed from '@noble/ed25519';
 type RemainingAccountParams = {
 	userAccounts: UserAccount[];
 	writableMarketIndexes?: number[];
-	writableSpotMarketIndexes?: number[];
 	readableMarketIndex?: number | number[];
-	readableSpotMarketIndexes?: number[];
 	useMarketLastSlotCache?: boolean;
 };
 
@@ -194,9 +151,7 @@ export class NormalClient {
 	_isSubscribed = false;
 	txSender: TxSender;
 	marketLastSlotCache = new Map<number, number>();
-	spotMarketLastSlotCache = new Map<number, number>();
 	mustIncludeMarketIndexes = new Set<number>();
-	mustIncludeSpotMarketIndexes = new Set<number>();
 	authority: PublicKey;
 	marketLookupTable: PublicKey;
 	lookupTableAccount: AddressLookupTableAccount;
@@ -206,14 +161,9 @@ export class NormalClient {
 	txVersion: TransactionVersion;
 	txParams: TxParams;
 	enableMetricsEvents?: boolean;
-
 	txHandler: TxHandler;
-
 	receiverProgram?: Program<PythSolanaReceiver>;
 	wormholeProgram?: Program<WormholeCoreBridgeSolana>;
-	sbOnDemandProgramdId: PublicKey;
-	sbOnDemandProgram?: Program30<Idl30>;
-	sbProgramFeedConfigs?: Map<string, any>;
 
 	public get isSubscribed() {
 		return this._isSubscribed && this.accountSubscriber.isSubscribed;
@@ -239,7 +189,7 @@ export class NormalClient {
 		);
 		this.program = new Program(
 			normalIDL as Idl,
-			config.programID ?? new PublicKey(DRIFT_PROGRAM_ID),
+			config.programID ?? new PublicKey(NORMAL_PROGRAM_ID),
 			this.provider
 		);
 
@@ -338,15 +288,13 @@ export class NormalClient {
 		const delistedMarketSetting =
 			config.delistedMarketSetting || DelistedMarketSetting.Subscribe;
 		const noMarketsAndOraclesSpecified =
-			config.marketIndexes === undefined &&
-			config.vaultIndexes === undefined &&
+			// config.marketIndexes === undefined &&
 			config.oracleInfos === undefined;
 		if (config.accountSubscription?.type === 'polling') {
 			this.accountSubscriber = new PollingNormalClientAccountSubscriber(
 				this.program,
 				config.accountSubscription.accountLoader,
 				config.marketIndexes ?? [],
-				config.vaultIndexes ?? [],
 				config.oracleInfos ?? [],
 				noMarketsAndOraclesSpecified,
 				delistedMarketSetting
@@ -355,7 +303,6 @@ export class NormalClient {
 			this.accountSubscriber = new WebSocketNormalClientAccountSubscriber(
 				this.program,
 				config.marketIndexes ?? [],
-				config.vaultIndexes ?? [],
 				config.oracleInfos ?? [],
 				noMarketsAndOraclesSpecified,
 				delistedMarketSetting,
@@ -487,6 +434,18 @@ export class NormalClient {
 		return this.accountSubscriber.getStateAccountAndSlot().data;
 	}
 
+	public getInsuranceFundAccount(): InsuranceFundAccount {
+		return this.accountSubscriber.getInsuranceAccountAndSlot().data;
+	}
+
+	/**
+	 * Forces a fetch to rpc before returning accounts. Useful for anchor tests.
+	 */
+	public async forceGetInsuranceFundAccount(): Promise<InsuranceFundAccount> {
+		await this.accountSubscriber.fetch();
+		return this.accountSubscriber.getInsuranceAccountAndSlot().data;
+	}
+
 	public getMarketAccount(marketIndex: number): MarketAccount | undefined {
 		return this.accountSubscriber.getMarketAccountAndSlot(marketIndex)?.data;
 	}
@@ -515,40 +474,6 @@ export class NormalClient {
 			.getMarketAccountsAndSlots()
 			.filter((value) => value !== undefined)
 			.map((value) => value.data);
-	}
-
-	public getSpotMarketAccount(
-		marketIndex: number
-	): SpotMarketAccount | undefined {
-		return this.accountSubscriber.getSpotMarketAccountAndSlot(marketIndex).data;
-	}
-
-	public getInsuranceFundAccount(): InsuranceFundAccount | undefined {
-		return this.accountSubscriber.getInsuranceAccountAndSlot().data;
-	}
-
-	/**
-	 * Forces a fetch to rpc before returning accounts. Useful for anchor tests.
-	 * @param marketIndex
-	 */
-	public async forceGetSpotMarketAccount(
-		marketIndex: number
-	): Promise<SpotMarketAccount | undefined> {
-		await this.accountSubscriber.fetch();
-		return this.accountSubscriber.getSpotMarketAccountAndSlot(marketIndex).data;
-	}
-
-	public getSpotMarketAccounts(): SpotMarketAccount[] {
-		return this.accountSubscriber
-			.getSpotMarketAccountsAndSlots()
-			.filter((value) => value !== undefined)
-			.map((value) => value.data);
-	}
-
-	public getQuoteSpotMarketAccount(): SpotMarketAccount {
-		return this.accountSubscriber.getSpotMarketAccountAndSlot(
-			QUOTE_SPOT_MARKET_INDEX
-		).data;
 	}
 
 	public getOraclePriceDataAndSlot(
@@ -834,23 +759,6 @@ export class NormalClient {
 		return result;
 	}
 
-	// __   __  _______  _______  ______
-	// |  | |  ||       ||       ||    _ |
-	// |  | |  ||  _____||    ___||   | ||
-	// |  |_|  || |_____ |   |___ |   |_||_
-	// |       ||_____  ||    ___||    __  |
-	// |       | _____| ||   |___ |   |  | |
-	// |_______||_______||_______||___|  |_|
-
-	//  ___      ___  __       ____  ____  ___  ___________
-	// |"  \    /"  |/""\     ("  _||_ " ||"  |("     _   ")
-	//  \   \  //  //    \    |   (  ) : |||  | )__/  \\__/
-	//   \\  \/. .//' /\  \   (:  |  | . )|:  |    \\_ /
-	//    \.    ////  __'  \   \\ \__/ //  \  |___ |.  |
-	// 	   \\   //   /  \\  \  /\\ __ //\ ( \_|:  \\:  |
-	// 	    \__/(___/    \___)(__________) \_______)\__|
-	//
-
 	public async initializeUserAccount(
 		subAccountId = 0,
 		name?: string,
@@ -908,6 +816,19 @@ export class NormalClient {
 				isSigner: false,
 			});
 		}
+
+		// const state = this.getStateAccount();
+		// if (!state.whitelistMint.equals(PublicKey.default)) {
+		// 	const associatedTokenPublicKey = await getAssociatedTokenAddress(
+		// 		state.whitelistMint,
+		// 		this.wallet.publicKey
+		// 	);
+		// 	remainingAccounts.push({
+		// 		pubkey: associatedTokenPublicKey,
+		// 		isWritable: false,
+		// 		isSigner: false,
+		// 	});
+		// }
 
 		if (name === undefined) {
 			if (subAccountId === 0) {
@@ -1066,6 +987,61 @@ export class NormalClient {
 		);
 
 		return ix;
+	}
+
+	public async getUpdateUserMarginTradingEnabledIx(
+		marginTradingEnabled: boolean,
+		subAccountId = 0,
+		userAccountPublicKey?: PublicKey
+	): Promise<TransactionInstruction> {
+		const userAccountPublicKeyToUse =
+			userAccountPublicKey ||
+			getUserAccountPublicKeySync(
+				this.program.programId,
+				this.wallet.publicKey,
+				subAccountId
+			);
+
+		await this.addUser(subAccountId, this.wallet.publicKey);
+
+		let remainingAccounts;
+		try {
+			remainingAccounts = this.getRemainingAccounts({
+				userAccounts: [this.getUserAccount(subAccountId)],
+			});
+		} catch (err) {
+			remainingAccounts = [];
+		}
+
+		return await this.program.instruction.updateUserMarginTradingEnabled(
+			subAccountId,
+			marginTradingEnabled,
+			{
+				accounts: {
+					user: userAccountPublicKeyToUse,
+					authority: this.wallet.publicKey,
+				},
+				remainingAccounts,
+			}
+		);
+	}
+
+	public async updateUserMarginTradingEnabled(
+		updates: { marginTradingEnabled: boolean; subAccountId: number }[]
+	): Promise<TransactionSignature> {
+		const ixs = await Promise.all(
+			updates.map(async ({ marginTradingEnabled, subAccountId }) => {
+				return await this.getUpdateUserMarginTradingEnabledIx(
+					marginTradingEnabled,
+					subAccountId
+				);
+			})
+		);
+
+		const tx = await this.buildTransaction(ixs, this.txParams);
+
+		const { txSig } = await this.sendTransaction(tx, [], this.opts);
+		return txSig;
 	}
 
 	public async updateUserDelegate(
@@ -1391,62 +1367,6 @@ export class NormalClient {
 		return this.getUser(subAccountId).getUserAccountAndSlot();
 	}
 
-	public getVaultPosition(
-		marketIndex: number,
-		subAccountId?: number
-	): SpotPosition | undefined {
-		return this.getUserAccount(subAccountId).vaultPositions.find(
-			(vaultPosition) => vaultPosition.marketIndex === marketIndex
-		);
-	}
-
-	public getQuoteAssetTokenAmount(): BN {
-		return this.getTokenAmount(QUOTE_SPOT_MARKET_INDEX);
-	}
-
-	/**
-	 * Returns the token amount for a given market. The spot market precision is based on the token mint decimals.
-	 * Positive if it is a deposit, negative if it is a borrow.
-	 * @param marketIndex
-	 */
-	public getTokenAmount(marketIndex: number): BN {
-		const spotPosition = this.getSpotPosition(marketIndex);
-		if (spotPosition === undefined) {
-			return ZERO;
-		}
-		const spotMarket = this.getSpotMarketAccount(marketIndex);
-		return getSignedTokenAmount(
-			getTokenAmount(
-				spotPosition.scaledBalance,
-				spotMarket,
-				spotPosition.balanceType
-			),
-			spotPosition.balanceType
-		);
-	}
-
-	/**
-	 * Converts an amount to the spot precision for a given market. The spot market precision is based on the token mint decimals.
-	 * @param marketIndex
-	 * @param amount
-	 */
-	public convertToSpotPrecision(marketIndex: number, amount: BN | number): BN {
-		const spotMarket = this.getSpotMarketAccount(marketIndex);
-		return castNumberToSpotPrecision(amount, spotMarket);
-	}
-
-	/**
-	 * Converts an amount to the perp precision. The perp market precision is {@link BASE_PRECISION} (1e9).
-	 * @param amount
-	 */
-	public convertToPerpPrecision(amount: BN | number): BN {
-		if (typeof amount === 'number') {
-			return numberToSafeBN(amount, BASE_PRECISION);
-		} else {
-			return amount.mul(BASE_PRECISION);
-		}
-	}
-
 	/**
 	 * Converts an amount to the price precision. The perp market precision is {@link PRICE_PRECISION} (1e6).
 	 * @param amount
@@ -1459,31 +1379,8 @@ export class NormalClient {
 		}
 	}
 
-	/**
-	 * Each normal instruction must include perp and sport market accounts in the ix remaining accounts.
-	 * Use this function to force a subset of markets to be included in the remaining accounts for every ix
-	 *
-	 * @param marketIndexes
-	 * @param spotMarketIndexes
-	 */
-	public mustIncludeMarketsInIx({
-		marketIndexes,
-		spotMarketIndexes,
-	}: {
-		marketIndexes: number[];
-		spotMarketIndexes: number[];
-	}): void {
-		marketIndexes.forEach((marketIndex) => {
-			this.mustIncludeMarketIndexes.add(marketIndex);
-		});
-
-		spotMarketIndexes.forEach((spotMarketIndex) => {
-			this.mustIncludeSpotMarketIndexes.add(spotMarketIndex);
-		});
-	}
-
 	getRemainingAccounts(params: RemainingAccountParams): AccountMeta[] {
-		const { oracleAccountMap, vaultAccountMap, marketAccountMap } =
+		const { oracleAccountMap, marketAccountMap } =
 			this.getRemainingAccountMapsForUsers(params.userAccounts);
 
 		if (params.useMarketLastSlotCache) {
@@ -1497,29 +1394,10 @@ export class NormalClient {
 						marketIndex,
 						false,
 						oracleAccountMap,
-						spotMarketAccountMap,
 						marketAccountMap
 					);
 				} else {
 					this.marketLastSlotCache.delete(marketIndex);
-				}
-			}
-
-			for (const [
-				marketIndex,
-				slot,
-			] of this.spotMarketLastSlotCache.entries()) {
-				// if cache has more recent slot than user positions account slot, add market to remaining accounts
-				// otherwise remove from slot
-				if (slot > lastUserSlot) {
-					this.addSpotMarketToRemainingAccountMaps(
-						marketIndex,
-						false,
-						oracleAccountMap,
-						spotMarketAccountMap
-					);
-				} else {
-					this.spotMarketLastSlotCache.delete(marketIndex);
 				}
 			}
 		}
@@ -1533,7 +1411,6 @@ export class NormalClient {
 					marketIndex,
 					false,
 					oracleAccountMap,
-					spotMarketAccountMap,
 					marketAccountMap
 				);
 			}
@@ -1544,28 +1421,7 @@ export class NormalClient {
 				marketIndex,
 				false,
 				oracleAccountMap,
-				spotMarketAccountMap,
 				marketAccountMap
-			);
-		}
-
-		if (params.readableSpotMarketIndexes !== undefined) {
-			for (const readableSpotMarketIndex of params.readableSpotMarketIndexes) {
-				this.addSpotMarketToRemainingAccountMaps(
-					readableSpotMarketIndex,
-					false,
-					oracleAccountMap,
-					spotMarketAccountMap
-				);
-			}
-		}
-
-		for (const spotMarketIndex of this.mustIncludeSpotMarketIndexes.values()) {
-			this.addSpotMarketToRemainingAccountMaps(
-				spotMarketIndex,
-				false,
-				oracleAccountMap,
-				spotMarketAccountMap
 			);
 		}
 
@@ -1575,27 +1431,14 @@ export class NormalClient {
 					writableMarketIndex,
 					true,
 					oracleAccountMap,
-					spotMarketAccountMap,
 					marketAccountMap
-				);
-			}
-		}
-
-		if (params.writableSpotMarketIndexes !== undefined) {
-			for (const writableSpotMarketIndex of params.writableSpotMarketIndexes) {
-				this.addSpotMarketToRemainingAccountMaps(
-					writableSpotMarketIndex,
-					true,
-					oracleAccountMap,
-					spotMarketAccountMap
 				);
 			}
 		}
 
 		return [
 			...oracleAccountMap.values(),
-			...spotMarketAccountMap.values(),
-			...marketAccountMap.values(),
+			// ...marketAccountMap.values(),
 		];
 	}
 
@@ -1603,7 +1446,6 @@ export class NormalClient {
 		marketIndex: number,
 		writable: boolean,
 		oracleAccountMap: Map<string, AccountMeta>,
-		spotMarketAccountMap: Map<number, AccountMeta>,
 		marketAccountMap: Map<number, AccountMeta>
 	): void {
 		const marketAccount = this.getMarketAccount(marketIndex);
@@ -1619,89 +1461,37 @@ export class NormalClient {
 			isSigner: false,
 			isWritable: oracleWritable,
 		});
-		this.addSpotMarketToRemainingAccountMaps(
-			marketAccount.quoteSpotMarketIndex,
-			false,
-			oracleAccountMap,
-			spotMarketAccountMap
-		);
-	}
-
-	addSpotMarketToRemainingAccountMaps(
-		marketIndex: number,
-		writable: boolean,
-		oracleAccountMap: Map<string, AccountMeta>,
-		spotMarketAccountMap: Map<number, AccountMeta>
-	): void {
-		const spotMarketAccount = this.getSpotMarketAccount(marketIndex);
-		spotMarketAccountMap.set(spotMarketAccount.marketIndex, {
-			pubkey: spotMarketAccount.pubkey,
-			isSigner: false,
-			isWritable: writable,
-		});
-		if (!spotMarketAccount.oracle.equals(PublicKey.default)) {
-			oracleAccountMap.set(spotMarketAccount.oracle.toString(), {
-				pubkey: spotMarketAccount.oracle,
-				isSigner: false,
-				isWritable: false,
-			});
-		}
 	}
 
 	getRemainingAccountMapsForUsers(userAccounts: UserAccount[]): {
 		oracleAccountMap: Map<string, AccountMeta>;
-		vaultAccountMap: Map<number, AccountMeta>;
 		marketAccountMap: Map<number, AccountMeta>;
 	} {
 		const oracleAccountMap = new Map<string, AccountMeta>();
-		const vaultAccountMap = new Map<number, AccountMeta>();
 		const marketAccountMap = new Map<number, AccountMeta>();
 
 		for (const userAccount of userAccounts) {
-			for (const spotPosition of userAccount.spotPositions) {
-				if (!isSpotPositionAvailable(spotPosition)) {
-					this.addSpotMarketToRemainingAccountMaps(
-						spotPosition.marketIndex,
-						false,
-						oracleAccountMap,
-						vaultAccountMap
-					);
-
-					if (
-						!spotPosition.openAsks.eq(ZERO) ||
-						!spotPosition.openBids.eq(ZERO)
-					) {
-						this.addSpotMarketToRemainingAccountMaps(
-							QUOTE_SPOT_MARKET_INDEX,
-							false,
-							oracleAccountMap,
-							vaultAccountMap
-						);
-					}
-				}
-			}
-			for (const position of userAccount.vaultPositions) {
-				if (!positionIsAvailable(position)) {
-					this.addMarketToRemainingAccountMaps(
-						position.marketIndex,
-						false,
-						oracleAccountMap,
-						vaultAccountMap,
-						marketAccountMap
-					);
-				}
-			}
+			// for (const position of userAccount.perpPositions) {
+			// 	if (!positionIsAvailable(position)) {
+			// 		this.addPerpMarketToRemainingAccountMaps(
+			// 			position.marketIndex,
+			// 			false,
+			// 			oracleAccountMap,
+			// 			spotMarketAccountMap,
+			// 			perpMarketAccountMap
+			// 		);
+			// 	}
+			// }
 		}
 
 		return {
 			oracleAccountMap,
-			vaultAccountMap,
 			marketAccountMap,
 		};
 	}
 
 	/**
-	 * Get the associated token address for the given spot market
+	 * Get the associated token address for the given market
 	 * @param marketIndex
 	 * @param useNative
 	 * @param tokenProgram
@@ -1711,11 +1501,11 @@ export class NormalClient {
 		useNative = true,
 		tokenProgram = TOKEN_PROGRAM_ID
 	): Promise<PublicKey> {
-		const spotMarket = this.getSpotMarketAccount(marketIndex);
-		if (useNative && spotMarket.mint.equals(WRAPPED_SOL_MINT)) {
+		const market = this.getMarketAccount(marketIndex);
+		if (useNative && market.mint.equals(WRAPPED_SOL_MINT)) {
 			return this.wallet.publicKey;
 		}
-		const mint = spotMarket.mint;
+		const mint = market.mint;
 		return await getAssociatedTokenAddress(
 			mint,
 			this.wallet.publicKey,
@@ -1747,167 +1537,6 @@ export class NormalClient {
 			programId: ASSOCIATED_TOKEN_PROGRAM_ID,
 			data: Buffer.from([0x1]),
 		});
-	}
-
-	public async getDepositTxnIx(
-		amount: BN,
-		marketIndex: number,
-		associatedTokenAccount: PublicKey,
-		subAccountId?: number,
-		reduceOnly = false
-	): Promise<TransactionInstruction[]> {
-		const spotMarketAccount = this.getSpotMarketAccount(marketIndex);
-
-		const isSolMarket = spotMarketAccount.mint.equals(WRAPPED_SOL_MINT);
-
-		const signerAuthority = this.wallet.publicKey;
-
-		const createWSOLTokenAccount =
-			isSolMarket && associatedTokenAccount.equals(signerAuthority);
-
-		const instructions = [];
-
-		if (createWSOLTokenAccount) {
-			const { ixs, pubkey } = await this.getWrappedSolAccountCreationIxs(
-				amount,
-				true
-			);
-
-			associatedTokenAccount = pubkey;
-
-			instructions.push(...ixs);
-		}
-
-		const depositCollateralIx = await this.getDepositInstruction(
-			amount,
-			marketIndex,
-			associatedTokenAccount,
-			subAccountId,
-			reduceOnly,
-			true
-		);
-
-		instructions.push(depositCollateralIx);
-
-		// Close the wrapped sol account at the end of the transaction
-		if (createWSOLTokenAccount) {
-			instructions.push(
-				createCloseAccountInstruction(
-					associatedTokenAccount,
-					signerAuthority,
-					signerAuthority,
-					[]
-				)
-			);
-		}
-
-		return instructions;
-	}
-
-	public async createDepositTxn(
-		amount: BN,
-		marketIndex: number,
-		associatedTokenAccount: PublicKey,
-		subAccountId?: number,
-		reduceOnly = false,
-		txParams?: TxParams
-	): Promise<VersionedTransaction | Transaction> {
-		const instructions = await this.getDepositTxnIx(
-			amount,
-			marketIndex,
-			associatedTokenAccount,
-			subAccountId,
-			reduceOnly
-		);
-
-		txParams = { ...(txParams ?? this.txParams), computeUnits: 600_000 };
-
-		const tx = await this.buildTransaction(instructions, txParams);
-
-		return tx;
-	}
-
-	/**
-	 * Deposit funds into the given spot market
-	 *
-	 * @param amount to deposit
-	 * @param marketIndex spot market index to deposit into
-	 * @param associatedTokenAccount can be the wallet public key if using native sol
-	 * @param subAccountId subaccountId to deposit
-	 * @param reduceOnly if true, deposit must not increase account risk
-	 */
-	public async deposit(
-		amount: BN,
-		marketIndex: number,
-		associatedTokenAccount: PublicKey,
-		subAccountId?: number,
-		reduceOnly = false,
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const tx = await this.createDepositTxn(
-			amount,
-			marketIndex,
-			associatedTokenAccount,
-			subAccountId,
-			reduceOnly,
-			txParams
-		);
-
-		const { txSig, slot } = await this.sendTransaction(tx, [], this.opts);
-		this.spotMarketLastSlotCache.set(marketIndex, slot);
-		return txSig;
-	}
-
-	async getDepositInstruction(
-		amount: BN,
-		marketIndex: number,
-		userTokenAccount: PublicKey,
-		subAccountId?: number,
-		reduceOnly = false,
-		userInitialized = true
-	): Promise<TransactionInstruction> {
-		const userAccountPublicKey = await getUserAccountPublicKey(
-			this.program.programId,
-			this.authority,
-			subAccountId ?? this.activeSubAccountId
-		);
-
-		let remainingAccounts = [];
-		if (userInitialized) {
-			remainingAccounts = this.getRemainingAccounts({
-				userAccounts: [await this.forceGetUserAccount()],
-				useMarketLastSlotCache: true,
-				writableSpotMarketIndexes: [marketIndex],
-			});
-		} else {
-			remainingAccounts = this.getRemainingAccounts({
-				userAccounts: [],
-				writableSpotMarketIndexes: [marketIndex],
-			});
-		}
-
-		const spotMarketAccount = this.getSpotMarketAccount(marketIndex);
-
-		this.addTokenMintToRemainingAccounts(spotMarketAccount, remainingAccounts);
-		const tokenProgram = this.getTokenProgramForSpotMarket(spotMarketAccount);
-		return await this.program.instruction.deposit(
-			marketIndex,
-			amount,
-			reduceOnly,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					spotMarket: spotMarketAccount.pubkey,
-					spotMarketVault: spotMarketAccount.vault,
-					user: userAccountPublicKey,
-					userStats: this.getUserStatsAccountPublicKey(),
-					userTokenAccount: userTokenAccount,
-					authority: this.wallet.publicKey,
-					tokenProgram,
-				},
-				remainingAccounts,
-			}
-		);
 	}
 
 	private async checkIfAccountExists(account: PublicKey): Promise<boolean> {
@@ -1976,22 +1605,29 @@ export class NormalClient {
 		return result;
 	}
 
-	public getTokenProgramForSpotMarket(
-		spotMarketAccount: SpotMarketAccount
+	public getTokenProgramForMarket(marketAccount: MarketAccount): PublicKey {
+		if (marketAccount.tokenProgram === 1) {
+			return TOKEN_2022_PROGRAM_ID;
+		}
+		return TOKEN_PROGRAM_ID;
+	}
+
+	public getTokenProgramForInsuranceFund(
+		insuranceFundAccount: InsuranceFundAccount
 	): PublicKey {
-		if (spotMarketAccount.tokenProgram === 1) {
+		if (insuranceFundAccount.tokenProgram === 1) {
 			return TOKEN_2022_PROGRAM_ID;
 		}
 		return TOKEN_PROGRAM_ID;
 	}
 
 	public addTokenMintToRemainingAccounts(
-		spotMarketAccount: SpotMarketAccount,
+		insuranceFundAccount: InsuranceFundAccount,
 		remainingAccounts: AccountMeta[]
 	) {
-		if (spotMarketAccount.tokenProgram === 1) {
+		if (insuranceFundAccount.tokenProgram === 1) {
 			remainingAccounts.push({
-				pubkey: spotMarketAccount.mint,
+				pubkey: insuranceFundAccount.mint,
 				isSigner: false,
 				isWritable: false,
 			});
@@ -2010,208 +1646,6 @@ export class NormalClient {
 			tokenMintAddress,
 			tokenProgram
 		);
-	}
-
-	public async createInitializeUserAccountAndDepositCollateralIxs(
-		amount: BN,
-		userTokenAccount: PublicKey,
-		marketIndex = 0,
-		subAccountId = 0,
-		name?: string,
-		fromSubAccountId?: number,
-		referrerInfo?: ReferrerInfo,
-		donateAmount?: BN,
-		customMaxMarginRatio?: number
-	): Promise<{
-		ixs: TransactionInstruction[];
-		userAccountPublicKey: PublicKey;
-	}> {
-		const ixs = [];
-
-		const [userAccountPublicKey, initializeUserAccountIx] =
-			await this.getInitializeUserInstructions(
-				subAccountId,
-				name,
-				referrerInfo
-			);
-
-		const spotMarket = this.getSpotMarketAccount(marketIndex);
-
-		const isSolMarket = spotMarket.mint.equals(WRAPPED_SOL_MINT);
-
-		const authority = this.wallet.publicKey;
-
-		const isFromSubaccount =
-			fromSubAccountId !== null &&
-			fromSubAccountId !== undefined &&
-			!isNaN(fromSubAccountId);
-
-		donateAmount = donateAmount ? donateAmount : ZERO;
-
-		const createWSOLTokenAccount =
-			(isSolMarket &&
-				userTokenAccount.equals(authority) &&
-				!isFromSubaccount) ||
-			!donateAmount.eq(ZERO);
-
-		const wSolAmount = isSolMarket ? amount.add(donateAmount) : donateAmount;
-
-		let wsolTokenAccount: PublicKey;
-		if (createWSOLTokenAccount) {
-			const { ixs: startIxs, pubkey } =
-				await this.getWrappedSolAccountCreationIxs(wSolAmount, true);
-
-			wsolTokenAccount = pubkey;
-
-			if (isSolMarket) {
-				userTokenAccount = pubkey;
-			}
-
-			ixs.push(...startIxs);
-		}
-
-		const depositCollateralIx = isFromSubaccount
-			? await this.getTransferDepositIx(
-					amount,
-					marketIndex,
-					fromSubAccountId,
-					subAccountId
-			  )
-			: await this.getDepositInstruction(
-					amount,
-					marketIndex,
-					userTokenAccount,
-					subAccountId,
-					false,
-					false
-			  );
-
-		if (subAccountId === 0) {
-			if (
-				!(await this.checkIfAccountExists(this.getUserStatsAccountPublicKey()))
-			) {
-				ixs.push(await this.getInitializeUserStatsIx());
-			}
-		}
-		ixs.push(initializeUserAccountIx, depositCollateralIx);
-
-		if (!donateAmount.eq(ZERO)) {
-			const donateIx = await this.getDepositIntoSpotMarketRevenuePoolIx(
-				1,
-				donateAmount,
-				wsolTokenAccount
-			);
-
-			ixs.push(donateIx);
-		}
-
-		// Set the max margin ratio to initialize account with if passed
-		if (customMaxMarginRatio) {
-			const customMarginRatioIx = await this.getUpdateUserCustomMarginRatioIx(
-				customMaxMarginRatio,
-				subAccountId
-			);
-			ixs.push(customMarginRatioIx);
-		}
-
-		// Close the wrapped sol account at the end of the transaction
-		if (createWSOLTokenAccount) {
-			ixs.push(
-				createCloseAccountInstruction(
-					wsolTokenAccount,
-					authority,
-					authority,
-					[]
-				)
-			);
-		}
-
-		return {
-			ixs,
-			userAccountPublicKey,
-		};
-	}
-
-	public async createInitializeUserAccountAndDepositCollateral(
-		amount: BN,
-		userTokenAccount: PublicKey,
-		marketIndex = 0,
-		subAccountId = 0,
-		name?: string,
-		fromSubAccountId?: number,
-		referrerInfo?: ReferrerInfo,
-		donateAmount?: BN,
-		txParams?: TxParams,
-		customMaxMarginRatio?: number
-	): Promise<[Transaction | VersionedTransaction, PublicKey]> {
-		const { ixs, userAccountPublicKey } =
-			await this.createInitializeUserAccountAndDepositCollateralIxs(
-				amount,
-				userTokenAccount,
-				marketIndex,
-				subAccountId,
-				name,
-				fromSubAccountId,
-				referrerInfo,
-				donateAmount,
-				customMaxMarginRatio
-			);
-
-		const tx = await this.buildTransaction(ixs, txParams);
-
-		return [tx, userAccountPublicKey];
-	}
-
-	/**
-	 * Creates the User account for a user, and deposits some initial collateral
-	 * @param amount
-	 * @param userTokenAccount
-	 * @param marketIndex
-	 * @param subAccountId
-	 * @param name
-	 * @param fromSubAccountId
-	 * @param referrerInfo
-	 * @param donateAmount
-	 * @param txParams
-	 * @returns
-	 */
-	public async initializeUserAccountAndDepositCollateral(
-		amount: BN,
-		userTokenAccount: PublicKey,
-		marketIndex = 0,
-		subAccountId = 0,
-		name?: string,
-		fromSubAccountId?: number,
-		referrerInfo?: ReferrerInfo,
-		donateAmount?: BN,
-		txParams?: TxParams,
-		customMaxMarginRatio?: number
-	): Promise<[TransactionSignature, PublicKey]> {
-		const [tx, userAccountPublicKey] =
-			await this.createInitializeUserAccountAndDepositCollateral(
-				amount,
-				userTokenAccount,
-				marketIndex,
-				subAccountId,
-				name,
-				fromSubAccountId,
-				referrerInfo,
-				donateAmount,
-				txParams,
-				customMaxMarginRatio
-			);
-		const additionalSigners: Array<Signer> = [];
-
-		const { txSig, slot } = await this.sendTransaction(
-			tx,
-			additionalSigners,
-			this.opts
-		);
-		this.spotMarketLastSlotCache.set(marketIndex, slot);
-
-		await this.addUser(subAccountId);
-
-		return [txSig, userAccountPublicKey];
 	}
 
 	public async initializeUserAccountForDevnet(
@@ -2238,14 +1672,14 @@ export class NormalClient {
 				referrerInfo
 			);
 
-		const depositCollateralIx = await this.getDepositInstruction(
-			amount,
-			marketIndex,
-			associateTokenPublicKey,
-			subAccountId,
-			false,
-			false
-		);
+		// const depositCollateralIx = await this.getDepositInstruction(
+		// 	amount,
+		// 	marketIndex,
+		// 	associateTokenPublicKey,
+		// 	subAccountId,
+		// 	false,
+		// 	false
+		// );
 
 		ixs.push(createAssociatedAccountIx, mintToIx);
 
@@ -2256,7 +1690,8 @@ export class NormalClient {
 				ixs.push(await this.getInitializeUserStatsIx());
 			}
 		}
-		ixs.push(initializeUserAccountIx, depositCollateralIx);
+		// ixs.push(initializeUserAccountIx, depositCollateralIx);
+		ixs.push(initializeUserAccountIx);
 
 		const tx = await this.buildTransaction(ixs, txParams);
 
@@ -2265,1239 +1700,6 @@ export class NormalClient {
 		await this.addUser(subAccountId);
 
 		return [txSig, userAccountPublicKey];
-	}
-
-	private async getWithdrawalIxs(
-		amount: BN,
-		marketIndex: number,
-		associatedTokenAddress: PublicKey,
-		reduceOnly = false,
-		subAccountId?: number
-	) {
-		const withdrawIxs: anchor.web3.TransactionInstruction[] = [];
-
-		const spotMarketAccount = this.getSpotMarketAccount(marketIndex);
-
-		const isSolMarket = spotMarketAccount.mint.equals(WRAPPED_SOL_MINT);
-
-		const authority = this.wallet.publicKey;
-
-		const createWSOLTokenAccount =
-			isSolMarket && associatedTokenAddress.equals(authority);
-
-		if (createWSOLTokenAccount) {
-			const { ixs, pubkey } = await this.getWrappedSolAccountCreationIxs(
-				amount,
-				false
-			);
-
-			associatedTokenAddress = pubkey;
-
-			withdrawIxs.push(...ixs);
-		} else {
-			const accountExists = await this.checkIfAccountExists(
-				associatedTokenAddress
-			);
-
-			if (!accountExists) {
-				const createAssociatedTokenAccountIx =
-					this.getAssociatedTokenAccountCreationIx(
-						spotMarketAccount.mint,
-						associatedTokenAddress,
-						this.getTokenProgramForSpotMarket(spotMarketAccount)
-					);
-
-				withdrawIxs.push(createAssociatedTokenAccountIx);
-			}
-		}
-
-		const withdrawCollateralIx = await this.getWithdrawIx(
-			amount,
-			spotMarketAccount.marketIndex,
-			associatedTokenAddress,
-			reduceOnly,
-			subAccountId
-		);
-
-		withdrawIxs.push(withdrawCollateralIx);
-
-		// Close the wrapped sol account at the end of the transaction
-		if (createWSOLTokenAccount) {
-			withdrawIxs.push(
-				createCloseAccountInstruction(
-					associatedTokenAddress,
-					authority,
-					authority,
-					[]
-				)
-			);
-		}
-
-		return withdrawIxs;
-	}
-
-	/**
-	 * Withdraws from a user account. If deposit doesn't already exist, creates a borrow
-	 * @param amount
-	 * @param marketIndex
-	 * @param associatedTokenAddress - the token account to withdraw to. can be the wallet public key if using native sol
-	 * @param reduceOnly
-	 */
-	public async withdraw(
-		amount: BN,
-		marketIndex: number,
-		associatedTokenAddress: PublicKey,
-		reduceOnly = false,
-		subAccountId?: number,
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const additionalSigners: Array<Signer> = [];
-
-		const withdrawIxs = await this.getWithdrawalIxs(
-			amount,
-			marketIndex,
-			associatedTokenAddress,
-			reduceOnly,
-			subAccountId
-		);
-
-		const tx = await this.buildTransaction(
-			withdrawIxs,
-			txParams ?? this.txParams
-		);
-
-		const { txSig, slot } = await this.sendTransaction(
-			tx,
-			additionalSigners,
-			this.opts
-		);
-		this.spotMarketLastSlotCache.set(marketIndex, slot);
-		return txSig;
-	}
-
-	public async withdrawAllDustPositions(
-		subAccountId?: number,
-		txParams?: TxParams,
-		opts?: {
-			dustPositionCountCallback?: (count: number) => void;
-		}
-	): Promise<TransactionSignature | undefined> {
-		const user = this.getUser(subAccountId);
-
-		const dustPositionSpotMarketAccounts =
-			user.getSpotMarketAccountsWithDustPosition();
-
-		if (
-			!dustPositionSpotMarketAccounts ||
-			dustPositionSpotMarketAccounts.length === 0
-		) {
-			opts?.dustPositionCountCallback?.(0);
-			return undefined;
-		}
-
-		opts?.dustPositionCountCallback?.(dustPositionSpotMarketAccounts.length);
-
-		let allWithdrawIxs: anchor.web3.TransactionInstruction[] = [];
-
-		for (const position of dustPositionSpotMarketAccounts) {
-			const tokenAccount = await getAssociatedTokenAddress(
-				position.mint,
-				this.wallet.publicKey
-			);
-
-			const tokenAmount = await user.getTokenAmount(position.marketIndex);
-
-			const withdrawIxs = await this.getWithdrawalIxs(
-				tokenAmount.muln(2), //  2x to ensure all dust is withdrawn
-				position.marketIndex,
-				tokenAccount,
-				true, // reduce-only true to ensure all dust is withdrawn
-				subAccountId
-			);
-
-			allWithdrawIxs = allWithdrawIxs.concat(withdrawIxs);
-		}
-
-		const tx = await this.buildTransaction(
-			allWithdrawIxs,
-			txParams ?? this.txParams
-		);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getWithdrawIx(
-		amount: BN,
-		marketIndex: number,
-		userTokenAccount: PublicKey,
-		reduceOnly = false,
-		subAccountId?: number
-	): Promise<TransactionInstruction> {
-		const user = await this.getUserAccountPublicKey(subAccountId);
-
-		const remainingAccounts = this.getRemainingAccounts({
-			userAccounts: [this.getUserAccount(subAccountId)],
-			useMarketLastSlotCache: true,
-			writableSpotMarketIndexes: [marketIndex],
-			readableSpotMarketIndexes: [QUOTE_SPOT_MARKET_INDEX],
-		});
-
-		const spotMarketAccount = this.getSpotMarketAccount(marketIndex);
-
-		this.addTokenMintToRemainingAccounts(spotMarketAccount, remainingAccounts);
-		const tokenProgram = this.getTokenProgramForSpotMarket(spotMarketAccount);
-
-		return await this.program.instruction.withdraw(
-			marketIndex,
-			amount,
-			reduceOnly,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					spotMarket: spotMarketAccount.pubkey,
-					spotMarketVault: spotMarketAccount.vault,
-					normalSigner: this.getSignerPublicKey(),
-					user,
-					userStats: this.getUserStatsAccountPublicKey(),
-					userTokenAccount: userTokenAccount,
-					authority: this.wallet.publicKey,
-					tokenProgram,
-				},
-				remainingAccounts,
-			}
-		);
-	}
-
-	/**
-	 * Withdraws from the fromSubAccount and deposits into the toSubAccount
-	 * @param amount
-	 * @param marketIndex
-	 * @param fromSubAccountId
-	 * @param toSubAccountId
-	 * @param txParams
-	 */
-	public async transferDeposit(
-		amount: BN,
-		marketIndex: number,
-		fromSubAccountId: number,
-		toSubAccountId: number,
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const { txSig, slot } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getTransferDepositIx(
-					amount,
-					marketIndex,
-					fromSubAccountId,
-					toSubAccountId
-				),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		if (
-			fromSubAccountId === this.activeSubAccountId ||
-			toSubAccountId === this.activeSubAccountId
-		) {
-			this.spotMarketLastSlotCache.set(marketIndex, slot);
-		}
-		return txSig;
-	}
-
-	public async getTransferDepositIx(
-		amount: BN,
-		marketIndex: number,
-		fromSubAccountId: number,
-		toSubAccountId: number
-	): Promise<TransactionInstruction> {
-		const fromUser = await getUserAccountPublicKey(
-			this.program.programId,
-			this.wallet.publicKey,
-			fromSubAccountId
-		);
-		const toUser = await getUserAccountPublicKey(
-			this.program.programId,
-			this.wallet.publicKey,
-			toSubAccountId
-		);
-
-		let remainingAccounts;
-
-		const userMapKey = this.getUserMapKey(
-			fromSubAccountId,
-			this.wallet.publicKey
-		);
-		if (this.users.has(userMapKey)) {
-			remainingAccounts = this.getRemainingAccounts({
-				userAccounts: [this.users.get(userMapKey).getUserAccount()],
-				useMarketLastSlotCache: true,
-				writableSpotMarketIndexes: [marketIndex],
-			});
-		} else {
-			const userAccountPublicKey = getUserAccountPublicKeySync(
-				this.program.programId,
-				this.authority,
-				fromSubAccountId
-			);
-
-			const fromUserAccount = (await this.program.account.user.fetch(
-				userAccountPublicKey
-			)) as UserAccount;
-			remainingAccounts = this.getRemainingAccounts({
-				userAccounts: [fromUserAccount],
-				useMarketLastSlotCache: true,
-				writableSpotMarketIndexes: [marketIndex],
-			});
-		}
-
-		return await this.program.instruction.transferDeposit(marketIndex, amount, {
-			accounts: {
-				authority: this.wallet.publicKey,
-				fromUser,
-				toUser,
-				userStats: this.getUserStatsAccountPublicKey(),
-				state: await this.getStatePublicKey(),
-				spotMarketVault: this.getSpotMarketAccount(marketIndex).vault,
-			},
-			remainingAccounts,
-		});
-	}
-
-	public async updateSpotMarketCumulativeInterest(
-		marketIndex: number,
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.updateSpotMarketCumulativeInterestIx(marketIndex),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		return txSig;
-	}
-
-	public async updateSpotMarketCumulativeInterestIx(
-		marketIndex: number
-	): Promise<TransactionInstruction> {
-		const spotMarket = this.getSpotMarketAccount(marketIndex);
-		return await this.program.instruction.updateSpotMarketCumulativeInterest({
-			accounts: {
-				state: await this.getStatePublicKey(),
-				spotMarket: spotMarket.pubkey,
-				spotMarketVault: spotMarket.vault,
-				oracle: spotMarket.oracle,
-			},
-		});
-	}
-
-	public async removePerpLpShares(
-		marketIndex: number,
-		sharesToBurn?: BN,
-		txParams?: TxParams,
-		subAccountId?: number
-	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getRemovePerpLpSharesIx(
-					marketIndex,
-					sharesToBurn,
-					subAccountId
-				),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		return txSig;
-	}
-
-	public async removePerpLpSharesInExpiringMarket(
-		marketIndex: number,
-		userAccountPublicKey: PublicKey,
-		sharesToBurn?: BN,
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getRemovePerpLpSharesInExpiringMarket(
-					marketIndex,
-					userAccountPublicKey,
-					sharesToBurn
-				),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		return txSig;
-	}
-
-	public async getRemovePerpLpSharesInExpiringMarket(
-		marketIndex: number,
-		userAccountPublicKey: PublicKey,
-		sharesToBurn?: BN
-	): Promise<TransactionInstruction> {
-		const userAccount = (await this.program.account.user.fetch(
-			userAccountPublicKey
-		)) as UserAccount;
-
-		const remainingAccounts = this.getRemainingAccounts({
-			userAccounts: [userAccount],
-			useMarketLastSlotCache: true,
-			writableMarketIndexes: [marketIndex],
-		});
-
-		if (sharesToBurn == undefined) {
-			const perpPosition = userAccount.perpPositions.filter(
-				(position) => position.marketIndex === marketIndex
-			)[0];
-			sharesToBurn = perpPosition.lpShares;
-			console.log('burning lp shares:', sharesToBurn.toString());
-		}
-
-		return this.program.instruction.removePerpLpSharesInExpiringMarket(
-			sharesToBurn,
-			marketIndex,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					user: userAccountPublicKey,
-				},
-				remainingAccounts: remainingAccounts,
-			}
-		);
-	}
-
-	public async getRemovePerpLpSharesIx(
-		marketIndex: number,
-		sharesToBurn?: BN,
-		subAccountId?: number
-	): Promise<TransactionInstruction> {
-		const user = await this.getUserAccountPublicKey(subAccountId);
-
-		const remainingAccounts = this.getRemainingAccounts({
-			userAccounts: [this.getUserAccount(subAccountId)],
-			useMarketLastSlotCache: true,
-			writableMarketIndexes: [marketIndex],
-		});
-
-		if (sharesToBurn == undefined) {
-			const userAccount = this.getUserAccount(subAccountId);
-			const perpPosition = userAccount.perpPositions.filter(
-				(position) => position.marketIndex === marketIndex
-			)[0];
-			sharesToBurn = perpPosition.lpShares;
-			console.log('burning lp shares:', sharesToBurn.toString());
-		}
-
-		return this.program.instruction.removePerpLpShares(
-			sharesToBurn,
-			marketIndex,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					user,
-					authority: this.wallet.publicKey,
-				},
-				remainingAccounts: remainingAccounts,
-			}
-		);
-	}
-
-	public async addPerpLpShares(
-		amount: BN,
-		marketIndex: number,
-		txParams?: TxParams,
-		subAccountId?: number
-	): Promise<TransactionSignature> {
-		const { txSig, slot } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getAddPerpLpSharesIx(amount, marketIndex, subAccountId),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		this.marketLastSlotCache.set(marketIndex, slot);
-		return txSig;
-	}
-
-	public async getAddPerpLpSharesIx(
-		amount: BN,
-		marketIndex: number,
-		subAccountId?: number
-	): Promise<TransactionInstruction> {
-		const user = await this.getUserAccountPublicKey(subAccountId);
-		const remainingAccounts = this.getRemainingAccounts({
-			userAccounts: [this.getUserAccount(subAccountId)],
-			useMarketLastSlotCache: true,
-			writableMarketIndexes: [marketIndex],
-		});
-
-		return this.program.instruction.addPerpLpShares(amount, marketIndex, {
-			accounts: {
-				state: await this.getStatePublicKey(),
-				user,
-				authority: this.wallet.publicKey,
-			},
-			remainingAccounts: remainingAccounts,
-		});
-	}
-
-	public getQuoteValuePerLpShare(marketIndex: number): BN {
-		const marketAccount = this.getMarketAccount(marketIndex);
-
-		const openBids = BN.max(
-			marketAccount.amm.baseAssetReserve.sub(
-				marketAccount.amm.minBaseAssetReserve
-			),
-			ZERO
-		);
-
-		const openAsks = BN.max(
-			marketAccount.amm.maxBaseAssetReserve.sub(
-				marketAccount.amm.baseAssetReserve
-			),
-			ZERO
-		);
-
-		const oraclePriceData = this.getOracleDataForMarket(marketIndex);
-
-		const maxOpenBidsAsks = BN.max(openBids, openAsks);
-		const quoteValuePerLpShare = maxOpenBidsAsks
-			.mul(oraclePriceData.price)
-			.mul(QUOTE_PRECISION)
-			.div(PRICE_PRECISION)
-			.div(marketAccount.amm.sqrtK);
-
-		return quoteValuePerLpShare;
-	}
-
-	/**
-	 * @deprecated use {@link placePerpOrder} or {@link placeAndTakePerpOrder} instead
-	 */
-	public async openPosition(
-		direction: PositionDirection,
-		amount: BN,
-		marketIndex: number,
-		limitPrice?: BN,
-		subAccountId?: number
-	): Promise<TransactionSignature> {
-		return await this.placeAndTakePerpOrder(
-			{
-				orderType: OrderType.MARKET,
-				marketIndex,
-				direction,
-				baseAssetAmount: amount,
-				price: limitPrice,
-			},
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-			subAccountId
-		);
-	}
-
-	public async sendSignedTx(
-		tx: Transaction | VersionedTransaction,
-		opts?: ConfirmOptions
-	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			tx,
-			undefined,
-			opts ?? this.opts,
-			true
-		);
-
-		return txSig;
-	}
-
-	public async updateAMMs(
-		marketIndexes: number[],
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getUpdateAMMsIx(marketIndexes),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		return txSig;
-	}
-
-	public async getUpdateAMMsIx(
-		marketIndexes: number[]
-	): Promise<TransactionInstruction> {
-		for (let i = marketIndexes.length; i < 5; i++) {
-			marketIndexes.push(100);
-		}
-		const marketAccountInfos = [];
-		const oracleAccountInfos = [];
-		for (const marketIndex of marketIndexes) {
-			if (marketIndex !== 100) {
-				const market = this.getMarketAccount(marketIndex);
-				marketAccountInfos.push({
-					pubkey: market.pubkey,
-					isWritable: true,
-					isSigner: false,
-				});
-				oracleAccountInfos.push({
-					pubkey: amm.oracle,
-					isWritable: false,
-					isSigner: false,
-				});
-			}
-		}
-		const remainingAccounts = oracleAccountInfos.concat(marketAccountInfos);
-
-		return await this.program.instruction.updateAmms(marketIndexes, {
-			accounts: {
-				state: await this.getStatePublicKey(),
-				authority: this.wallet.publicKey,
-			},
-			remainingAccounts,
-		});
-	}
-
-	public async settleExpiredMarket(
-		marketIndex: number,
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getSettleExpiredMarketIx(marketIndex),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		return txSig;
-	}
-
-	public async getSettleExpiredMarketIx(
-		marketIndex: number
-	): Promise<TransactionInstruction> {
-		const remainingAccounts = this.getRemainingAccounts({
-			userAccounts: [],
-			writableMarketIndexes: [marketIndex],
-			writableSpotMarketIndexes: [QUOTE_SPOT_MARKET_INDEX],
-		});
-		const marketPublicKey = await getMarketPublicKey(
-			this.program.programId,
-			marketIndex
-		);
-
-		return await this.program.instruction.settleExpiredMarket(marketIndex, {
-			accounts: {
-				state: await this.getStatePublicKey(),
-				admin: this.isSubscribed
-					? this.getStateAccount().admin
-					: this.wallet.publicKey,
-				market: marketPublicKey,
-			},
-			remainingAccounts,
-		});
-	}
-
-	public async settleExpiredMarketPoolsToRevenuePool(
-		marketIndex: number,
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const marketPublicKey = await getMarketPublicKey(
-			this.program.programId,
-			marketIndex
-		);
-
-		const spotMarketPublicKey = await getSpotMarketPublicKey(
-			this.program.programId,
-			QUOTE_SPOT_MARKET_INDEX
-		);
-
-		const ix =
-			await this.program.instruction.settleExpiredMarketPoolsToRevenuePool({
-				accounts: {
-					state: await this.getStatePublicKey(),
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					spotMarket: spotMarketPublicKey,
-					market: marketPublicKey,
-				},
-			});
-
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(ix, txParams),
-			[],
-			this.opts
-		);
-
-		return txSig;
-	}
-
-	/**
-	 * Swap tokens in normal account using jupiter
-	 * @param jupiterClient jupiter client to find routes and jupiter instructions
-	 * @param outMarketIndex the market index of the token you're buying
-	 * @param inMarketIndex the market index of the token you're selling
-	 * @param outAssociatedTokenAccount the token account to receive the token being sold on jupiter
-	 * @param inAssociatedTokenAccount the token account to
-	 * @param amount the amount of TokenIn, regardless of swapMode
-	 * @param slippageBps the max slippage passed to jupiter api
-	 * @param swapMode jupiter swapMode (ExactIn or ExactOut), default is ExactIn
-	 * @param route the jupiter route to use for the swap
-	 * @param reduceOnly specify if In or Out token on the normal account must reduceOnly, checked at end of swap
-	 * @param txParams
-	 */
-	public async swap({
-		jupiterClient,
-		outMarketIndex,
-		inMarketIndex,
-		outAssociatedTokenAccount,
-		inAssociatedTokenAccount,
-		amount,
-		slippageBps,
-		swapMode,
-		route,
-		reduceOnly,
-		txParams,
-		v6,
-		onlyDirectRoutes = false,
-	}: {
-		jupiterClient: JupiterClient;
-		outMarketIndex: number;
-		inMarketIndex: number;
-		outAssociatedTokenAccount?: PublicKey;
-		inAssociatedTokenAccount?: PublicKey;
-		amount: BN;
-		slippageBps?: number;
-		swapMode?: SwapMode;
-		route?: Route;
-		reduceOnly?: SwapReduceOnly;
-		txParams?: TxParams;
-		onlyDirectRoutes?: boolean;
-		v6?: {
-			quote?: QuoteResponse;
-		};
-	}): Promise<TransactionSignature> {
-		let ixs: anchor.web3.TransactionInstruction[];
-		let lookupTables: anchor.web3.AddressLookupTableAccount[];
-
-		if (v6) {
-			const res = await this.getJupiterSwapIxV6({
-				jupiterClient,
-				outMarketIndex,
-				inMarketIndex,
-				outAssociatedTokenAccount,
-				inAssociatedTokenAccount,
-				amount,
-				slippageBps,
-				swapMode,
-				quote: v6.quote,
-				reduceOnly,
-				onlyDirectRoutes,
-			});
-			ixs = res.ixs;
-			lookupTables = res.lookupTables;
-		} else {
-			const res = await this.getJupiterSwapIx({
-				jupiterClient,
-				outMarketIndex,
-				inMarketIndex,
-				outAssociatedTokenAccount,
-				inAssociatedTokenAccount,
-				amount,
-				slippageBps,
-				swapMode,
-				route,
-				reduceOnly,
-			});
-			ixs = res.ixs;
-			lookupTables = res.lookupTables;
-		}
-
-		const tx = (await this.buildTransaction(
-			ixs,
-			txParams,
-			0,
-			lookupTables
-		)) as VersionedTransaction;
-
-		const { txSig, slot } = await this.sendTransaction(tx);
-		this.spotMarketLastSlotCache.set(outMarketIndex, slot);
-		this.spotMarketLastSlotCache.set(inMarketIndex, slot);
-
-		return txSig;
-	}
-
-	public async getJupiterSwapIx({
-		jupiterClient,
-		outMarketIndex,
-		inMarketIndex,
-		outAssociatedTokenAccount,
-		inAssociatedTokenAccount,
-		amount,
-		slippageBps,
-		swapMode,
-		onlyDirectRoutes,
-		route,
-		reduceOnly,
-		userAccountPublicKey,
-	}: {
-		jupiterClient: JupiterClient;
-		outMarketIndex: number;
-		inMarketIndex: number;
-		outAssociatedTokenAccount?: PublicKey;
-		inAssociatedTokenAccount?: PublicKey;
-		amount: BN;
-		slippageBps?: number;
-		swapMode?: SwapMode;
-		onlyDirectRoutes?: boolean;
-		route?: Route;
-		reduceOnly?: SwapReduceOnly;
-		userAccountPublicKey?: PublicKey;
-	}): Promise<{
-		ixs: TransactionInstruction[];
-		lookupTables: AddressLookupTableAccount[];
-	}> {
-		const outMarket = this.getSpotMarketAccount(outMarketIndex);
-		const inMarket = this.getSpotMarketAccount(inMarketIndex);
-
-		if (!route) {
-			const routes = await jupiterClient.getRoutes({
-				inputMint: inMarket.mint,
-				outputMint: outMarket.mint,
-				amount,
-				slippageBps,
-				swapMode,
-				onlyDirectRoutes,
-			});
-
-			if (!routes || routes.length === 0) {
-				throw new Error('No jupiter routes found');
-			}
-
-			route = routes[0];
-		}
-
-		const transaction = await jupiterClient.getSwapTransaction({
-			route,
-			userPublicKey: this.provider.wallet.publicKey,
-			slippageBps,
-		});
-
-		const { transactionMessage, lookupTables } =
-			await jupiterClient.getTransactionMessageAndLookupTables({
-				transaction,
-			});
-
-		const jupiterInstructions = jupiterClient.getJupiterInstructions({
-			transactionMessage,
-			inputMint: inMarket.mint,
-			outputMint: outMarket.mint,
-		});
-
-		const preInstructions = [];
-		if (!outAssociatedTokenAccount) {
-			const tokenProgram = this.getTokenProgramForSpotMarket(outMarket);
-			outAssociatedTokenAccount = await this.getAssociatedTokenAccount(
-				outMarket.marketIndex,
-				false,
-				tokenProgram
-			);
-
-			const accountInfo = await this.connection.getAccountInfo(
-				outAssociatedTokenAccount
-			);
-			if (!accountInfo) {
-				preInstructions.push(
-					this.createAssociatedTokenAccountIdempotentInstruction(
-						outAssociatedTokenAccount,
-						this.provider.wallet.publicKey,
-						this.provider.wallet.publicKey,
-						outMarket.mint,
-						tokenProgram
-					)
-				);
-			}
-		}
-
-		if (!inAssociatedTokenAccount) {
-			const tokenProgram = this.getTokenProgramForSpotMarket(outMarket);
-			inAssociatedTokenAccount = await this.getAssociatedTokenAccount(
-				inMarket.marketIndex,
-				false,
-				tokenProgram
-			);
-
-			const accountInfo = await this.connection.getAccountInfo(
-				inAssociatedTokenAccount
-			);
-			if (!accountInfo) {
-				preInstructions.push(
-					this.createAssociatedTokenAccountIdempotentInstruction(
-						inAssociatedTokenAccount,
-						this.provider.wallet.publicKey,
-						this.provider.wallet.publicKey,
-						inMarket.mint,
-						tokenProgram
-					)
-				);
-			}
-		}
-
-		const { beginSwapIx, endSwapIx } = await this.getSwapIx({
-			outMarketIndex,
-			inMarketIndex,
-			amountIn: new BN(route.inAmount),
-			inTokenAccount: inAssociatedTokenAccount,
-			outTokenAccount: outAssociatedTokenAccount,
-			reduceOnly,
-			userAccountPublicKey,
-		});
-
-		const ixs = [
-			...preInstructions,
-			beginSwapIx,
-			...jupiterInstructions,
-			endSwapIx,
-		];
-
-		return { ixs, lookupTables };
-	}
-
-	public async getJupiterSwapIxV6({
-		jupiterClient,
-		outMarketIndex,
-		inMarketIndex,
-		outAssociatedTokenAccount,
-		inAssociatedTokenAccount,
-		amount,
-		slippageBps,
-		swapMode,
-		onlyDirectRoutes,
-		quote,
-		reduceOnly,
-		userAccountPublicKey,
-	}: {
-		jupiterClient: JupiterClient;
-		outMarketIndex: number;
-		inMarketIndex: number;
-		outAssociatedTokenAccount?: PublicKey;
-		inAssociatedTokenAccount?: PublicKey;
-		amount: BN;
-		slippageBps?: number;
-		swapMode?: SwapMode;
-		onlyDirectRoutes?: boolean;
-		quote?: QuoteResponse;
-		reduceOnly?: SwapReduceOnly;
-		userAccountPublicKey?: PublicKey;
-	}): Promise<{
-		ixs: TransactionInstruction[];
-		lookupTables: AddressLookupTableAccount[];
-	}> {
-		const outMarket = this.getSpotMarketAccount(outMarketIndex);
-		const inMarket = this.getSpotMarketAccount(inMarketIndex);
-
-		if (!quote) {
-			const fetchedQuote = await jupiterClient.getQuote({
-				inputMint: inMarket.mint,
-				outputMint: outMarket.mint,
-				amount,
-				slippageBps,
-				swapMode,
-				onlyDirectRoutes,
-			});
-
-			quote = fetchedQuote;
-		}
-
-		if (!quote) {
-			throw new Error("Could not fetch Jupiter's quote. Please try again.");
-		}
-
-		const isExactOut = swapMode === 'ExactOut' || quote.swapMode === 'ExactOut';
-		const amountIn = new BN(quote.inAmount);
-		const exactOutBufferedAmountIn = amountIn.muln(1001).divn(1000); // Add 10bp buffer
-
-		const transaction = await jupiterClient.getSwap({
-			quote,
-			userPublicKey: this.provider.wallet.publicKey,
-			slippageBps,
-		});
-
-		const { transactionMessage, lookupTables } =
-			await jupiterClient.getTransactionMessageAndLookupTables({
-				transaction,
-			});
-
-		const jupiterInstructions = jupiterClient.getJupiterInstructions({
-			transactionMessage,
-			inputMint: inMarket.mint,
-			outputMint: outMarket.mint,
-		});
-
-		const preInstructions = [];
-		if (!outAssociatedTokenAccount) {
-			const tokenProgram = this.getTokenProgramForSpotMarket(outMarket);
-			outAssociatedTokenAccount = await this.getAssociatedTokenAccount(
-				outMarket.marketIndex,
-				false,
-				tokenProgram
-			);
-
-			const accountInfo = await this.connection.getAccountInfo(
-				outAssociatedTokenAccount
-			);
-			if (!accountInfo) {
-				preInstructions.push(
-					this.createAssociatedTokenAccountIdempotentInstruction(
-						outAssociatedTokenAccount,
-						this.provider.wallet.publicKey,
-						this.provider.wallet.publicKey,
-						outMarket.mint,
-						tokenProgram
-					)
-				);
-			}
-		}
-
-		if (!inAssociatedTokenAccount) {
-			const tokenProgram = this.getTokenProgramForSpotMarket(inMarket);
-			inAssociatedTokenAccount = await this.getAssociatedTokenAccount(
-				inMarket.marketIndex,
-				false,
-				tokenProgram
-			);
-
-			const accountInfo = await this.connection.getAccountInfo(
-				inAssociatedTokenAccount
-			);
-			if (!accountInfo) {
-				preInstructions.push(
-					this.createAssociatedTokenAccountIdempotentInstruction(
-						inAssociatedTokenAccount,
-						this.provider.wallet.publicKey,
-						this.provider.wallet.publicKey,
-						inMarket.mint,
-						tokenProgram
-					)
-				);
-			}
-		}
-
-		const { beginSwapIx, endSwapIx } = await this.getSwapIx({
-			outMarketIndex,
-			inMarketIndex,
-			amountIn: isExactOut ? exactOutBufferedAmountIn : amountIn,
-			inTokenAccount: inAssociatedTokenAccount,
-			outTokenAccount: outAssociatedTokenAccount,
-			reduceOnly,
-			userAccountPublicKey,
-		});
-
-		const ixs = [
-			...preInstructions,
-			beginSwapIx,
-			...jupiterInstructions,
-			endSwapIx,
-		];
-
-		return { ixs, lookupTables };
-	}
-
-	/**
-	 * Get the normal begin_swap and end_swap instructions
-	 *
-	 * @param outMarketIndex the market index of the token you're buying
-	 * @param inMarketIndex the market index of the token you're selling
-	 * @param amountIn the amount of the token to sell
-	 * @param inTokenAccount the token account to move the tokens being sold
-	 * @param outTokenAccount the token account to receive the tokens being bought
-	 * @param limitPrice the limit price of the swap
-	 * @param reduceOnly
-	 * @param userAccountPublicKey optional, specify a custom userAccountPublicKey to use instead of getting the current user account; can be helpful if the account is being created within the current tx
-	 */
-	public async getSwapIx({
-		outMarketIndex,
-		inMarketIndex,
-		amountIn,
-		inTokenAccount,
-		outTokenAccount,
-		limitPrice,
-		reduceOnly,
-		userAccountPublicKey,
-	}: {
-		outMarketIndex: number;
-		inMarketIndex: number;
-		amountIn: BN;
-		inTokenAccount: PublicKey;
-		outTokenAccount: PublicKey;
-		limitPrice?: BN;
-		reduceOnly?: SwapReduceOnly;
-		userAccountPublicKey?: PublicKey;
-	}): Promise<{
-		beginSwapIx: TransactionInstruction;
-		endSwapIx: TransactionInstruction;
-	}> {
-		const userAccountPublicKeyToUse =
-			userAccountPublicKey || (await this.getUserAccountPublicKey());
-
-		const userAccounts = [];
-		try {
-			if (this.hasUser() && this.getUser().getUserAccountAndSlot()) {
-				userAccounts.push(this.getUser().getUserAccountAndSlot()!.data);
-			}
-		} catch (err) {
-			// ignore
-		}
-
-		const remainingAccounts = this.getRemainingAccounts({
-			userAccounts,
-			writableSpotMarketIndexes: [outMarketIndex, inMarketIndex],
-			readableSpotMarketIndexes: [QUOTE_SPOT_MARKET_INDEX],
-		});
-
-		const outSpotMarket = this.getSpotMarketAccount(outMarketIndex);
-		const inSpotMarket = this.getSpotMarketAccount(inMarketIndex);
-
-		const outTokenProgram = this.getTokenProgramForSpotMarket(outSpotMarket);
-		const inTokenProgram = this.getTokenProgramForSpotMarket(inSpotMarket);
-
-		if (!outTokenProgram.equals(inTokenProgram)) {
-			remainingAccounts.push({
-				pubkey: outTokenProgram,
-				isWritable: false,
-				isSigner: false,
-			});
-		}
-
-		if (outSpotMarket.tokenProgram === 1 || inSpotMarket.tokenProgram === 1) {
-			remainingAccounts.push({
-				pubkey: inSpotMarket.mint,
-				isWritable: false,
-				isSigner: false,
-			});
-			remainingAccounts.push({
-				pubkey: outSpotMarket.mint,
-				isWritable: false,
-				isSigner: false,
-			});
-		}
-
-		const beginSwapIx = await this.program.instruction.beginSwap(
-			inMarketIndex,
-			outMarketIndex,
-			amountIn,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					user: userAccountPublicKeyToUse,
-					userStats: this.getUserStatsAccountPublicKey(),
-					authority: this.wallet.publicKey,
-					outSpotMarketVault: outSpotMarket.vault,
-					inSpotMarketVault: inSpotMarket.vault,
-					inTokenAccount,
-					outTokenAccount,
-					tokenProgram: inTokenProgram,
-					normalSigner: this.getStateAccount().signer,
-					instructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-				},
-				remainingAccounts,
-			}
-		);
-
-		const endSwapIx = await this.program.instruction.endSwap(
-			inMarketIndex,
-			outMarketIndex,
-			limitPrice ?? null,
-			reduceOnly ?? null,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					user: userAccountPublicKeyToUse,
-					userStats: this.getUserStatsAccountPublicKey(),
-					authority: this.wallet.publicKey,
-					outSpotMarketVault: outSpotMarket.vault,
-					inSpotMarketVault: inSpotMarket.vault,
-					inTokenAccount,
-					outTokenAccount,
-					tokenProgram: inTokenProgram,
-					normalSigner: this.getStateAccount().signer,
-					instructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-				},
-				remainingAccounts,
-			}
-		);
-
-		return { beginSwapIx, endSwapIx };
-	}
-
-	public async stakeForMSOL({ amount }: { amount: BN }): Promise<TxSigAndSlot> {
-		const ixs = await this.getStakeForMSOLIx({ amount });
-		const tx = await this.buildTransaction(ixs);
-		return this.sendTransaction(tx);
-	}
-
-	public async getStakeForMSOLIx({
-		amount,
-		userAccountPublicKey,
-	}: {
-		amount: BN;
-		userAccountPublicKey?: PublicKey;
-	}): Promise<TransactionInstruction[]> {
-		const wSOLMint = this.getSpotMarketAccount(1).mint;
-		const mSOLAccount = await this.getAssociatedTokenAccount(2);
-		const wSOLAccount = await this.getAssociatedTokenAccount(1, false);
-
-		const wSOLAccountExists = await this.checkIfAccountExists(wSOLAccount);
-
-		const closeWSOLIx = createCloseAccountInstruction(
-			wSOLAccount,
-			this.wallet.publicKey,
-			this.wallet.publicKey
-		);
-
-		const createWSOLIx =
-			await this.createAssociatedTokenAccountIdempotentInstruction(
-				wSOLAccount,
-				this.wallet.publicKey,
-				this.wallet.publicKey,
-				wSOLMint
-			);
-
-		const { beginSwapIx, endSwapIx } = await this.getSwapIx({
-			inMarketIndex: 1,
-			outMarketIndex: 2,
-			amountIn: amount,
-			inTokenAccount: wSOLAccount,
-			outTokenAccount: mSOLAccount,
-			userAccountPublicKey,
-		});
-
-		const program = getMarinadeFinanceProgram(this.provider);
-		const depositIx = await getMarinadeDepositIx({
-			program,
-			mSOLAccount: mSOLAccount,
-			transferFrom: this.wallet.publicKey,
-			amount,
-		});
-
-		const ixs = [];
-
-		if (!wSOLAccountExists) {
-			ixs.push(createWSOLIx);
-		}
-		ixs.push(beginSwapIx, closeWSOLIx, depositIx, createWSOLIx, endSwapIx);
-
-		return ixs;
 	}
 
 	public async updateUserIdle(
@@ -3550,37 +1752,6 @@ export class NormalClient {
 		return Buffer.from(await ed.sign(message, keypair.secretKey.slice(0, 32)));
 	}
 
-	/**
-	 * @deprecated use {@link placePerpOrder} or {@link placeAndTakePerpOrder} instead
-	 */
-	public async closePosition(
-		marketIndex: number,
-		limitPrice?: BN,
-		subAccountId?: number
-	): Promise<TransactionSignature> {
-		const userPosition =
-			this.getUser(subAccountId).getPerpPosition(marketIndex);
-		if (!userPosition) {
-			throw Error(`No position in market ${marketIndex.toString()}`);
-		}
-
-		return await this.placeAndTakePerpOrder(
-			{
-				orderType: OrderType.MARKET,
-				marketIndex,
-				direction: findDirectionToClose(userPosition),
-				baseAssetAmount: userPosition.baseAssetAmount.abs(),
-				reduceOnly: true,
-				price: limitPrice,
-			},
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-			subAccountId
-		);
-	}
-
 	public async getSetUserStatusToBeingLiquidatedIx(
 		userAccountPublicKey: PublicKey,
 		userAccount: UserAccount
@@ -3615,192 +1786,6 @@ export class NormalClient {
 		return txSig;
 	}
 
-	public async liquidateVault(
-		userAccountPublicKey: PublicKey,
-		userAccount: UserAccount,
-		vaultIndex: number,
-		maxBaseAssetAmount: BN,
-		limitPrice?: BN,
-		txParams?: TxParams,
-		liquidatorSubAccountId?: number
-	): Promise<TransactionSignature> {
-		const { txSig, slot } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getLiquidateVaultIx(
-					userAccountPublicKey,
-					userAccount,
-					vaultIndex,
-					maxBaseAssetAmount,
-					limitPrice,
-					liquidatorSubAccountId
-				),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		this.marketLastSlotCache.set(vaultIndex, slot);
-		return txSig;
-	}
-
-	public async getLiquidateVaultIx(
-		userAccountPublicKey: PublicKey,
-		userAccount: UserAccount,
-		vaultIndex: number,
-		maxBaseAssetAmount: BN,
-		limitPrice?: BN,
-		liquidatorSubAccountId?: number
-	): Promise<TransactionInstruction> {
-		const userStatsPublicKey = getUserStatsAccountPublicKey(
-			this.program.programId,
-			userAccount.authority
-		);
-
-		const liquidator = await this.getUserAccountPublicKey(
-			liquidatorSubAccountId
-		);
-		const liquidatorStatsPublicKey = this.getUserStatsAccountPublicKey();
-
-		const remainingAccounts = this.getRemainingAccounts({
-			userAccounts: [this.getUserAccount(liquidatorSubAccountId), userAccount],
-			useMarketLastSlotCache: true,
-			writableVaultIndexes: [vaultIndex],
-		});
-
-		return await this.program.instruction.liquidatePerp(
-			vaultIndex,
-			maxBaseAssetAmount,
-			limitPrice ?? null,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					authority: this.wallet.publicKey,
-					user: userAccountPublicKey,
-					userStats: userStatsPublicKey,
-					liquidator,
-					liquidatorStats: liquidatorStatsPublicKey,
-				},
-				remainingAccounts: remainingAccounts,
-			}
-		);
-	}
-
-	public async resolveVaultBankruptcy(
-		userAccountPublicKey: PublicKey,
-		userAccount: UserAccount,
-		vaultIndex: number,
-		txParams?: TxParams,
-		liquidatorSubAccountId?: number
-	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getResolveVaultBankruptcyIx(
-					userAccountPublicKey,
-					userAccount,
-					vaultIndex,
-					liquidatorSubAccountId
-				),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		return txSig;
-	}
-
-	public async getResolveVaultBankruptcyIx(
-		userAccountPublicKey: PublicKey,
-		userAccount: UserAccount,
-		vaultIndex: number,
-		liquidatorSubAccountId?: number
-	): Promise<TransactionInstruction> {
-		const userStatsPublicKey = getUserStatsAccountPublicKey(
-			this.program.programId,
-			userAccount.authority
-		);
-
-		const liquidator = await this.getUserAccountPublicKey(
-			liquidatorSubAccountId
-		);
-		const liquidatorStatsPublicKey = this.getUserStatsAccountPublicKey();
-
-		const remainingAccounts = this.getRemainingAccounts({
-			userAccounts: [this.getUserAccount(liquidatorSubAccountId), userAccount],
-			writableMarketIndexes: [vaultIndex],
-			writableSpotMarketIndexes: [QUOTE_SPOT_MARKET_INDEX],
-		});
-
-		const spotMarket = this.getQuoteSpotMarketAccount();
-
-		return await this.program.instruction.resolvePerpBankruptcy(
-			QUOTE_SPOT_MARKET_INDEX,
-			vaultIndex,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					authority: this.wallet.publicKey,
-					user: userAccountPublicKey,
-					userStats: userStatsPublicKey,
-					liquidator,
-					liquidatorStats: liquidatorStatsPublicKey,
-					spotMarketVault: spotMarket.vault,
-					insuranceFundVault: spotMarket.insuranceFund.vault,
-					normalSigner: this.getSignerPublicKey(),
-					tokenProgram: TOKEN_PROGRAM_ID,
-				},
-				remainingAccounts: remainingAccounts,
-			}
-		);
-	}
-
-	public async updatePerpBidAskTwap(
-		marketIndex: number,
-		makers: [PublicKey, PublicKey][],
-		txParams?: TxParams
-	): Promise<TransactionSignature> {
-		const { txSig } = await this.sendTransaction(
-			await this.buildTransaction(
-				await this.getUpdatePerpBidAskTwapIx(marketIndex, makers),
-				txParams
-			),
-			[],
-			this.opts
-		);
-		return txSig;
-	}
-
-	public async getUpdatePerpBidAskTwapIx(
-		marketIndex: number,
-		makers: [PublicKey, PublicKey][]
-	): Promise<TransactionInstruction> {
-		const market = this.getMarketAccount(marketIndex);
-
-		const remainingAccounts = [];
-		for (const [maker, makerStats] of makers) {
-			remainingAccounts.push({
-				pubkey: maker,
-				isWritable: false,
-				isSigner: false,
-			});
-			remainingAccounts.push({
-				pubkey: makerStats,
-				isWritable: false,
-				isSigner: false,
-			});
-		}
-
-		return await this.program.instruction.updatePerpBidAskTwap({
-			accounts: {
-				state: await this.getStatePublicKey(),
-				market: market.pubkey,
-				oracle: amm.oracle,
-				authority: this.wallet.publicKey,
-				keeperStats: this.getUserStatsAccountPublicKey(),
-			},
-			remainingAccounts,
-		});
-	}
-
 	public triggerEvent(eventName: keyof NormalClientAccountEvents, data?: any) {
 		this.eventEmitter.emit(eventName, data);
 	}
@@ -3810,157 +1795,6 @@ export class NormalClient {
 			marketIndex
 		).data;
 	}
-
-	//   __    _____  ___   ________    _______  ___  ___
-	//  |" \  (\"   \|"  \ |"      "\  /"     "||"  \/"  |
-	//  ||  | |.\\   \    |(.  ___  :)(: ______) \   \  /
-	//  |:  | |: \.   \\  ||: \   ) || \/    |    \\  \/
-	//  |.  | |.  \    \. |(| (___\ || // ___)_   /\.  \
-	//  /\  |\|    \    \ ||:       :)(:      "| /  \   \
-	// (__\_|_)\___|\____\)(________/  \_______)|___/\___|
-	//
-
-	public async initializeIndexMarket(
-		marketIndex: number,
-		priceOracle: PublicKey,
-
-		oracleSource: OracleSource = OracleSource.PYTH,
-
-		maxRevenueWithdrawPerPeriod = ZERO,
-		quoteMaxInsurance = ZERO,
-
-		name = DEFAULT_MARKET_NAME
-	): Promise<TransactionSignature> {
-		const currentMarketIndex = this.getStateAccount().numberOfMarkets;
-
-		const initializeMarketIx = await this.getInitializeIndexMarketIx(
-			marketIndex,
-			priceOracle,
-			oracleSource,
-
-			maxRevenueWithdrawPerPeriod,
-			quoteMaxInsurance,
-			name
-		);
-		const tx = await this.buildTransaction(initializeMarketIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		while (this.getStateAccount().numberOfMarkets <= currentMarketIndex) {
-			await this.fetchAccounts();
-		}
-
-		await this.accountSubscriber.addMarket(marketIndex);
-		await this.accountSubscriber.addOracle({
-			source: oracleSource,
-			publicKey: priceOracle,
-		});
-		await this.accountSubscriber.setOracleMap();
-
-		return txSig;
-	}
-
-	public async getInitializeIndexMarketIx(
-		marketIndex: number,
-		priceOracle: PublicKey,
-		oracleSource: OracleSource = OracleSource.PYTH,
-
-		activeStatus = true,
-		maxRevenueWithdrawPerPeriod = ZERO,
-		quoteMaxInsurance = ZERO,
-
-		name = DEFAULT_MARKET_NAME
-	): Promise<TransactionInstruction> {
-		const marketPublicKey = await getMarketPublicKey(
-			this.program.programId,
-			marketIndex
-		);
-
-		const nameBuffer = encodeName(name);
-		return await this.program.instruction.initializeIndexMarket(
-			marketIndex,
-			oracleSource,
-
-			activeStatus,
-
-			maxRevenueWithdrawPerPeriod,
-			quoteMaxInsurance,
-
-			nameBuffer,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					oracle: priceOracle,
-					market: marketPublicKey,
-					rent: SYSVAR_RENT_PUBKEY,
-					systemProgram: anchor.web3.SystemProgram.programId,
-				},
-			}
-		);
-	}
-
-	public async updateIndexExpenseRatio(
-		marketIndex: number,
-		expenseRatio: number
-	): Promise<TransactionSignature> {
-		const updateIndexExpenseRatioIx = await this.getIndexExpenseRatioIx(
-			marketIndex,
-			expenseRatio
-		);
-
-		const tx = await this.buildTransaction(updateIndexExpenseRatioIx);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-
-		return txSig;
-	}
-
-	public async getIndexExpenseRatioIx(
-		marketIndex: number,
-		expenseRatio: number
-	): Promise<TransactionInstruction> {
-		const userAccountPublicKey = getUserAccountPublicKeySync(
-			this.program.programId,
-			this.wallet.publicKey,
-			subAccountId
-		);
-
-		return await this.program.instruction.updateIndexExpenseRatio(
-			marketIndex,
-			expenseRatio,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					admin: this.isSubscribed
-						? this.getStateAccount().admin
-						: this.wallet.publicKey,
-					authority: userAccountPublicKey,
-					market: await getMarketPublicKey(this.program.programId, marketIndex),
-				},
-			}
-		);
-	}
-
-	/**
-      __       ___      ___  ___      ___ 
-     /""\     |"  \    /"  ||"  \    /"  |
-    /    \     \   \  //   | \   \  //   |
-   /' /\  \    /\\  \/.    | /\\  \/.    |
-  //  __'  \  |: \.        ||: \.        |
- /   /  \\  \ |.  \    /:  ||.  \    /:  |
-(___/    \___)|___|\__/|___||___|\__/|___|
-	 */
-
-	// 	__    _____  ___    ________  ____  ____   _______        __      _____  ___    ______    _______
-	// 	|" \  (\"   \|"  \  /"       )("  _||_ " | /"      \      /""\    (\"   \|"  \  /" _  "\  /"     "|
-	// 	||  | |.\\   \    |(:   \___/ |   (  ) : ||:        |    /    \   |.\\   \    |(: ( \___)(: ______)
-	// 	|:  | |: \.   \\  | \___  \   (:  |  | . )|_____/   )   /' /\  \  |: \.   \\  | \/ \      \/    |
-	// 	|.  | |.  \    \. |  __/  \\   \\ \__/ //  //      /   //  __'  \ |.  \    \. | //  \ _   // ___)_
-	// 	/\  |\|    \    \ | /" \   :)  /\\ __ //\ |:  __   \  /   /  \\  \|    \    \ |(:   _) \ (:      "|
-	//    (__\_|_)\___|\____\)(_______/  (__________)|__|  \___)(___/    \___)\___|\____\) \_______) \_______)
 
 	public async initializeInsuranceFundStake(
 		txParams?: TxParams
@@ -3985,6 +1819,7 @@ export class NormalClient {
 		return await this.program.instruction.initializeInsuranceFundStake({
 			accounts: {
 				insuranceFundStake: ifStakeAccountPublicKey,
+				insuranceFund: this.getInsuranceFundAccount().pubkey,
 				userStats: this.getUserStatsAccountPublicKey(),
 				authority: this.wallet.publicKey,
 				payer: this.wallet.publicKey,
@@ -3999,23 +1834,23 @@ export class NormalClient {
 		amount: BN,
 		collateralAccountPublicKey: PublicKey
 	): Promise<TransactionInstruction> {
-		// const spotMarket = this.getSpotMarketAccount(marketIndex);
+		const insuranceFund = this.getInsuranceFundAccount();
 		const ifStakeAccountPublicKey = getInsuranceFundStakeAccountPublicKey(
 			this.program.programId,
 			this.wallet.publicKey
 		);
 
 		const remainingAccounts = [];
-		// this.addTokenMintToRemainingAccounts(spotMarket, remainingAccounts);
-		const tokenProgram = this.getTokenProgramForSpotMarket(spotMarket);
+		this.addTokenMintToRemainingAccounts(insuranceFund, remainingAccounts);
+		const tokenProgram = this.getTokenProgramForInsuranceFund(insuranceFund);
 		const ix = this.program.instruction.addInsuranceFundStake(amount, {
 			accounts: {
 				state: await this.getStatePublicKey(),
-				// spotMarket: spotMarket.pubkey,
+				insuranceFund: insuranceFund.pubkey,
 				insuranceFundStake: ifStakeAccountPublicKey,
 				userStats: this.getUserStatsAccountPublicKey(),
 				authority: this.wallet.publicKey,
-				insuranceFundVault: spotMarket.insuranceFund.vault,
+				insuranceFundVault: insuranceFund.vault,
 				normalSigner: this.getSignerPublicKey(),
 				userTokenAccount: collateralAccountPublicKey,
 				tokenProgram,
@@ -4054,8 +1889,8 @@ export class NormalClient {
 		const addIfStakeIxs = [];
 
 		const additionalSigners: Array<Signer> = [];
-		// const spotMarketAccount = this.getSpotMarketAccount(marketIndex);
-		const isSolMarket = spotMarketAccount.mint.equals(WRAPPED_SOL_MINT);
+		const insuranceFundAccount = this.getInsuranceFundAccount();
+		const isSolMarket = insuranceFundAccount.mint.equals(WRAPPED_SOL_MINT);
 		const createWSOLTokenAccount =
 			isSolMarket && collateralAccountPublicKey.equals(this.wallet.publicKey);
 
@@ -4081,8 +1916,12 @@ export class NormalClient {
 		}
 
 		if (fromSubaccount) {
-			const withdrawIx = await this.getWithdrawIx(amount, tokenAccount);
-			addIfStakeIxs.push(withdrawIx);
+			// const withdrawIx = await this.getWithdrawIx(
+			// 	amount,
+			// 	marketIndex,
+			// 	tokenAccount
+			// );
+			// addIfStakeIxs.push(withdrawIx);
 		}
 
 		if (initializeStakeAccount) {
@@ -4188,7 +2027,7 @@ export class NormalClient {
 		);
 
 		const additionalSigners: Array<Signer> = [];
-		const isSolMarket = spotMarketAccount.mint.equals(WRAPPED_SOL_MINT);
+		const isSolMarket = insuranceFundAccount.mint.equals(WRAPPED_SOL_MINT);
 		const createWSOLTokenAccount =
 			isSolMarket && collateralAccountPublicKey.equals(this.wallet.publicKey);
 
@@ -4212,15 +2051,19 @@ export class NormalClient {
 						tokenAccount,
 						this.wallet.publicKey,
 						this.wallet.publicKey,
-						spotMarketAccount.mint
+						insuranceFundAccount.mint
 					);
 				removeIfStakeIxs.push(createTokenAccountIx);
 			}
 		}
 
 		const remainingAccounts = [];
-		// this.addTokenMintToRemainingAccounts(spotMarketAccount, remainingAccounts);
-		// const tokenProgram = this.getTokenProgramForSpotMarket(spotMarketAccount);
+		this.addTokenMintToRemainingAccounts(
+			insuranceFundAccount,
+			remainingAccounts
+		);
+		const tokenProgram =
+			this.getTokenProgramForInsuranceFund(insuranceFundAccount);
 		const removeStakeIx =
 			await this.program.instruction.removeInsuranceFundStake({
 				accounts: {
@@ -4261,169 +2104,44 @@ export class NormalClient {
 		return txSig;
 	}
 
-	public async settleRevenueToInsuranceFund(
-		spotMarketIndex: number,
+	public async updateUserQuoteAssetInsuranceStake(
+		authority: PublicKey,
 		txParams?: TxParams
 	): Promise<TransactionSignature> {
 		const tx = await this.buildTransaction(
-			await this.getSettleRevenueToInsuranceFundIx(spotMarketIndex),
+			await this.getUpdateUserQuoteAssetInsuranceStakeIx(authority),
 			txParams
 		);
 		const { txSig } = await this.sendTransaction(tx, [], this.opts);
 		return txSig;
 	}
 
-	public async getSettleRevenueToInsuranceFundIx(
-		spotMarketIndex: number
+	public async getUpdateUserQuoteAssetInsuranceStakeIx(
+		authority: PublicKey
 	): Promise<TransactionInstruction> {
-		const spotMarketAccount = this.getSpotMarketAccount(spotMarketIndex);
-		const remainingAccounts = [];
-		this.addTokenMintToRemainingAccounts(spotMarketAccount, remainingAccounts);
-		const ix = await this.program.instruction.settleRevenueToInsuranceFund(
-			spotMarketIndex,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					spotMarket: spotMarketAccount.pubkey,
-					spotMarketVault: spotMarketAccount.vault,
-					normalSigner: this.getSignerPublicKey(),
-					insuranceFundVault: spotMarketAccount.insuranceFund.vault,
-					tokenProgram: TOKEN_PROGRAM_ID,
-				},
-				remainingAccounts,
-			}
+		const marketIndex = QUOTE_SPOT_MARKET_INDEX;
+		const insuranceFund = this.getInsuranceFundAccount();
+		const ifStakeAccountPublicKey = getInsuranceFundStakeAccountPublicKey(
+			this.program.programId,
+			authority
 		);
-		return ix;
-	}
-
-	public async getDepositIntoSpotMarketRevenuePoolIx(
-		marketIndex: number,
-		amount: BN,
-		userTokenAccountPublicKey: PublicKey
-	): Promise<TransactionInstruction> {
-		const spotMarket = await this.getSpotMarketAccount(marketIndex);
-
-		const remainingAccounts = [];
-		this.addTokenMintToRemainingAccounts(spotMarket, remainingAccounts);
-		const tokenProgram = this.getTokenProgramForSpotMarket(spotMarket);
-		const ix = await this.program.instruction.depositIntoSpotMarketRevenuePool(
-			amount,
-			{
-				accounts: {
-					state: await this.getStatePublicKey(),
-					spotMarket: spotMarket.pubkey,
-					authority: this.wallet.publicKey,
-					spotMarketVault: spotMarket.vault,
-					userTokenAccount: userTokenAccountPublicKey,
-					tokenProgram,
-				},
-			}
+		const userStatsPublicKey = getUserStatsAccountPublicKey(
+			this.program.programId,
+			authority
 		);
+
+		const ix = this.program.instruction.updateUserQuoteAssetInsuranceStake({
+			accounts: {
+				state: await this.getStatePublicKey(),
+				insuranceFund: insuranceFund.pubkey,
+				insuranceFundStake: ifStakeAccountPublicKey,
+				userStats: userStatsPublicKey,
+				signer: this.wallet.publicKey,
+				insuranceFundVault: insuranceFund.vault,
+			},
+		});
 
 		return ix;
-	}
-
-	public async depositIntoSpotMarketRevenuePool(
-		marketIndex: number,
-		amount: BN,
-		userTokenAccountPublicKey: PublicKey
-	): Promise<TransactionSignature> {
-		const ix = await this.getDepositIntoSpotMarketRevenuePoolIx(
-			marketIndex,
-			amount,
-			userTokenAccountPublicKey
-		);
-		const tx = await this.buildTransaction([ix]);
-
-		const { txSig } = await this.sendTransaction(tx, [], this.opts);
-		return txSig;
-	}
-
-	public getMarketExtendedInfo(marketIndex: number): MarketExtendedInfo {
-		const marketAccount = this.getMarketAccount(marketIndex);
-		const quoteAccount = this.getSpotMarketAccount(QUOTE_SPOT_MARKET_INDEX);
-
-		const extendedInfo: MarketExtendedInfo = {
-			marketIndex,
-			minOrderSize: marketAccount.amm?.minOrderSize,
-			marginMaintenance: marketAccount.marginRatioMaintenance,
-			pnlPoolValue: getTokenAmount(
-				marketAccount.pnlPool?.scaledBalance,
-				quoteAccount,
-				SpotBalanceType.DEPOSIT
-			),
-			Tier: marketAccount.Tier,
-			availableInsurance: calculateMarketMaxAvailableInsurance(
-				marketAccount,
-				quoteAccount
-			),
-		};
-
-		return extendedInfo;
-	}
-
-	/**
-	 * Calculates taker / maker fee (as a percentage, e.g. .001 = 10 basis points) for particular marketType
-	 * @param marketType
-	 * @param positionMarketIndex
-	 * @returns : {takerFee: number, makerFee: number} Precision None
-	 */
-	public getMarketFees(
-		marketType: MarketType,
-		marketIndex?: number,
-		user?: User
-	) {
-		let feeTier;
-		if (user) {
-			feeTier = user.getUserFeeTier(marketType);
-		} else {
-			const state = this.getStateAccount();
-			feeTier = isVariant(marketType, 'perp')
-				? state.perpFeeStructure.feeTiers[0]
-				: state.spotFeeStructure.feeTiers[0];
-		}
-
-		let takerFee = feeTier.feeNumerator / feeTier.feeDenominator;
-		let makerFee =
-			feeTier.makerRebateNumerator / feeTier.makerRebateDenominator;
-
-		if (marketIndex !== undefined) {
-			let marketAccount = null;
-			if (isVariant(marketType, 'perp')) {
-				marketAccount = this.getMarketAccount(marketIndex);
-			} else {
-				marketAccount = this.getSpotMarketAccount(marketIndex);
-			}
-			takerFee += (takerFee * marketAccount.feeAdjustment) / 100;
-			makerFee += (makerFee * marketAccount.feeAdjustment) / 100;
-		}
-
-		return {
-			takerFee,
-			makerFee,
-		};
-	}
-
-	/**
-	 * Returns the market index and type for a given market name
-	 * E.g. "SOL-PERP" -> { marketIndex: 0, marketType: MarketType.PERP }
-	 *
-	 * @param name
-	 */
-	getMarketIndexAndType(
-		name: string
-	): { marketIndex: number; marketType: MarketType } | undefined {
-		name = name.toUpperCase();
-		for (const marketAccount of this.getMarketAccounts()) {
-			if (decodeName(marketAccount.name).toUpperCase() === name) {
-				return {
-					marketIndex: marketAccount.marketIndex,
-					marketType: MarketType.SYNTH,
-				};
-			}
-		}
-
-		return undefined;
 	}
 
 	public getReceiverProgram(): Program<PythSolanaReceiver> {
@@ -4514,7 +2232,7 @@ export class NormalClient {
 					{
 						accounts: {
 							keeper: this.wallet.publicKey,
-							pythSolanaReceiver: DRIFT_ORACLE_RECEIVER_ID,
+							pythSolanaReceiver: NORMAL_ORACLE_RECEIVER_ID,
 							guardianSet,
 						},
 						remainingAccounts,
@@ -4563,7 +2281,7 @@ export class NormalClient {
 			{
 				accounts: {
 					keeper: this.wallet.publicKey,
-					pythSolanaReceiver: DRIFT_ORACLE_RECEIVER_ID,
+					pythSolanaReceiver: NORMAL_ORACLE_RECEIVER_ID,
 					guardianSet,
 					priceFeed: getPythPullOraclePublicKey(
 						this.program.programId,
@@ -4639,7 +2357,7 @@ export class NormalClient {
 			{
 				accounts: {
 					keeper: this.wallet.publicKey,
-					pythSolanaReceiver: DRIFT_ORACLE_RECEIVER_ID,
+					pythSolanaReceiver: NORMAL_ORACLE_RECEIVER_ID,
 					encodedVaa: encodedVaaAddress,
 					priceFeed: getPythPullOraclePublicKey(
 						this.program.programId,

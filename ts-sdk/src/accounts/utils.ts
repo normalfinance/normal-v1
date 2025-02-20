@@ -1,14 +1,13 @@
 import { PublicKey } from '@solana/web3.js';
 import { DataAndSlot } from './types';
-import { isVariant, MarketAccount, VaultAccount } from '../types';
+import { isVariant, MarketAccount } from '../types';
 
 export function capitalize(value: string): string {
 	return value[0].toUpperCase() + value.slice(1);
 }
 
 export function findDelistedMarketsAndOracles(
-	markets: DataAndSlot<MarketAccount>[],
-	vaults: DataAndSlot<VaultAccount>[]
+	markets: DataAndSlot<MarketAccount>[]
 ): { marketIndexes: number[]; oracles: PublicKey[] } {
 	const delistedMarketIndexes = [];
 	const delistedOracles = [];

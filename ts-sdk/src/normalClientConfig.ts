@@ -25,7 +25,6 @@ export type NormalClientConfig = {
 	subAccountIds?: number[];
 	activeSubAccountId?: number;
 	marketIndexes?: number[];
-	vaultIndexes?: number[];
 	marketLookupTable?: PublicKey;
 	oracleInfos?: OracleInfo[];
 	userStats?: boolean;

@@ -22,22 +22,24 @@ export enum ExchangeStatus {
 	PAUSED = 127,
 }
 
+export class BalanceType {
+	static readonly DEPOSIT = { deposit: {} };
+	static readonly BORROW = { borrow: {} };
+}
+
 export class MarketStatus {
 	static readonly INITIALIZED = { initialized: {} };
 	static readonly ACTIVE = { active: {} };
+	static readonly FUNDING_PAUSED = { fundingPaused: {} };
+	static readonly AMM_PAUSED = { ammPaused: {} };
+	static readonly FILL_PAUSED = { fillPaused: {} };
+	static readonly WITHDRAW_PAUSED = { withdrawPaused: {} };
 	static readonly REDUCE_ONLY = { reduceOnly: {} };
 	static readonly SETTLEMENT = { settlement: {} };
 	static readonly DELISTED = { delisted: {} };
 }
 
-export class VaultStatus {
-	static readonly ACTIVE = { active: {} };
-	static readonly BEING_LIQUIDATED = { beingLiquidated: {} };
-	static readonly BANKRUPT = { bankrupt: {} };
-	static readonly REDUCE_ONLY = { reduceOnly: {} };
-}
-
-export enum VaultOperation {
+export enum MarketOperation {
 	CREATE = 1,
 	DEPOSIT = 2,
 	WITHDRAW = 4,
@@ -60,10 +62,6 @@ export enum UserStatus {
 	REDUCE_ONLY = 4,
 }
 
-export enum IndexVisibility {
-	PRIVATE = 0,
-	PUBLIC = 1,
-}
 
 export class Tier {
 	static readonly A = { a: {} };
@@ -72,26 +70,6 @@ export class Tier {
 	static readonly SPECULATIVE = { speculative: {} };
 	static readonly HIGHLY_SPECULATIVE = { highlySpeculative: {} };
 	static readonly ISOLATED = { isolated: {} };
-}
-
-// export class SwapDirection {
-// 	static readonly ADD = { add: {} };
-// 	static readonly REMOVE = { remove: {} };
-// }
-
-export class SpotBalanceType {
-	static readonly DEPOSIT = { deposit: {} };
-	static readonly BORROW = { borrow: {} };
-}
-
-export class OrderDirection {
-	static readonly BUY = { buy: {} };
-	static readonly SELL = { sell: {} };
-}
-
-export class DepositDirection {
-	static readonly DEPOSIT = { deposit: {} };
-	static readonly WITHDRAW = { withdraw: {} };
 }
 
 export class OracleSource {
@@ -104,18 +82,6 @@ export class OracleSource {
 	static readonly QUOTE_ASSET = { quoteAsset: {} };
 	static readonly PYTH_STABLE_COIN = { pythStableCoin: {} };
 	static readonly PYTH_STABLE_COIN_PULL = { pythStableCoinPull: {} };
-}
-
-export declare type MarketTypeStr = 'synth';
-export class MarketType {
-	static readonly SYNTH = { synth: {} };
-}
-
-export class DepositExplanation {
-	static readonly NONE = { none: {} };
-	static readonly TRANSFER = { transfer: {} };
-	static readonly BORROW = { borrow: {} };
-	static readonly REPAY_BORROW = { repayBorrow: {} };
 }
 
 export class StakeAction {
@@ -166,29 +132,6 @@ export type NewUserRecord = {
 	referrer: PublicKey;
 };
 
-export type DepositRecord = {
-	ts: BN;
-	userAuthority: PublicKey;
-	user: PublicKey;
-	direction: {
-		deposit?: any;
-		withdraw?: any;
-	};
-	marketIndex: number;
-	vaultIndex: number;
-	amount: BN;
-	oraclePrice: BN;
-	marketDepositBalance: BN;
-	marketWithdrawBalance: BN;
-	marketCumulativeDepositInterest: BN;
-	marketCumulativeBorrowInterest: BN;
-	totalDepositsAfter: BN;
-	totalWithdrawsAfter: BN;
-	depositRecordId: BN;
-	explanation: DepositExplanation;
-	transferUser?: PublicKey;
-};
-
 export declare type InsuranceFundRecord = {
 	ts: BN;
 	userIfFactor: number;
@@ -212,91 +155,6 @@ export declare type InsuranceFundStakeRecord = {
 	ifSharesAfter: BN;
 	userIfSharesAfter: BN;
 	totalIfSharesAfter: BN;
-};
-
-export type LPRecord = {
-	ts: BN;
-	user: PublicKey;
-	action: LPAction;
-	nShares: BN;
-	marketIndex: number;
-	deltaBaseAssetAmount: BN;
-	deltaQuoteAssetAmount: BN;
-	pnl: BN;
-};
-
-export class LPAction {
-	static readonly ADD_LIQUIDITY = { addLiquidity: {} };
-	static readonly REMOVE_LIQUIDITY = { removeLiquidity: {} };
-}
-
-export type LiquidationRecord = {
-	ts: BN;
-	user: PublicKey;
-	liquidator: PublicKey;
-	liquidationType: LiquidationType;
-	marginRequirement: BN;
-	totalCollateral: BN;
-	marginFreed: BN;
-	liquidationId: number;
-	bankrupt: boolean;
-	canceledOrderIds: BN[];
-	liquidateVault: LiquidateVaultRecord;
-	bankruptcy: VaultBankruptcyRecord;
-};
-
-export class LiquidationType {
-	static readonly LIQUIDATE_VAULT = { liquidateVault: {} };
-	static readonly VAULT_BANKRUPTCY = {
-		vaultBankruptcy: {},
-	};
-}
-
-export type LiquidateVaultRecord = {
-	vaultIndex: number;
-	marketIndex: number;
-	oraclePrice: BN;
-	baseAssetAmount: BN;
-	quoteAssetAmount: BN;
-	lpShares: BN;
-	userOrderId: BN;
-	liquidatorOrderId: BN;
-	fillRecordId: BN;
-	liquidatorFee: BN;
-	ifFee: BN;
-};
-
-export type VaultBankruptcyRecord = {
-	vaultIndex: number;
-	marketIndex: number;
-	ifPayment: BN;
-	clawbackUser: PublicKey | null;
-	clawbackUserPayment: BN | null;
-	cumulativeFundingRateDelta: BN;
-	// borrowAmount: BN;
-	// cumulativeDepositInterestDelta: BN;
-};
-
-export type SwapRecord = {
-	ts: BN;
-	user: PublicKey;
-	amountOut: BN;
-	amountIn: BN;
-	outMarketIndex: number;
-	inMarketIndex: number;
-	outOraclePrice: BN;
-	inOraclePrice: BN;
-	fee: BN;
-};
-
-export type SpotMarketVaultDepositRecord = {
-	ts: BN;
-	marketIndex: number;
-	depositBalance: BN;
-	cumulativeDepositInterestBefore: BN;
-	cumulativeDepositInterestAfter: BN;
-	depositTokenAmountBefore: BN;
-	amount: BN;
 };
 
 export type StateAccount = {
@@ -329,6 +187,7 @@ export type InsuranceFundAccount = {
 	pubkey: PublicKey;
 	authority: PublicKey;
 	vault: PublicKey;
+	mint: PublicKey;
 	totalShares: BN;
 	userShares: BN;
 	sharesBase: BN;
@@ -339,26 +198,26 @@ export type InsuranceFundAccount = {
 	userFactor: BN;
 	maxInsurance: BN;
 	pausedOperations: number;
+	tokenProgram: number;
 };
 
 export type MarketAccount = {
 	pubkey: PublicKey;
+	mint: PublicKey;
+	decimals: number;
+	tokenProgram: number;
 	marketIndex: number;
 	name: number[];
 	status: MarketStatus;
-	Tier: Tier;
+	tier: Tier;
 	pausedOperations: number;
 	numberOfUsers: number;
-
 	oracle: PublicKey;
 	oracleSource: OracleSource;
-	// historicalOracleData: HistoricalOracleData;
-	// historicalIndexData: HistoricalIndexData;
-
+	historicalOracleData: HistoricalOracleData;
 	token_mint_collateral: PublicKey;
 	token_vault_synthetic: PublicKey;
 	token_vault_collateral: PublicKey;
-
 	liquidation_penalty: number;
 	liquidatorFee: number;
 	ifLiquidationFee: number;
@@ -368,9 +227,7 @@ export type MarketAccount = {
 	debtCeiling: BN;
 	debtFloor: number;
 	collateral_lending_utilization: BN;
-
 	amm: AMM;
-
 	insuranceClaim: {
 		revenueWithdrawSinceLastSettle: BN;
 		maxRevenueWithdrawPerPeriod: BN;
@@ -378,59 +235,15 @@ export type MarketAccount = {
 		quoteSettledInsurance: BN;
 		quoteMaxInsurance: BN;
 	};
-
-	total_gov_token_inflation: BN;
-
-	collateral_action_config: {};
-
 	outstandingDebt: BN;
 	protocolDebt: BN;
-
 	expiryTs: BN;
 	expiryPrice: BN;
 };
 
-export type IndexAsset = {
-	mint: PublicKey;
-	vault: PublicKey;
-	marketIndex: number;
-	weight: number;
-	lastUpdatedTs: BN;
-};
-
-export type IndexMarketAccount = {
-	pubkey: PublicKey;
-	marketIndex: number;
-	name: number[];
-	status: MarketStatus;
-	Tier: Tier;
-	pausedOperations: number;
-	numberOfUsers: number;
-
+export type AMM = {
 	oracle: PublicKey;
 	oracleSource: OracleSource;
-	historicalOracleData: HistoricalOracleData;
-
-	token_mint_collateral: PublicKey;
-	token_vault_synthetic: PublicKey;
-	token_vault_collateral: PublicKey;
-
-	assets: IndexAsset[];
-	visibility: IndexVisibility;
-	whitelist: PublicKey[];
-
-	expense_ratio: number;
-	revenue_share: number;
-	protocol_fee_owed: number;
-	manager_fee_owed: number;
-	referral_fee_owed: number;
-	total_fees: number;
-
-	expiryTs: BN;
-	expiryPrice: BN;
-
-	rebalancedTs: BN;
-	updatedTs: BN;
 };
 
 export type HistoricalOracleData = {
@@ -445,110 +258,6 @@ export type HistoricalOracleData = {
 export type PoolBalance = {
 	scaledBalance: BN;
 	marketIndex: number;
-};
-
-export type AMMRewardInfo = {
-	mint: PublicKey;
-	vault: PublicKey;
-	authority: PublicKey;
-	emissionsPerSecondX64: BN;
-	growthGlobalX64: BN;
-};
-
-export type AMM = {
-	vault_balance_authority: PublicKey;
-
-	token_mint_synthetic: PublicKey;
-	token_mint_quote: PublicKey;
-
-	token_vault_synthetic: PublicKey;
-	token_vault_quote: PublicKey;
-
-	oracle: PublicKey;
-	oracleSource: OracleSource;
-	historicalOracleData: HistoricalOracleData;
-	lastOracleConfPct: BN;
-	last_oracle_valid: boolean;
-	last_oracle_normalised_price: BN;
-	lastOracleReservePriceSpreadPct: BN;
-	oracle_std: BN;
-
-	max_price_deviance: number;
-	liquidity_to_volume_multiplier: number;
-
-	tickSpacing: number;
-	tickSpacingSeed: number[];
-	tickCurrentIndex: number;
-	liquidity: BN;
-	sqrtPrice: BN;
-
-	feeRate: number;
-	protocolFeeRate: number;
-	ifFeeRate: number;
-
-	feeGrowthGlobalSynthetic: BN;
-	feeGrowthGlobalQuote: BN;
-
-	protocolFeeOwedSynthetic: BN;
-	protocolFeeOwedQuote: BN;
-
-	rewardLastUpdatedTimestamp: BN;
-	rewardInfos: AMMRewardInfo[];
-};
-
-// # User Account Types
-export type Position = {
-	scaledBalance: BN;
-	cumulativeDeposits: BN;
-	marketIndex: number;
-};
-
-export type Schedule = {
-	market_type: MarketType;
-	amm: PublicKey;
-	base_asset_amount_per_interval: BN;
-	direction: OrderDirection;
-	active: boolean;
-	interval_seconds: BN;
-	total_orders: number;
-	min_price: number;
-	max_price: number;
-	executed_orders: number;
-	total_executed: BN;
-	last_updated_ts: BN;
-	last_order_ts: BN;
-};
-
-export type ScheduleParams = {
-	marketType: MarketType;
-	direction: OrderDirection;
-	baseAssetAmount: BN;
-	marketIndex: number;
-	minPrice: BN | null;
-	maxPrice: BN | null;
-};
-
-export type NecessaryScheduleParams = {
-	marketIndex: number;
-	baseAssetAmount: BN;
-	direction: OrderDirection;
-};
-
-export type OptionalScheduleParams = {
-	[Property in keyof ScheduleParams]?: ScheduleParams[Property];
-} & NecessaryScheduleParams;
-
-export type ModifyScheduleParams = {
-	[Property in keyof ScheduleParams]?: ScheduleParams[Property] | null;
-};
-
-export const DefaultScheduleParams: ScheduleParams = {
-	marketType: MarketType.SYNTH,
-	direction: OrderDirection.BUY,
-	baseAssetAmount: ZERO,
-	marketIndex: 0,
-	minPrice: null,
-	maxPrice: null,
 };
 
 export type UserStatsAccount = {
@@ -579,10 +288,7 @@ export type UserAccount = {
 	delegate: PublicKey;
 	name: number[];
 	subAccountId: number;
-	positions: Position[];
-	indexes: number[];
-	schedules: Schedule[];
-	scheduleStreak: number;
+	// positions: Position[];
 	status: number;
 	nextLiquidationId: number;
 	maxMarginRatio: number;
@@ -640,7 +346,7 @@ export interface IVersionedWallet {
 
 export type FeeStructure = {
 	feeTiers: FeeTier[];
-	fillerRewardStructure: OrderFillerRewardStructure;
+	// fillerRewardStructure: OrderFillerRewardStructure;
 	flatFillerFee: BN;
 	referrerRewardEpochUpperBound: BN;
 };
@@ -674,7 +380,6 @@ export type MarginCategory = 'Initial' | 'Maintenance';
 export type InsuranceFundStake = {
 	costBasis: BN;
 
-	marketIndex: number;
 	authority: PublicKey;
 
 	ifShares: BN;

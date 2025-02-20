@@ -5,7 +5,6 @@ import {
 	UserStats,
 	WrappedEvent,
 	NewUserRecord,
-	LPRecord,
 	InsuranceFundStakeRecord,
 	BulkAccountLoader,
 	PollingUserStatsAccountSubscriber,
@@ -120,14 +119,16 @@ export class UserStatsMap {
 		if (record.eventType === 'NewUserRecord') {
 			const newUserRecord = record as NewUserRecord;
 			await this.mustGet(newUserRecord.userAuthority.toString());
-		} else if (record.eventType === 'LPRecord') {
-			if (!userMap) {
-				return;
-			}
-			const lpRecord = record as LPRecord;
-			const user = await userMap.mustGet(lpRecord.user.toString());
-			await this.mustGet(user.getUserAccount().authority.toString());
-		} else if (record.eventType === 'InsuranceFundStakeRecord') {
+		}
+		// else if (record.eventType === 'LPRecord') {
+		// 	if (!userMap) {
+		// 		return;
+		// 	}
+		// 	const lpRecord = record as LPRecord;
+		// 	const user = await userMap.mustGet(lpRecord.user.toString());
+		// 	await this.mustGet(user.getUserAccount().authority.toString());
+		// }
+		else if (record.eventType === 'InsuranceFundStakeRecord') {
 			const ifStakeRecord = record as InsuranceFundStakeRecord;
 			await this.mustGet(ifStakeRecord.userAuthority.toString());
 		}

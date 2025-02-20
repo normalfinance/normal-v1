@@ -22,10 +22,7 @@ use instructions::*;
 mod test_utils;
 mod validation;
 
-#[cfg(feature = "mainnet-beta")]
-declare_id!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
-#[cfg(not(feature = "mainnet-beta"))]
-declare_id!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
+declare_id!("BqxukimGxeWzUJSwpDyGoc6Q78iMtAhwSYxgiq2vXTxB");
 
 #[program]
 pub mod normal {

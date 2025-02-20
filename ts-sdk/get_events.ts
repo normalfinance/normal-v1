@@ -1,5 +1,5 @@
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { configs, NormalClient, Wallet } from '@normalfinance/sdk';
+import { configs, NormalClient, Wallet } from '@normalfinance/solana-sdk';
 
 async function main() {
 	const normalConfig = configs['mainnet-beta'];

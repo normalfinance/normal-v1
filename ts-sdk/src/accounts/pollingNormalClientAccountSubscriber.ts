@@ -12,14 +12,13 @@ import StrictEventEmitter from 'strict-event-emitter-types';
 import { EventEmitter } from 'events';
 import {
 	MarketAccount,
-	VaultAccount,
 	StateAccount,
 	UserAccount,
+	InsuranceFundAccount,
 } from '../types';
 import {
 	getNormalStateAccountPublicKey,
 	getMarketPublicKey,
-	getVaultPublicKey,
 } from '../addresses/pda';
 import { BulkAccountLoader } from './bulkAccountLoader';
 import { capitalize, findDelistedMarketsAndOracles } from './utils';
@@ -37,7 +36,6 @@ export class PollingNormalClientAccountSubscriber
 	isSubscribed: boolean;
 	program: Program;
 	marketIndexes: number[];
-	vaultIndexes: number[];
 	oracleInfos: OracleInfo[];
 	oracleClientCache = new OracleClientCache();
 
@@ -54,9 +52,6 @@ export class PollingNormalClientAccountSubscriber
 	market = new Map<number, DataAndSlot<MarketAccount>>();
 	oracleMap = new Map<number, PublicKey>();
 	oracleStringMap = new Map<number, string>();
-	vault = new Map<number, DataAndSlot<VaultAccount>>();
-	vaultOracleMap = new Map<number, PublicKey>();
-	vaultOracleStringMap = new Map<number, string>();
 	oracles = new Map<string, DataAndSlot<OraclePriceData>>();
 	user?: DataAndSlot<UserAccount>;
 	delistedMarketSetting: DelistedMarketSetting;
@@ -69,7 +64,6 @@ export class PollingNormalClientAccountSubscriber
 		program: Program,
 		accountLoader: BulkAccountLoader,
 		marketIndexes: number[],
-		vaultIndexes: number[],
 		oracleInfos: OracleInfo[],
 		shouldFindAllMarketsAndOracles: boolean,
 		delistedMarketSetting: DelistedMarketSetting
@@ -79,10 +73,21 @@ export class PollingNormalClientAccountSubscriber
 		this.eventEmitter = new EventEmitter();
 		this.accountLoader = accountLoader;
 		this.marketIndexes = marketIndexes;
-		this.vaultIndexes = vaultIndexes;
 		this.oracleInfos = oracleInfos;
 		this.shouldFindAllMarketsAndOracles = shouldFindAllMarketsAndOracles;
 		this.delistedMarketSetting = delistedMarketSetting;
+	}
+	getOraclePriceDataAndSlotForVault(
+		vaultIndex: number
+	): DataAndSlot<OraclePriceData> | undefined {
+		throw new Error('Method not implemented.');
+	}
+
+	setVaultOracleMap(): Promise<void> {
+		throw new Error('Method not implemented.');
+	}
+	getInsuranceAccountAndSlot(): DataAndSlot<InsuranceFundAccount> {
+		throw new Error('Method not implemented.');
 	}
 
 	public async subscribe(): Promise<boolean> {
@@ -101,10 +106,10 @@ export class PollingNormalClientAccountSubscriber
 		});
 
 		if (this.shouldFindAllMarketsAndOracles) {
-			const { marketIndexes, vaultIndexes, oracleInfos } =
-				await findAllMarketAndOracles(this.program);
+			const { marketIndexes, oracleInfos } = await findAllMarketAndOracles(
+				this.program
+			);
 			this.marketIndexes = marketIndexes;
-			this.vaultIndexes = vaultIndexes;
 			this.oracleInfos = oracleInfos;
 		}
 
@@ -150,10 +155,7 @@ export class PollingNormalClientAccountSubscriber
 			eventType: 'stateAccountUpdate',
 		});
 
-		await Promise.all([
-			this.updateMarketAccountsToPoll(),
-			this.updateVaultAccountsToPoll(),
-		]);
+		await Promise.all([this.updateMarketAccountsToPoll()]);
 	}
 
 	async updateMarketAccountsToPoll(): Promise<boolean> {
@@ -178,31 +180,6 @@ export class PollingNormalClientAccountSubscriber
 			mapKey: marketIndex,
 		});
 
-		return true;
-	}
-
-	async updateVaultAccountsToPoll(): Promise<boolean> {
-		await Promise.all(
-			this.vaultIndexes.map(async (vaultIndex) => {
-				await this.addVaultAccountToPoll(vaultIndex);
-			})
-		);
-
-		return true;
-	}
-
-	async addVaultAccountToPoll(vaultIndex: number): Promise<boolean> {
-		const vaultPublicKey = await getVaultPublicKey(
-			this.program.programId,
-			vaultIndex
-		);
-
-		this.accountsToPoll.set(vaultPublicKey.toString(), {
-			key: 'vault',
-			publicKey: vaultPublicKey,
-			eventType: 'vaultAccountUpdate',
-			mapKey: vaultIndex,
-		});
 		return true;
 	}
 
@@ -275,8 +252,7 @@ export class PollingNormalClientAccountSubscriber
 	async addOracleToAccountLoader(oracleToPoll: OraclesToPoll): Promise<void> {
 		const oracleClient = this.oracleClientCache.get(
 			oracleToPoll.source,
-			this.program.provider.connection,
-			this.program
+			this.program.provider.connection
 		);
 
 		oracleToPoll.callbackId = await this.accountLoader.addAccount(
@@ -348,8 +324,7 @@ export class PollingNormalClientAccountSubscriber
 			if (buffer) {
 				const oracleClient = this.oracleClientCache.get(
 					oracleToPoll.source,
-					this.program.provider.connection,
-					this.program
+					this.program.provider.connection
 				);
 				const oraclePriceData =
 					oracleClient.getOraclePriceDataFromBuffer(buffer);
@@ -388,25 +363,6 @@ export class PollingNormalClientAccountSubscriber
 		this.accountsToPoll.clear();
 		this.oraclesToPoll.clear();
 		this.isSubscribed = false;
-	}
-
-	async addVault(vaultIndex: number): Promise<boolean> {
-		const vaultPublicKey = await getVaultPublicKey(
-			this.program.programId,
-			vaultIndex
-		);
-
-		if (this.accountsToPoll.has(vaultPublicKey.toString())) {
-			return true;
-		}
-
-		await this.addVaultAccountToPoll(vaultIndex);
-
-		const accountToPoll = this.accountsToPoll.get(vaultPublicKey.toString());
-
-		await this.addAccountToAccountLoader(accountToPoll);
-		this.setVaultOracleMap();
-		return true;
 	}
 
 	async addMarket(marketIndex: number): Promise<boolean> {
@@ -485,35 +441,13 @@ export class PollingNormalClientAccountSubscriber
 		await Promise.all(oraclePromises);
 	}
 
-	async setVaultOracleMap() {
-		const vaults = this.getVaultAccountsAndSlots();
-		const oraclePromises = [];
-		for (const vault of vaults) {
-			const vaultAccount = vault.data;
-			const vaultIndex = vaultAccount.vaultIndex;
-			const oracle = vaultAccount.oracle;
-			if (!this.oracles.has(oracle.toBase58())) {
-				oraclePromises.push(
-					this.addOracle({
-						publicKey: oracle,
-						source: vaultAccount.oracleSource,
-					})
-				);
-			}
-			this.vaultOracleMap.set(vaultIndex, oracle);
-			this.vaultOracleStringMap.set(vaultIndex, oracle.toBase58());
-		}
-		await Promise.all(oraclePromises);
-	}
-
 	handleDelistedMarkets(): void {
 		if (this.delistedMarketSetting === DelistedMarketSetting.Subscribe) {
 			return;
 		}
 
 		const { marketIndexes, oracles } = findDelistedMarketsAndOracles(
-			this.getMarketAccountsAndSlots(),
-			this.getVaultAccountsAndSlots()
+			this.getMarketAccountsAndSlots()
 		);
 
 		for (const marketIndex of marketIndexes) {
@@ -559,16 +493,6 @@ export class PollingNormalClientAccountSubscriber
 		return Array.from(this.market.values());
 	}
 
-	public getVaultAccountAndSlot(
-		vaultIndex: number
-	): DataAndSlot<VaultAccount> | undefined {
-		return this.vault.get(vaultIndex);
-	}
-
-	public getVaultAccountsAndSlots(): DataAndSlot<VaultAccount>[] {
-		return Array.from(this.vault.values());
-	}
-
 	public getOraclePriceDataAndSlot(
 		oraclePublicKey: PublicKey | string
 	): DataAndSlot<OraclePriceData> | undefined {
@@ -601,24 +525,6 @@ export class PollingNormalClientAccountSubscriber
 		if (!perpMarketAccount.data.amm.oracle.equals(oracle)) {
 			// If the oracle has changed, we need to update the oracle map in background
 			this.setOracleMap();
-		}
-
-		return this.getOraclePriceDataAndSlot(oracleString);
-	}
-
-	public getOraclePriceDataAndSlotForVault(
-		vaultIndex: number
-	): DataAndSlot<OraclePriceData> | undefined {
-		const vaultAccount = this.getVaultAccountAndSlot(vaultIndex);
-		const oracle = this.vaultOracleMap.get(vaultIndex);
-		const oracleString = this.vaultOracleStringMap.get(vaultIndex);
-		if (!vaultAccount || !oracle) {
-			return undefined;
-		}
-
-		if (!vaultAccount.data.oracle.equals(oracle)) {
-			// If the oracle has changed, we need to update the oracle map in background
-			this.setVaultOracleMap();
 		}
 
 		return this.getOraclePriceDataAndSlot(oracleString);

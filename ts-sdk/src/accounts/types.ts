@@ -1,5 +1,4 @@
 import {
-	VaultAccount,
 	MarketAccount,
 	OracleSource,
 	StateAccount,
@@ -42,7 +41,6 @@ export interface NormalClientAccountEvents {
 	stateAccountUpdate: (payload: StateAccount) => void;
 	insurnaceFundAccountUpdate: (payload: InsuranceFundAccount) => void;
 	marketAccountUpdate: (payload: MarketAccount) => void;
-	vaultAccountUpdate: (payload: VaultAccount) => void;
 	oraclePriceUpdate: (publicKey: PublicKey, data: OraclePriceData) => void;
 	userAccountUpdate: (payload: UserAccount) => void;
 	update: void;
@@ -58,10 +56,9 @@ export interface NormalClientAccountSubscriber {
 	unsubscribe(): Promise<void>;
 
 	addMarket(marketIndex: number): Promise<boolean>;
-	addVault(vaultIndex: number): Promise<boolean>;
+
 	addOracle(oracleInfo: OracleInfo): Promise<boolean>;
 	setOracleMap(): Promise<void>;
-	setVaultOracleMap(): Promise<void>;
 
 	getStateAccountAndSlot(): DataAndSlot<StateAccount>;
 	getInsuranceAccountAndSlot(): DataAndSlot<InsuranceFundAccount>;
@@ -69,18 +66,12 @@ export interface NormalClientAccountSubscriber {
 		marketIndex: number
 	): DataAndSlot<MarketAccount> | undefined;
 	getMarketAccountsAndSlots(): DataAndSlot<MarketAccount>[];
-	getVaultAccountAndSlot(
-		marketIndex: number
-	): DataAndSlot<VaultAccount> | undefined;
-	getVaultAccountsAndSlots(): DataAndSlot<VaultAccount>[];
+
 	getOraclePriceDataAndSlot(
 		oraclePublicKey: PublicKey | string
 	): DataAndSlot<OraclePriceData> | undefined;
 	getOraclePriceDataAndSlotForMarket(
 		marketIndex: number
-	): DataAndSlot<OraclePriceData> | undefined;
-	getOraclePriceDataAndSlotForVault(
-		vaultIndex: number
 	): DataAndSlot<OraclePriceData> | undefined;
 
 	updateAccountLoaderPollingFrequency?: (pollingFrequency: number) => void;
