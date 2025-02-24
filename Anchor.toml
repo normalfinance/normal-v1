@@ -12,7 +12,7 @@ watch_build = 'find ./programs/clearing_house/src/* ./tests ./ts-sdk/src | entr 
 watch_cargo = 'find ./programs/clearing_house/src/* ./tests ./ts-sdk/src | entr -c cargo test -- --show-output'
 
 [programs.localnet]
-normal = ""
+normal = "BqxukimGxeWzUJSwpDyGoc6Q78iMtAhwSYxgiq2vXTxB"
 token_faucet = "V4v1mQiAdLz4qwckEb45WqHYceYizoib39cDBHSWfaB"
 
 [[test.validator.account]]

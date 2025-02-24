@@ -10,6 +10,7 @@ use borsh::{ BorshDeserialize, BorshSerialize };
 use solana_program::msg;
 use crate::math_error;
 
+use super::collateral_position::CollateralPosition;
 use super::user_stats::UserStats;
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
@@ -36,7 +37,7 @@ pub struct User {
 	/// Encoded display name e.g. "toly"
 	pub name: [u8; 32],
 	/// The user's positions
-	// pub positions: [CollateralPosition; 8],
+	pub positions: [CollateralPosition; 8],
 	/// The total values of deposits the user has made
 	/// precision: QUOTE_PRECISION
 	pub total_deposits: u64,
@@ -92,7 +93,69 @@ impl User {
 		self.status &= !(status as u8);
 	}
 
-	// Position...
+	pub fn get_spot_position_index(&self, market_index: u16) -> DriftResult<usize> {
+        // first spot position is always quote asset
+        if market_index == 0 {
+            validate!(
+                self.spot_positions[0].market_index == 0,
+                ErrorCode::DefaultError,
+                "User position 0 not market_index=0"
+            )?;
+            return Ok(0);
+        }
+
+        self.spot_positions
+            .iter()
+            .position(|spot_position| spot_position.market_index == market_index)
+            .ok_or(ErrorCode::CouldNotFindSpotPosition)
+    }
+
+    pub fn get_spot_position(&self, market_index: u16) -> DriftResult<&SpotPosition> {
+        self.get_spot_position_index(market_index)
+            .map(|market_index| &self.spot_positions[market_index])
+    }
+
+    pub fn get_spot_position_mut(&mut self, market_index: u16) -> DriftResult<&mut SpotPosition> {
+        self.get_spot_position_index(market_index)
+            .map(move |market_index| &mut self.spot_positions[market_index])
+    }
+
+    pub fn add_spot_position(
+        &mut self,
+        market_index: u16,
+        balance_type: SpotBalanceType,
+    ) -> DriftResult<usize> {
+        let new_spot_position_index = self
+            .spot_positions
+            .iter()
+            .enumerate()
+            .position(|(index, spot_position)| index != 0 && spot_position.is_available())
+            .ok_or(ErrorCode::NoSpotPositionAvailable)?;
+
+        let new_spot_position = SpotPosition {
+            market_index,
+            balance_type,
+            ..SpotPosition::default()
+        };
+
+        self.spot_positions[new_spot_position_index] = new_spot_position;
+
+        Ok(new_spot_position_index)
+    }
+
+    pub fn force_get_spot_position_mut(
+        &mut self,
+        market_index: u16,
+    ) -> DriftResult<&mut SpotPosition> {
+        self.get_spot_position_index(market_index)
+            .or_else(|_| self.add_spot_position(market_index, SpotBalanceType::Deposit))
+            .map(move |market_index| &mut self.spot_positions[market_index])
+    }
+
+    pub fn force_get_spot_position_index(&mut self, market_index: u16) -> DriftResult<usize> {
+        self.get_spot_position_index(market_index)
+            .or_else(|_| self.add_spot_position(market_index, SpotBalanceType::Deposit))
+    }
 
 	pub fn get_deposit_value(
 		&mut self,

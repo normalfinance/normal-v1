@@ -78,7 +78,7 @@ export async function getMarketPublicKey(
 	return (
 		await PublicKey.findProgramAddress(
 			[
-				Buffer.from(anchor.utils.bytes.utf8.encode('market')),
+				Buffer.from(anchor.utils.bytes.utf8.encode('synth_market')),
 				new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
 			],
 			programId
@@ -92,7 +92,7 @@ export function getMarketPublicKeySync(
 ): PublicKey {
 	return PublicKey.findProgramAddressSync(
 		[
-			Buffer.from(anchor.utils.bytes.utf8.encode('market')),
+			Buffer.from(anchor.utils.bytes.utf8.encode('synth_market')),
 			new anchor.BN(marketIndex).toArrayLike(Buffer, 'le', 2),
 		],
 		programId

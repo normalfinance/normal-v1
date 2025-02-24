@@ -6,6 +6,7 @@ use anchor_lang::prelude::{ AccountInfo, Pubkey };
 use crate::errors::ErrorCode;
 use crate::state::insurance::InsuranceFundStake;
 use crate::state::state::{ ExchangeStatus, State };
+use crate::state::synth_market::SynthMarket;
 use crate::state::user::User;
 use crate::state::user_stats::UserStats;
 // use crate::validate;
@@ -41,26 +42,26 @@ pub fn is_stats_for_if_stake(
 	Ok(user_stats.authority.eq(&if_stake.authority))
 }
 
-// pub fn market_valid(
-// 	market: &AccountLoader<Market>
-// ) -> anchor_lang::Result<()> {
-// 	if market.load()?.status == MarketStatus::Delisted {
-// 		return Err(ErrorCode::MarketDelisted.into());
-// 	}
-// 	Ok(())
-// }
+pub fn market_valid(
+	market: &AccountLoader<SynthMarket>
+) -> anchor_lang::Result<()> {
+	if market.load()?.status == SynthMarketStatus::Delisted {
+		return Err(ErrorCode::MarketDelisted.into());
+	}
+	Ok(())
+}
 
-// pub fn valid_oracle_for_market(
-// 	oracle: &AccountInfo,
-// 	market: &AccountLoader<Market>
-// ) -> anchor_lang::Result<()> {
-// 	validate!(
-// 		market.load()?.amm.oracle.eq(oracle.key),
-// 		ErrorCode::InvalidOracle,
-// 		"not valid_oracle_for_perp_market"
-// 	)?;
-// 	Ok(())
-// }
+pub fn valid_oracle_for_market(
+	oracle: &AccountInfo,
+	market: &AccountLoader<SynthMarket>
+) -> anchor_lang::Result<()> {
+	validate!(
+		market.load()?.amm.oracle.eq(oracle.key),
+		ErrorCode::InvalidOracle,
+		"not valid_oracle_for_synth_market"
+	)?;
+	Ok(())
+}
 
 pub fn liq_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
 	if state.get_exchange_status()?.contains(ExchangeStatus::LiqPaused) {
@@ -69,19 +70,12 @@ pub fn liq_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
 	Ok(())
 }
 
-// pub fn amm_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
-// 	if state.amm_paused()? {
-// 		return Err(ErrorCode::ExchangePaused.into());
-// 	}
-// 	Ok(())
-// }
-
-// pub fn fill_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
-// 	if state.get_exchange_status()?.contains(ExchangeStatus::FillPaused) {
-// 		return Err(ErrorCode::ExchangePaused.into());
-// 	}
-// 	Ok(())
-// }
+pub fn amm_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
+	if state.amm_paused()? {
+		return Err(ErrorCode::ExchangePaused.into());
+	}
+	Ok(())
+}
 
 pub fn deposit_not_paused(state: &Account<State>) -> anchor_lang::Result<()> {
 	if state.get_exchange_status()?.contains(ExchangeStatus::DepositPaused) {

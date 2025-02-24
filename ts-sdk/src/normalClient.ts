@@ -288,7 +288,7 @@ export class NormalClient {
 		const delistedMarketSetting =
 			config.delistedMarketSetting || DelistedMarketSetting.Subscribe;
 		const noMarketsAndOraclesSpecified =
-			// config.marketIndexes === undefined &&
+			config.marketIndexes === undefined &&
 			config.oracleInfos === undefined;
 		if (config.accountSubscription?.type === 'polling') {
 			this.accountSubscriber = new PollingNormalClientAccountSubscriber(

@@ -1,5 +1,6 @@
 use crate::errors::ErrorCode;
 use crate::errors::NormalResult;
+use crate::state::synth_market_map::SynthMarketMap;
 use crate::state::traits::Size;
 use crate::state::user::User;
 use crate::state::user_stats::UserStats;
@@ -21,13 +22,13 @@ use std::iter::Peekable;
 use std::slice::Iter;
 
 pub struct AccountMaps<'a> {
-	// pub market_map: MarketMap<'a>,
+	pub synth_market_map: SynthMarketMap<'a>,
 	pub oracle_map: OracleMap<'a>,
 }
 
 pub fn load_maps<'a, 'b>(
 	account_info_iter: &mut Peekable<Iter<'a, AccountInfo<'a>>>,
-	// writable_markets: &'b MarketSet,
+	writable_markets: &'b MarketSet,
 	slot: u64,
 	oracle_guard_rails: Option<OracleGuardRails>
 ) -> NormalResult<AccountMaps<'a>> {
@@ -36,13 +37,13 @@ pub fn load_maps<'a, 'b>(
 		slot,
 		oracle_guard_rails
 	)?;
-	// let market_map = MarketMap::load(
-	// 	writable_markets,
-	// 	account_info_iter
-	// )?;
+	let synth_market_map = SynthMarketMap::load(
+		writable_markets,
+		account_info_iter
+	)?;
 
 	Ok(AccountMaps {
-		// market_map,
+		synth_market_map,
 		oracle_map,
 	})
 }

@@ -27,19 +27,17 @@ export class BalanceType {
 	static readonly BORROW = { borrow: {} };
 }
 
-export class MarketStatus {
+export class SynthMarketStatus {
 	static readonly INITIALIZED = { initialized: {} };
 	static readonly ACTIVE = { active: {} };
-	static readonly FUNDING_PAUSED = { fundingPaused: {} };
 	static readonly AMM_PAUSED = { ammPaused: {} };
-	static readonly FILL_PAUSED = { fillPaused: {} };
 	static readonly WITHDRAW_PAUSED = { withdrawPaused: {} };
 	static readonly REDUCE_ONLY = { reduceOnly: {} };
 	static readonly SETTLEMENT = { settlement: {} };
 	static readonly DELISTED = { delisted: {} };
 }
 
-export enum MarketOperation {
+export enum SynthOperation {
 	CREATE = 1,
 	DEPOSIT = 2,
 	WITHDRAW = 4,
@@ -61,7 +59,6 @@ export enum UserStatus {
 	BANKRUPT = 2,
 	REDUCE_ONLY = 4,
 }
-
 
 export class Tier {
 	static readonly A = { a: {} };
@@ -201,33 +198,49 @@ export type InsuranceFundAccount = {
 	tokenProgram: number;
 };
 
-export type MarketAccount = {
-	pubkey: PublicKey;
-	mint: PublicKey;
-	decimals: number;
-	tokenProgram: number;
-	marketIndex: number;
-	name: number[];
-	status: MarketStatus;
-	tier: Tier;
-	pausedOperations: number;
-	numberOfUsers: number;
+export type SyntheticParams = {
+	token_mint: PublicKey;
+	vault: PublicKey;
+	tier: SynthTier;
+	balance: BN;
+	token_twap: BN;
+	max_position_size: BN;
+};
+
+export type CollateralParams = {
+	// symbol: String;
+	token_mint: PublicKey;
+	vault: PublicKey;
 	oracle: PublicKey;
 	oracleSource: OracleSource;
-	historicalOracleData: HistoricalOracleData;
-	token_mint_collateral: PublicKey;
-	token_vault_synthetic: PublicKey;
-	token_vault_collateral: PublicKey;
+	oracle_frozen: boolean;
+	balance: BN;
+	pool_delta_balance: BN;
+	token_twap: BN;
+	margin_ratio_initial: BN;
+	margin_ratio_maintenance: BN;
+	max_token_deposits: BN;
+	max_token_borrows_fraction: BN;
+	withdraw_guard_threshold: BN;
+};
+
+export type MarketAccount = {
+	pubkey: PublicKey;
+	decimals: number;
+	amm: AMM;
+	synthetic: SyntheticParams;
+	collateral: CollateralParams;
+	marketIndex: number;
+	name: number[];
+	status: SynthMarketStatus;
+	pausedOperations: number;
+	numberOfUsers: number;
 	liquidation_penalty: number;
 	liquidatorFee: number;
 	ifLiquidationFee: number;
-	marginRatioInitial: number;
-	marginRatioMaintenance: number;
 	imfFactor: number;
 	debtCeiling: BN;
 	debtFloor: number;
-	collateral_lending_utilization: BN;
-	amm: AMM;
 	insuranceClaim: {
 		revenueWithdrawSinceLastSettle: BN;
 		maxRevenueWithdrawPerPeriod: BN;
@@ -235,15 +248,52 @@ export type MarketAccount = {
 		quoteSettledInsurance: BN;
 		quoteMaxInsurance: BN;
 	};
-	outstandingDebt: BN;
-	protocolDebt: BN;
 	expiryTs: BN;
 	expiryPrice: BN;
 };
 
+export type AMMRewardInfo = {
+	mint: PublicKey;
+	vault: PublicKey;
+	authority: PublicKey;
+	emissions_per_second_x64: BN;
+	growth_global_x64: BN;
+};
+
 export type AMM = {
+	token_mint_a: PublicKey;
+	token_mint_b: PublicKey;
+	token_vault_a: PublicKey;
+	token_vault_b: PublicKey;
+	// token_mint_lp: PublicKey;
+	tick_spacing: number;
+	tick_spacing_seed;
+	tick_current_index;
+
 	oracle: PublicKey;
 	oracleSource: OracleSource;
+	historical_oracle_data: HistoricalOracleData;
+	last_oracle_normalised_price: BN;
+	last_oracle_price_spread_pct: BN;
+	last_price_twap: BN;
+	last_oracle_conf_pct: BN;
+	oracle_std: BN;
+	last_price_twap_ts: BN;
+	last_oracle_valid: boolean;
+
+	liquidity: BN;
+	sqrt_price: BN;
+	fee_rate: BN;
+	protocol_fee_rate: BN;
+	fee_growth_global_a: BN;
+	fee_growth_global_b: BN;
+	protocol_fee_owed_a: BN;
+	protocol_fee_owed_b: BN;
+	max_allowed_slippage_bps: BN;
+	max_allowed_variance_bps: BN;
+	reward_last_updated_timestamp: BN;
+	reward_infos: AMMRewardInfo[];
+	last_update_slot: BN;
 };
 
 export type HistoricalOracleData = {

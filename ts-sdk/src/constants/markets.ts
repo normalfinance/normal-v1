@@ -22,7 +22,7 @@ export const DevnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Bitcoin',
 		category: ['L1', 'Payment'],
-		symbol: 'BTC-USDC',
+		symbol: 'BTC-SOL',
 		baseAssetSymbol: 'BTC',
 		marketIndex: 0,
 		oracle: new PublicKey('486kr3pmFPfTsS4aZgcsQ7kS4i9rjMsYYZup6HQNSTT4'),
@@ -34,7 +34,7 @@ export const DevnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Ethereum',
 		category: ['L1', 'Infra'],
-		symbol: 'ETH-USDC',
+		symbol: 'ETH-SOL',
 		baseAssetSymbol: 'ETH',
 		marketIndex: 1,
 		oracle: new PublicKey('6bEp2MiyoiiiDxcVqE8rUHQWwHirXUXtKfAEATTVqNzT'),
@@ -46,7 +46,7 @@ export const DevnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Doge',
 		category: ['Meme', 'Dog'],
-		symbol: 'DOGE-USDC',
+		symbol: 'DOGE-SOL',
 		baseAssetSymbol: 'DOGE',
 		marketIndex: 2,
 		oracle: new PublicKey('23y63pHVwKfYSCDFdiGRaGbTYWoyr8UzhUE7zukyf6gK'),
@@ -58,7 +58,7 @@ export const DevnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Binance Coin',
 		category: ['Exchange'],
-		symbol: 'BNB-USDC',
+		symbol: 'BNB-SOL',
 		baseAssetSymbol: 'BNB',
 		marketIndex: 3,
 		oracle: new PublicKey('Dk8eWjuQHMbxJAwB9Sg7pXQPH4kgbg8qZGcUrWcD9gTm'),
@@ -70,7 +70,7 @@ export const DevnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Sui',
 		category: ['L1'],
-		symbol: 'SUI-USDC',
+		symbol: 'SUI-SOL',
 		baseAssetSymbol: 'SUI',
 		marketIndex: 4,
 		oracle: new PublicKey('HBordkz5YxjzNURmKUY4vfEYFG9fZyZNeNF1VDLMoemT'),
@@ -82,7 +82,7 @@ export const DevnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'XRP',
 		category: ['Payments'],
-		symbol: 'XRP-USDC',
+		symbol: 'XRP-SOL',
 		baseAssetSymbol: 'XRP',
 		marketIndex: 5,
 		oracle: new PublicKey('9757epAjXWCWQH98kyK9vzgehd1XDVEf7joNHUaKk3iV'),
@@ -97,7 +97,7 @@ export const MainnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Bitcoin',
 		category: ['L1', 'Payment'],
-		symbol: 'BTC-USDC',
+		symbol: 'BTC-SOL',
 		baseAssetSymbol: 'BTC',
 		marketIndex: 0,
 		oracle: new PublicKey('486kr3pmFPfTsS4aZgcsQ7kS4i9rjMsYYZup6HQNSTT4'),
@@ -109,7 +109,7 @@ export const MainnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Ethereum',
 		category: ['L1', 'Infra'],
-		symbol: 'ETH-USDC',
+		symbol: 'ETH-SOL',
 		baseAssetSymbol: 'ETH',
 		marketIndex: 1,
 		oracle: new PublicKey('6bEp2MiyoiiiDxcVqE8rUHQWwHirXUXtKfAEATTVqNzT'),
@@ -122,7 +122,7 @@ export const MainnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Doge',
 		category: ['Meme', 'Dog'],
-		symbol: 'DOGE-USDC',
+		symbol: 'DOGE-SOL',
 		baseAssetSymbol: 'DOGE',
 		marketIndex: 2,
 		oracle: new PublicKey('23y63pHVwKfYSCDFdiGRaGbTYWoyr8UzhUE7zukyf6gK'),
@@ -134,7 +134,7 @@ export const MainnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Binance Coin',
 		category: ['Exchange'],
-		symbol: 'BNB-USDC',
+		symbol: 'BNB-SOL',
 		baseAssetSymbol: 'BNB',
 		marketIndex: 3,
 		oracle: new PublicKey('Dk8eWjuQHMbxJAwB9Sg7pXQPH4kgbg8qZGcUrWcD9gTm'),
@@ -146,7 +146,7 @@ export const MainnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'Sui',
 		category: ['L1'],
-		symbol: 'SUI-USDC',
+		symbol: 'SUI-SOL',
 		baseAssetSymbol: 'SUI',
 		marketIndex: 4,
 		oracle: new PublicKey('HBordkz5YxjzNURmKUY4vfEYFG9fZyZNeNF1VDLMoemT'),
@@ -159,7 +159,7 @@ export const MainnetMarkets: MarketConfig[] = [
 	{
 		fullName: 'XRP',
 		category: ['Payments'],
-		symbol: 'XRP-USDC',
+		symbol: 'XRP-SOL',
 		baseAssetSymbol: 'XRP',
 		marketIndex: 5,
 		oracle: new PublicKey('9757epAjXWCWQH98kyK9vzgehd1XDVEf7joNHUaKk3iV'),

@@ -1,7 +1,8 @@
-use solana_program::msg;
+use anchor_lang::prelude::msg;
+// use solana_program::msg;
 
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
-pub enum MarketOperation {
+pub enum SynthOperation {
 	Create = 0b00000001,
 	Deposit = 0b00000010,
 	Withdraw = 0b00000100,
@@ -12,23 +13,23 @@ pub enum MarketOperation {
 	// Swap = 0,
 }
 
-const ALL_MARKET_OPERATIONS: [MarketOperation; 7] = [
-	MarketOperation::Create,
-	MarketOperation::Delete,
-	MarketOperation::Withdraw,
-	MarketOperation::Lend,
-	MarketOperation::Transfer,
-	MarketOperation::Delete,
-	MarketOperation::Liquidation,
+const ALL_SYNTH_OPERATIONS: [SynthOperation; 7] = [
+	SynthOperation::Create,
+	SynthOperation::Delete,
+	SynthOperation::Withdraw,
+	SynthOperation::Lend,
+	SynthOperation::Transfer,
+	SynthOperation::Delete,
+	SynthOperation::Liquidation,
 ];
 
-impl MarketOperation {
-	pub fn is_operation_paused(current: u8, operation: MarketOperation) -> bool {
+impl SynthOperation {
+	pub fn is_operation_paused(current: u8, operation: SynthOperation) -> bool {
 		(current & (operation as u8)) != 0
 	}
 
 	pub fn log_all_operations_paused(current: u8) {
-		for operation in ALL_MARKET_OPERATIONS.iter() {
+		for operation in ALL_SYNTH_OPERATIONS.iter() {
 			if Self::is_operation_paused(current, *operation) {
 				msg!("{:?} is paused", operation);
 			}
